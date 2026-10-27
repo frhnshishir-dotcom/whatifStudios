@@ -68,6 +68,18 @@ def validate_config(data: dict) -> dict:
     for r in cfg["dark_ranges"]:
         if not (isinstance(r, list) and len(r) == 2 and all(isinstance(v, int) for v in r) and r[0] <= r[1]):
             raise ConfigError(f"dark_ranges entries must be [start, end], got {r!r}")
+    prev_end = cfg["frame_start"] - 1
+    for sh in cfg.get("shots", []):
+        if not (isinstance(sh, list) and len(sh) == 3 and isinstance(sh[0], str)
+                and all(isinstance(v, int) for v in sh[1:])):
+            raise ConfigError(f"shots entries must be [camera, first, last], got {sh!r}")
+        if not (prev_end < sh[1] <= sh[2] <= cfg["frame_end"]):
+            raise ConfigError(f"shots must be in order, non-overlapping and inside the frame range: {sh!r}")
+        prev_end = sh[2]
+    if cfg.get("picture_lock") not in (None, "applied", "not_applied"):
+        raise ConfigError("picture_lock must be 'applied' or 'not_applied'")
+    if "max_chunk" in cfg and not (isinstance(cfg["max_chunk"], int) and cfg["max_chunk"] > 0):
+        raise ConfigError("max_chunk must be a positive integer")
     return cfg
 
 

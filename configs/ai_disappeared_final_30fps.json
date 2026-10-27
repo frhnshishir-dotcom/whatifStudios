@@ -10,6 +10,15 @@
   "color_mode": "RGB",
   "samples": 16,
   "audio": "forbidden",
+  "picture_lock": "applied",
+  "shots": [
+    ["CAM_01_Aerial_Approach", 1, 150],
+    ["CAM_02_Billboards", 151, 300],
+    ["CAM_03_Intersection", 301, 480],
+    ["CAM_04_Skyline_Pullback", 481, 615]
+  ],
+  "max_chunk": 180,
+  "est_frame_mb": 1.5,
   "black_threshold": 4.0,
   "dark_ranges": [],
   "min_size_ratio": 0.4,
