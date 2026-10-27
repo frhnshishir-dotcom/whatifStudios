@@ -1,5 +1,9 @@
 # WhatIfStudio - EP001 "What If AI Disappeared Overnight?"
 
+> The steps below are the original 24 fps / 288-frame v1 flow, kept for reference. For the current cut, see
+> `CLAUDE.md` and the checks in `tools/pipeline/README.md` (preflight, manifest, resume, safe assembly).
+> `tools/render_final.bat` is deprecated: background `blender -b` renders crash on this laptop.
+
 Run inside the open Blender session (MCP / Text Editor). Background `blender -b` renders
 crashed on this laptop's Intel iGPU (0xC0000409), so render from the interactive session.
 
