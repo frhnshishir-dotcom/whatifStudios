@@ -26,11 +26,13 @@ Script and phase prompts: `docs/EP001_LONG_PROMPTS.md`. Work through those phase
 | `tools/v2/build_city_v2.py` -> `tools/v2/upgrade_v2.py` -> `tools/v3/upgrade_v3.py` | Original procedural build chain (the city, roads, cars, people, signs) |
 | `tools/v4/hero_building_v4.py`, `hero_car_v4.py` | Brick hero tower (Poly Haven kit) and detailed hero car `CAR_02` |
 | `tools/v5/aerial_v5.py`, `tools/v6/look_v6.py`, `tools/v6/horizon_v6.py` | Skyline towers, look development (clouds, haze, light), distant city |
-| `tools/final/picture_lock.py` | 20.5 s / 30 fps retime (opening hook, end question). Reference for how to retime keys. |
+| `tools/final/picture_lock.py` | 20.5 s / 30 fps retime (opening hook, end question). Reference for how to retime keys. It saves nothing, and it is **not re-runnable**: it reads the old camera keys at f72/144/216/288, so a second run on the same scene breaks every camera move. |
+| `checkpoints/picturelock_30fps_20261027_154727/master_city_picturelock_30fps.blend` | The 20.5 s / 30 fps / 615-frame retime, already applied. `_renderprep.blend` beside it adds the final render settings. |
 | `tools/assemble_video.py` | FFmpeg assembly + ffprobe validation (`--episode <folder> --root <root>`). Needs ffmpeg on PATH. |
 | `tools/v3/make_people_v3.py`, `assets/people_v3.blend` | 4 posed MPFB/MakeHuman pedestrians (CC0 assets) |
 | `assets/polyhaven/modular_urban_apartments_facade/` | Poly Haven CC0 facade kit (1k) |
-| `episodes/ai_disappeared_final/output/EP001_What_If_AI_Disappeared_Overnight_9x16.mp4` | Existing 12 s export. **Keep.** |
+| `episodes/ai_disappeared_final/output/EP001_What_If_AI_Disappeared_Overnight_9x16.mp4` | Older 12 s / 24 fps export (288 frames). **Keep.** |
+| `episodes/ai_disappeared_final_30fps/output/ai_disappeared_final_30fps_9x16.mp4` | **Current final teaser:** 20.5 s, 30 fps, 615 frames, 720×1280, H.264, silent. 16 samples. |
 
 Output convention for a new cut: `episodes/<cut_name>/{frames,previews,output,logs}` with frames named `frame_####.png`.
 
@@ -54,18 +56,30 @@ Output convention for a new cut: `episodes/<cut_name>/{frames,previews,output,lo
 - Preview: 540×960 at 50%, **4 samples** for animation checks, 12 samples for look checks.
 - Final: **720×1280, 32 samples, EEVEE, ray tracing (screen) ON** (benchmarked as almost free), PNG RGB.
 - Measured final cost per frame: aerial about 6 s, billboard shot about 9 s, street shot (`CAM_03`) about **15 s**, pull-back about 6 s.
+- At **16 samples** (used for the 30 fps final, and indistinguishable from the approved cut: SSIM 0.997): aerial 3 s, billboards 5-6 s, street 6-8 s, pull-back 3-5 s. All 615 frames took about 60 min.
 - `render.use_overwrite = False` and `use_placeholder = False`, so re-running a range only fills missing frames.
 
 ## Reliable render workflow (important)
 - **Background `blender -b` renders crash** on this iGPU (exit 0xC0000409). Render inside the **open Blender session** through MCP.
 - MCP calls can time out while Blender keeps rendering. Fire **one chunk per call** (for example one shot of 70-180 frames
   with `bpy.ops.render.render(animation=True)`), then **poll the frames folder** until the count is reached. Never re-fire a chunk while one is still running.
+  Better: start the chunk non-blocking with `bpy.ops.render.render("INVOKE_DEFAULT", animation=True)` under
+  `bpy.context.temp_override(window=wm.windows[0], scene=sc)`. Add a one-shot `render_complete`/`render_cancel` handler that restores
+  `frame_start/end`. The MCP call then returns at once, and `bpy.app.is_job_running("RENDER")` tells you when the chunk is finished.
 - After about 3 hours of heavy work, the session has once rendered **black frames and then frozen**. **Restart Blender before a long final render,**
   load the checkpoint into the fresh session, and don't chain hours of rebuilds in one session.
 - New objects have an **identity `matrix_world` until the depsgraph updates**. Use `obj.location` math, not `matrix_world`, right after creating them.
 - Aerial cameras use `clip_start = 1.0` (depth precision). The street camera uses 0.1.
 - Shader compilation makes the first render after material changes slow (20-40 s). Time steady-state renders separately.
-- FFmpeg is **not** on Windows PATH. Install it (`winget install Gyan.FFmpeg`), or encode with Blender's VSE (FFMPEG / H.264 / yuv420p).
+- FFmpeg + ffprobe (Gyan essentials build) are on the **user** PATH:
+  `C:\Users\User\ffmpeg-2026-10-25-git-46f23be8b1-essentials_build\ffmpeg-2026-10-25-git-46f23be8b1-essentials_build\bin`.
+  A shell started before that change won't see it, so prepend the folder to PATH for that command.
+  Assemble with `python tools/assemble_video.py --episode <cut_folder> --fps 30` (the default fps is 24).
+
+## Git
+Repo: `https://github.com/frhnshishir-dotcom/whatifStudios` (branch `main`). `.blend/.mp4/.png/.jpg/audio` go through **Git LFS**
+(`.gitattributes`). `.gitignore` excludes `episodes/*/{frames,previews,test,logs}/` (about 1.3 GB, regenerable). Commit scripts, docs,
+checkpoints and final MP4s; never commit rendered frame sequences. The free LFS quota is 1 GB storage, and about 115 MB is used.
 
 ## Verification checklist for any export
 `ffprobe`: 720×1280, the intended fps, frame count = duration × fps, H.264, yuv420p, a full decode with no errors, no audio stream.
