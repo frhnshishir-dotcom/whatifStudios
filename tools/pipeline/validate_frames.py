@@ -20,20 +20,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import ROOT, ConfigError, compress_ranges, config_hash, cut_dir, load_config, scan_frames  # noqa: E402
+from common import (ROOT, ConfigError, Issue, compress_ranges, config_hash, cut_dir, load_config,  # noqa: E402
+                    scan_frames)
 
 from PIL import Image, ImageStat  # noqa: E402
 
 SIZE_WINDOW = 15     # frames either side used for the local median file size
-
-
-@dataclass
-class Issue:
-    code: str
-    severity: str            # "error" | "warning"
-    frame: int | None = None
-    path: str | None = None
-    detail: str = ""
 
 
 @dataclass

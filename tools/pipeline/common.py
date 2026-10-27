@@ -8,7 +8,9 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,13 +23,28 @@ DEFAULTS = {
     "dark_ranges": [],          # [[a, b], ...] frames allowed to be dark (intentional fades)
     "min_size_ratio": 0.4,      # file smaller than this x the local median = undersized
 }
-# Keys that only tune validation or muxing. Changing them does not invalidate rendered frames.
-NON_RENDER_KEYS = {"black_threshold", "dark_ranges", "min_size_ratio", "audio", "notes"}
+# Keys that only tune validation, encoding or tooling. Changing them does not invalidate rendered frames.
+NON_RENDER_KEYS = {"black_threshold", "dark_ranges", "min_size_ratio", "audio", "audio_file", "notes",
+                   "output_name", "crf", "preset", "ffmpeg_dir", "shots", "max_chunk", "est_frame_mb",
+                   "picture_lock", "required_files"}
 IGNORED_FILES = {"thumbs.db", "desktop.ini", ".ds_store"}
 
 
 class ConfigError(ValueError):
     pass
+
+
+class ToolError(RuntimeError):
+    pass
+
+
+@dataclass
+class Issue:
+    code: str
+    severity: str            # "error" | "warning"
+    frame: int | None = None
+    path: str | None = None
+    detail: str = ""
 
 
 def validate_config(data: dict) -> dict:
@@ -72,6 +89,25 @@ def config_hash(cfg: dict) -> str:
 
 def cut_dir(cfg: dict, root=ROOT) -> Path:
     return Path(root) / "episodes" / cfg["cut"]
+
+
+def frame_count(cfg: dict) -> int:
+    return cfg["frame_end"] - cfg["frame_start"] + 1
+
+
+def find_tool(name: str, cfg: dict | None = None) -> str:
+    """ffmpeg / ffprobe: cfg["ffmpeg_dir"] first, then PATH. A shell opened before a PATH change won't see it,
+    so on Windows set ffmpeg_dir in the config instead of relying on PATH."""
+    d = (cfg or {}).get("ffmpeg_dir")
+    if d:
+        for cand in (Path(d) / name, Path(d) / f"{name}.exe"):
+            if cand.is_file():
+                return str(cand)
+        raise ToolError(f"{name} not found in ffmpeg_dir {d}")
+    found = shutil.which(name)
+    if not found:
+        raise ToolError(f"{name} not found on PATH (set ffmpeg_dir in the cut config)")
+    return found
 
 
 def scan_frames(frames_dir, prefix: str = "frame_"):
