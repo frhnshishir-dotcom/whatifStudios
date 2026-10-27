@@ -66,14 +66,16 @@ def tools():
 
 
 def make_mp4(path, frames=10, fps=30, size=(W, H), codec="libx264", pix_fmt="yuv420p", audio_s=None):
-    """Synthetic test clip (testsrc), optionally with a sine-tone audio track of audio_s seconds."""
-    cmd = [FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=size={size[0]}x{size[1]}:rate={fps}"]
+    """Synthetic test clip (testsrc), optionally with a sine-tone audio track of audio_s seconds.
+    Audio is muxed in a second pass: on ffmpeg 4.x, -frames:v would also cut the audio at the last video frame."""
+    video = Path(path).with_name(Path(path).stem + "_video.mp4") if audio_s else path
+    subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc=size={size[0]}x{size[1]}:rate={fps}",
+                    "-frames:v", str(frames), "-c:v", codec, "-pix_fmt", pix_fmt, str(video)], check=True)
     if audio_s:
-        cmd += ["-f", "lavfi", "-t", str(audio_s), "-i", "sine=frequency=440:sample_rate=48000"]
-    cmd += ["-frames:v", str(frames), "-c:v", codec, "-pix_fmt", pix_fmt]
-    if audio_s:
-        cmd += ["-c:a", "aac"]
-    subprocess.run(cmd + [str(path)], check=True)
+        subprocess.run([FFMPEG, "-v", "error", "-y", "-i", str(video), "-f", "lavfi", "-t", str(audio_s), "-i",
+                        "sine=frequency=440:sample_rate=48000", "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+                        "-c:a", "aac", str(path)], check=True)
+        video.unlink()
     return path
 
 

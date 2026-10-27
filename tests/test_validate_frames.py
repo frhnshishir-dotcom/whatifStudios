@@ -156,3 +156,14 @@ def test_cli_exit_codes_and_json(cut, tmp_path):
     assert main(args) == 0
     cfg_path.write_text("{}", encoding="utf-8")
     assert main(args) == 2
+
+
+def test_frame_written_just_after_start_is_not_stale(cut):
+    """Coarse file timestamps can put a fresh frame a few ms before the manifest's start time."""
+    cut.fill()
+    since = time.time()
+    t = since - 0.5
+    os.utime(cut.path(1), (t, t))
+    for n in range(2, 11):
+        os.utime(cut.path(n), (since + 1, since + 1))
+    assert validate(cut.cfg, cut.frames, since=since).ok

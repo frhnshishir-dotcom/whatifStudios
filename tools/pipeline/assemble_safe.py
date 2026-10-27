@@ -111,7 +111,8 @@ def ffmpeg_cmd(cfg: dict, ffmpeg: str, partial: Path, audio: Path | None) -> lis
     if audio:
         cmd += ["-i", str(audio)]
     cmd += ["-map", "0:v:0"] + (["-map", "1:a:0"] if audio else [])
-    cmd += ["-frames:v", str(n), "-vf", "format=yuv420p", "-c:v", "libx264", "-profile:v", "high",
+    # Exactly n frames are piped in, so no -frames:v (on ffmpeg 4.x it also ends the audio at the last video frame).
+    cmd += ["-vf", "format=yuv420p", "-c:v", "libx264", "-profile:v", "high",
             "-preset", str(cfg.get("preset", "medium")), "-crf", str(cfg.get("crf", 18)),
             "-r", str(cfg["fps"]), "-movflags", "+faststart"]
     if audio:

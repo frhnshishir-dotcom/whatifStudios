@@ -26,6 +26,7 @@ from common import (ROOT, ConfigError, Issue, compress_ranges, config_hash, cut_
 from PIL import Image, ImageStat  # noqa: E402
 
 SIZE_WINDOW = 15     # frames either side used for the local median file size
+STALE_TOLERANCE = 2.0   # seconds; file-system timestamps can lag the clock slightly (coarse mtime, FAT/exFAT 2 s)
 
 
 @dataclass
@@ -142,7 +143,7 @@ def validate(cfg: dict, frames_dir, since: float | None = None) -> Report:
         if info.mean_luma < cfg["black_threshold"] and not any(n in r for r in dark):
             info.codes.append("black")
             add(Issue("black", "error", frame=n, path=str(p), detail=f"mean luma {info.mean_luma}"))
-        if since is not None and info.mtime < since:
+        if since is not None and info.mtime < since - STALE_TOLERANCE:
             info.codes.append("stale")
             add(Issue("stale", "error", frame=n, path=str(p), detail="older than the current render manifest"))
 
