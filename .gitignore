@@ -1,0 +1,17 @@
+# Rendered image sequences, previews and render logs (regenerable, ~1.3 GB)
+episodes/*/frames/
+episodes/*/previews/
+episodes/*/test/
+episodes/*/logs/
+
+# Blender autosave / backup files
+*.blend1
+*.blend2
+*.blend@
+
+# OS / editor junk
+Thumbs.db
+desktop.ini
+.DS_Store
+__pycache__/
+*.pyc
