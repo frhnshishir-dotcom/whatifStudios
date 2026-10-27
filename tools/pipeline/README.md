@@ -1,6 +1,6 @@
 # tools/pipeline: checks for rendering, recovery and assembly
 
-Plain Python (3.9+) and Pillow, run in a normal terminal (not inside Blender) unless marked **in Blender**.
+Plain Python (3.9+, tested on 3.9 and 3.12, Linux and Windows) and Pillow, run in a normal terminal (not inside Blender) unless marked **in Blender**.
 None of these render, save a .blend, or delete a frame or video.
 
 Each cut has a config in `configs/<cut>.json`: frame range, fps, size, samples, scene, .blend, shots,
@@ -36,3 +36,6 @@ Frame errors: missing, extra, duplicate number, empty, unreadable, non-PNG, wron
 ## Tests
 `python -m pip install -r requirements-dev.txt` then `python -m pytest` from the repo root. The encode tests need
 ffmpeg on PATH and are skipped without it. Blender is never needed; the in-Blender scripts are tested against a fake `bpy`.
+
+CI: `.github/workflows/pipeline-tests.yml` runs the same tests on Windows and Linux when pipeline files change
+(free GitHub Actions; no LFS download, so it doesn't use LFS bandwidth).
