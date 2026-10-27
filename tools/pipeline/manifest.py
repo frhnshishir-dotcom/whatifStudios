@@ -83,6 +83,7 @@ def start(cfg: dict, root=ROOT, adopt: bool = False, replace: bool = False, now:
         "frames": {},
         "missing": list(range(cfg["frame_start"], cfg["frame_end"] + 1)),
         "summary": {},
+        "history": [],
     }
     atomic_write_json(path, m)
     return m
@@ -109,6 +110,9 @@ def update(cfg: dict, root=ROOT, frames_dir=None, now: float | None = None):
                     "missing": len(m["missing"]), "invalid": bad,
                     "errors": len(rep.errors), "warnings": len(rep.warnings)}
     m["updated"] = _iso(time.time() if now is None else now)
+    m.setdefault("history", []).append({"time": m["updated"], "complete": m["summary"]["complete"],
+                                        "missing": m["summary"]["missing"], "invalid": len(bad)})
+    m["history"] = m["history"][-500:]
     atomic_write_json(path, m)
     return m, rep
 

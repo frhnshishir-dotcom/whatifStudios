@@ -28,7 +28,9 @@ Script and phase prompts: `docs/EP001_LONG_PROMPTS.md`. Work through those phase
 | `tools/v5/aerial_v5.py`, `tools/v6/look_v6.py`, `tools/v6/horizon_v6.py` | Skyline towers, look development (clouds, haze, light), distant city |
 | `tools/final/picture_lock.py` | 20.5 s / 30 fps retime (opening hook, end question). Reference for how to retime keys. It saves nothing, and it is **not re-runnable**: it reads the old camera keys at f72/144/216/288, so a second run on the same scene breaks every camera move. |
 | `checkpoints/picturelock_30fps_20261027_154727/master_city_picturelock_30fps.blend` | The 20.5 s / 30 fps / 615-frame retime, already applied. `_renderprep.blend` beside it adds the final render settings. |
-| `tools/assemble_video.py` | FFmpeg assembly + ffprobe validation (`--episode <folder> --root <root>`). Needs ffmpeg on PATH. |
+| `tools/assemble_video.py` | Old FFmpeg assembly (`--episode <folder> --root <root>`). Kept for reference: it stops silently at the first missing frame, defaults to 24 fps and overwrites. Use `tools/pipeline/assemble_safe.py`. |
+| `tools/pipeline/` | Checks that run outside Blender: preflight, render manifest, frame validator, safe assembly, MP4 verify, resume. See `tools/pipeline/README.md`. One config per cut in `configs/<cut>.json`. |
+| `tools/render_final.bat`, `animate_episode.py` `final_range` | **Deprecated.** Both use `blender -b` (crashes here) and the old 24 fps / 288-frame ranges. |
 | `tools/v3/make_people_v3.py`, `assets/people_v3.blend` | 4 posed MPFB/MakeHuman pedestrians (CC0 assets) |
 | `assets/polyhaven/modular_urban_apartments_facade/` | Poly Haven CC0 facade kit (1k) |
 | `episodes/ai_disappeared_final/output/EP001_What_If_AI_Disappeared_Overnight_9x16.mp4` | Older 12 s / 24 fps export (288 frames). **Keep.** |
@@ -74,13 +76,25 @@ Output convention for a new cut: `episodes/<cut_name>/{frames,previews,output,lo
 - FFmpeg + ffprobe (Gyan essentials build) are on the **user** PATH:
   `C:\Users\User\ffmpeg-2026-10-25-git-46f23be8b1-essentials_build\ffmpeg-2026-10-25-git-46f23be8b1-essentials_build\bin`.
   A shell started before that change won't see it, so prepend the folder to PATH for that command.
-  Assemble with `python tools/assemble_video.py --episode <cut_folder> --fps 30` (the default fps is 24).
+  Assemble with `python tools/pipeline/assemble_safe.py --config configs/<cut>.json` (validates frames first,
+  takes fps from the config, never overwrites, verifies the MP4). Set `ffmpeg_dir` in the config if PATH isn't picked up.
 
 ## Git
 Repo: `https://github.com/frhnshishir-dotcom/whatifStudios` (branch `main`). `.blend/.mp4/.png/.jpg/audio` go through **Git LFS**
 (`.gitattributes`). `.gitignore` excludes `episodes/*/{frames,previews,test,logs}/` (about 1.3 GB, regenerable). Commit scripts, docs,
 checkpoints and final MP4s; never commit rendered frame sequences. The free LFS quota is 1 GB storage, and about 115 MB is used.
 
+## Pipeline checks (tools/pipeline, plain Python + Pillow, no Blender needed)
+Per cut: `configs/<cut>.json` (range, fps, size, samples, shots, `audio`: forbidden / required / optional).
+1. Before rendering: `blender_snapshot.py` in the open session via MCP (read-only), then `preflight.py --config <cfg>`.
+2. `manifest.py start --config <cfg>` before the first chunk (`--adopt` only for frames that already exist and are good).
+3. After each chunk or a crash: `resume.py --config <cfg>` prints the next chunk's guarded MCP snippet. Bad frames block
+   re-renders (use_overwrite is off); `resume.py --quarantine` moves them to `logs/rejected_<time>/`, never deletes.
+4. `assemble_safe.py --config <cfg>` refuses on any missing, extra, duplicate, wrong-size, black or stale frame.
+5. Never run `tools/final/picture_lock.py` on a scene that already has it; run `guard_picture_lock.py` first.
+Tests: `python -m pytest` (needs ffmpeg on PATH for the encode tests).
+
 ## Verification checklist for any export
-`ffprobe`: 720×1280, the intended fps, frame count = duration × fps, H.264, yuv420p, a full decode with no errors, no audio stream.
+`ffprobe`: 720×1280, the intended fps, frame count = duration × fps, H.264, yuv420p, a full decode with no errors, audio as the cut config says (`forbidden` = no audio stream).
+`tools/pipeline/verify_mp4.py` automates all of this except looking at the stills.
 Check that there are no missing or undersized PNGs before encoding. Pull 4-6 stills from the MP4 and look at them, including the hook text and every story event.
