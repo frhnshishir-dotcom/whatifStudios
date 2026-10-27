@@ -1,0 +1,5 @@
+# Pipeline tools (tools/pipeline) and their tests. Free, no Blender or GPU needed.
+#   python -m pip install -r requirements-dev.txt
+#   python -m pytest
+Pillow>=9.1
+pytest>=7

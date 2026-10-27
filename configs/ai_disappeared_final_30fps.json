@@ -1,0 +1,17 @@
+{
+  "cut": "ai_disappeared_final_30fps",
+  "scene": "EP001_City_v2",
+  "blend": "checkpoints/picturelock_30fps_20261027_154727/master_city_picturelock_30fps_renderprep.blend",
+  "frame_start": 1,
+  "frame_end": 615,
+  "fps": 30,
+  "width": 720,
+  "height": 1280,
+  "color_mode": "RGB",
+  "samples": 16,
+  "audio": "forbidden",
+  "black_threshold": 4.0,
+  "dark_ranges": [],
+  "min_size_ratio": 0.4,
+  "notes": "Current 20.5 s teaser. Silent: VO/music/SFX are added in CapCut."
+}
