@@ -92,9 +92,16 @@ Per cut: `configs/<cut>.json` (range, fps, size, samples, shots, `audio`: forbid
    re-renders (use_overwrite is off); `resume.py --quarantine` moves them to `logs/rejected_<time>/`, never deletes.
 4. `assemble_safe.py --config <cfg>` refuses on any missing, extra, duplicate, wrong-size, black or stale frame.
 5. Never run `tools/final/picture_lock.py` on a scene that already has it; run `guard_picture_lock.py` first.
+6. After the CapCut edit, before posting: `reel_check.py --mp4 <export>` (platform specs, loudness, hook, safe-zone stills, cover candidates).
 Tests: `python -m pytest` (needs ffmpeg on PATH for the encode tests).
 
 ## Verification checklist for any export
 `ffprobe`: 720×1280, the intended fps, frame count = duration × fps, H.264, yuv420p, a full decode with no errors, audio as the cut config says (`forbidden` = no audio stream).
 `tools/pipeline/verify_mp4.py` automates all of this except looking at the stills.
+For the posted reel (CapCut export, with audio), run `tools/pipeline/reel_check.py` and look at its `safezone_*.png` stills.
+
+## Publishing (connectors in Claude Code sessions)
+- **Buffer** (org "My organization", free plan: 3 channels, 10 scheduled posts): YouTube `Farhn47`, TikTok `streamvault47._`, Instagram `frhn47._`. Use it to schedule the reel and its captions.
+- **vidIQ**: signed in as shishir.farhn@gmail.com with **no YouTube channel authorized**. Connect Farhn47 in vidIQ before using channel analytics. Keyword, title and trend research work without it.
+- **OpusClip**: Starter plan, so no API/MCP access (Pro needed). Not required.
 Check that there are no missing or undersized PNGs before encoding. Pull 4-6 stills from the MP4 and look at them, including the hook text and every story event.

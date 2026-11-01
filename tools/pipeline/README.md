@@ -16,6 +16,7 @@ Each cut has a config in `configs/<cut>.json`: frame range, fps, size, samples, 
 | 4b | `python tools\pipeline\resume.py --config ... --quarantine` | Move bad frames (black, wrong size, stale, out of range, duplicate names) to `logs/rejected_<time>/` so Blender re-renders them |
 | 5 | `python tools\pipeline\assemble_safe.py --config ...` | Refuses unless every frame is valid; encodes, verifies, then publishes. Never overwrites (writes `_v2`, ...) |
 | 6 | `python tools\pipeline\verify_mp4.py --config ... --mp4 <file>` | Re-check any MP4: codec, yuv420p, size, fps, frame count, duration, audio per config, full decode |
+| 7 | `python tools\pipeline\reel_check.py --mp4 <CapCut export>` | **Before posting.** Checks the final reel (with VO/music) against Reels/TikTok/Shorts: H.264/HEVC, 9:16, >=720x1280 (1080x1920 advised), 24-60 fps, <=180 s (warns >90 s), audio present, loudness about -14 LUFS, true peak <= -1 dBTP, sound and picture in the first 0.5 s, faststart, clean decode. Writes `safezone_NN.png` (UI-covered zones in red, safe area in yellow) and 1080x1920 `cover_NN.jpg` candidates to a new `publish_<name>` folder. Never overwrites |
 | - | **in Blender** `run("pipeline\\guard_picture_lock.py", {"config": ...})` | Run before `tools/final/picture_lock.py`; raises unless the scene is still the pre-lock v6 layout |
 
 `validate_frames.py --config ...` is the stand-alone frame check that steps 4 and 5 use.
