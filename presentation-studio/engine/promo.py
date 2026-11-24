@@ -152,6 +152,10 @@ def render(spec: dict, out_dir: Path, preview_frames: bool = True) -> dict:
     dur = float(probe["format"]["duration"])
     subprocess.run([ff, "-y", "-v", "error", "-ss", f"{min(dur * 0.35, dur - 0.1):.2f}", "-i", str(mp4), "-frames:v", "1", "-q:v", "2", str(poster)])
     out["poster"] = poster
+    lite = out_dir / f"{mp4.stem}_lite.mp4"  # small copy for sharing, messaging apps and slides
+    subprocess.run([ff, "-y", "-v", "error", "-i", str(mp4), "-c:v", "libx264", "-preset", "slow", "-crf", "27", "-maxrate", "1800k",
+                    "-bufsize", "3600k", "-vf", "hqdn3d=1.5:1.5:4:4", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(lite)])
+    out["lite"] = lite
     if preview_frames:  # contact strip of 6 frames for visual review
         strip = out_dir / f"{mp4.stem}_frames.jpg"
         n = 6

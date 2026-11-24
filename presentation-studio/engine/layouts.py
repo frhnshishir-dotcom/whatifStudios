@@ -120,6 +120,16 @@ def video(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, post
     if p is None or not p.exists():
         ctx.issues.append({"level": "FAIL", "check": "missing-video", "msg": f"video not found: {src}"})
         return {"kind": "image", "box": list(box), "src": None, "fit": fit, "key": key, "order": order, "bleed": bleed, "decor": False, "alt": alt}
+    if p.stat().st_size > 6_000_000 and shutil.which("ffmpeg"):
+        # slide copy: same 1080p look, ~1/5 the size, so decks stay emailable / downloadable
+        lite = ctx.build_dir / "assets" / f"{p.stem}_slide.mp4"
+        if not lite.exists() or lite.stat().st_mtime < p.stat().st_mtime:
+            lite.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run([shutil.which("ffmpeg"), "-y", "-v", "error", "-i", str(p), "-c:v", "libx264", "-preset", "slow",
+                            "-crf", "27", "-maxrate", "1800k", "-bufsize", "3600k", "-vf", "hqdn3d=1.5:1.5:4:4",
+                            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(lite)])
+        if lite.exists():
+            p = lite
     pp = ctx.asset(poster) if poster else None
     if pp is None or not pp.exists():
         pp = ctx.build_dir / "assets" / f"{p.stem}_poster.jpg"

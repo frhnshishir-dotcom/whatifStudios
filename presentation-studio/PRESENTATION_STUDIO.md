@@ -10,7 +10,7 @@ One deck spec (`projects/<name>/deck.json`) produces:
 | Slide images | `exports/<name>/slides/slide-NN.png` | 1920×1080 |
 | Speaker script | `exports/<name>/<name>_speaker_script.md` | Per-slide notes, timing table, sources |
 | References | `exports/<name>/sources.md` | APA 7 |
-| Ad / promo videos | `exports/<name>/video/<spot>.mp4` | H.264, 16:9, 9:16, 1:1 or 4:5. Frame-exact render with a poster and a frame strip |
+| Ad / promo videos | `exports/<name>/video/<spot>.mp4` (master) + `<spot>_lite.mp4` (~2 MB, for sharing) | H.264, 16:9, 9:16, 1:1 or 4:5. Frame-exact render with a poster and a frame strip |
 | QA | `exports/<name>/qa/report.md` + `contact_html.png` + `contact_pptx.png` | Automated checks plus a human-review rubric |
 
 The trigger phrase **"CREATE A WORLD-CLASS PRESENTATION"** runs the full workflow in
