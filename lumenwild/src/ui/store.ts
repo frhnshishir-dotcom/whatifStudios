@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import type { EngineStats, HoverInfo } from '../engine/Engine';
+import { DEFAULT_OPTIONS, type EditTool, type ToolOptions } from '../engine/edit/Editor';
+import type { WorldObject } from '../engine/objects/defs';
 
-export type ToolId =
-  | 'select' | 'terrain' | 'raise' | 'lower' | 'water' | 'source' | 'drain' | 'channel' | 'waterfall'
-  | 'rock' | 'tree' | 'flowers' | 'mushroom' | 'bridge' | 'cottage' | 'mill' | 'ripple' | 'eraser';
+export type ToolId = EditTool;
+export interface HistoryState { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
 
 export interface Settings {
   resolutionScale: number;
@@ -16,7 +17,10 @@ interface UIState {
   worldName: string;
   seed: number;
   tool: ToolId;
-  brushSize: number;
+  opts: ToolOptions;
+  selected: WorldObject | null;
+  history: HistoryState;
+  toast: { text: string; id: number } | null;
   panelsHidden: boolean;
   paused: boolean;
   speed: number;
@@ -25,7 +29,10 @@ interface UIState {
   hover: HoverInfo | null;
   saveState: 'saved' | 'unsaved' | 'saving';
   setTool: (t: ToolId) => void;
-  setBrushSize: (n: number) => void;
+  setOpts: (o: Partial<ToolOptions>) => void;
+  setSelected: (o: WorldObject | null) => void;
+  setHistory: (h: HistoryState) => void;
+  showToast: (text: string) => void;
   togglePanels: () => void;
   setPaused: (p: boolean) => void;
   setSpeed: (s: number) => void;
@@ -40,7 +47,10 @@ export const useUI = create<UIState>()((set) => ({
   worldName: 'Lumenwild',
   seed: 7,
   tool: 'select',
-  brushSize: 3,
+  opts: { ...DEFAULT_OPTIONS, variants: { ...DEFAULT_OPTIONS.variants } },
+  selected: null,
+  history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null },
+  toast: null,
   panelsHidden: false,
   paused: false,
   speed: 1,
@@ -49,7 +59,14 @@ export const useUI = create<UIState>()((set) => ({
   hover: null,
   saveState: 'unsaved',
   setTool: (tool) => set({ tool }),
-  setBrushSize: (brushSize) => set({ brushSize: Math.max(1, Math.min(16, brushSize)) }),
+  setOpts: (o) => set((st) => {
+    const next = { ...st.opts, ...o, variants: { ...st.opts.variants, ...(o.variants ?? {}) } };
+    next.radius = Math.max(1, Math.min(16, Math.round(next.radius)));
+    return { opts: next };
+  }),
+  setSelected: (selected) => set({ selected }),
+  setHistory: (history) => set({ history }),
+  showToast: (text) => set((st) => ({ toast: { text, id: (st.toast?.id ?? 0) + 1 } })),
   togglePanels: () => set((s) => ({ panelsHidden: !s.panelsHidden })),
   setPaused: (paused) => set({ paused }),
   setSpeed: (speed) => set({ speed }),

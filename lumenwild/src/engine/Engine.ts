@@ -10,6 +10,8 @@ import { WaterLayer } from './water/WaterLayer';
 import { ObjectStore } from './objects/ObjectStore';
 import { ObjectLayer } from './objects/ObjectLayer';
 import type { SceneLayer } from './render/Composer';
+import { Editor, type EditTool } from './edit/Editor';
+import { EditorOverlay } from './edit/EditorOverlay';
 
 export interface EngineStats {
   fps: number;
@@ -58,6 +60,12 @@ export class Engine {
   objectLayer: ObjectLayer;
   /** Draws particles last (after objects), depth-tested. */
   private particleLayer: SceneLayer;
+  readonly editor: Editor;
+  readonly overlay: EditorOverlay;
+  /** Active editor tool (left-button strokes go to the editor). */
+  tool: EditTool = 'select';
+  /** World cell under the pointer (-1 = none). */
+  hoverIndex = -1;
   onStats: ((s: EngineStats) => void) | null = null;
   onHover: ((h: HoverInfo | null) => void) | null = null;
   onPauseChange: ((paused: boolean) => void) | null = null;
@@ -82,8 +90,15 @@ export class Engine {
     this.objects = new ObjectStore(world);
     this.objectLayer = new ObjectLayer(world, this.objects, null);
     this.particleLayer = { after: (buf, cam, t) => this.particles.draw(buf, cam, t, this.objectLayer.night) };
-    this.composer.layers.push(this.objectLayer, this.particleLayer);
+    this.editor = new Editor(world, this.objects, null);
+    this.overlay = new EditorOverlay(this.editor);
+    this.composer.layers.push(this.objectLayer, this.particleLayer, this.overlay);
     this.bindObjects();
+    this.toolHandler = {
+      down: (i) => this.editor.begin(this.tool, i),
+      move: (i) => this.editor.drag(i),
+      up: () => this.editor.end(),
+    };
   }
 
   /** Use an existing object store (generated together with the world). */
@@ -92,6 +107,7 @@ export class Engine {
     this.objects = store;
     this.objectLayer = new ObjectLayer(this.world, store, this.water ? this.water.view : null);
     if (k >= 0) this.composer.layers[k] = this.objectLayer;
+    this.editor.objects = store;
     this.bindObjects();
     this.renderer?.blitter.invalidate();
   }
@@ -151,6 +167,7 @@ export class Engine {
     this.waterLayer = new WaterLayer(this.world, ws.view, this.shader, this.particles);
     this.composer.layers.unshift(this.waterLayer);
     this.objectLayer.water = ws.view;
+    this.editor.water = ws;
     if (ws.mode === 'main') this.sims.push(ws);
     ws.setRunning(!this.clock.paused, this.clock.speed);
   }
@@ -174,6 +191,10 @@ export class Engine {
     const t0 = performance.now();
     for (let s = 0; s < steps; s++) for (const sim of this.sims) sim.step(this.clock.dt);
     const t1 = performance.now();
+    this.editor.tick(Math.min(0.05, dt));
+    this.objectLayer.selectedId = this.editor.selectedId;
+    this.overlay.tool = this.tool;
+    this.overlay.hover = this.hoverIndex;
     if (this.renderer) {
       this.cam.maxLift = Math.max(0, this.shader.maxElev * this.cam.heightScale);
       const buf = this.composer.compose(this.cam, this.clock.simTime);
@@ -219,14 +240,15 @@ export class Engine {
   }
 
   private updateHover(): void {
-    if (!this.onHover || !this.renderer) return;
+    if (!this.renderer) return;
     const [hx, hy] = this.hoverCell;
-    if (hx < 0) return;
+    if (hx < 0) { this.hoverIndex = -1; return; }
     const i = this.pickAt(hx, hy);
-    if (i < 0) { this.onHover(null); return; }
+    this.hoverIndex = i;
+    if (i < 0) { this.onHover?.(null); return; }
     const w = this.world, x = i % w.w, y = Math.floor(i / w.w);
     const b = this.composer.buf, [cx, cy] = this.renderer.cellAt(hx, hy, this.cam);
-    this.onHover({ x, y, i, elev: w.elev[i], mat: w.mat[i], cover: w.cover[i], moisture: w.moisture[i], kind: b.kind[cy * b.cols + cx] });
+    this.onHover?.({ x, y, i, elev: w.elev[i], mat: w.mat[i], cover: w.cover[i], moisture: w.moisture[i], kind: b.kind[cy * b.cols + cx] });
   }
 
   private bindInput(canvas: HTMLCanvasElement): void {
@@ -268,8 +290,8 @@ export class Engine {
       if (canvas.hasPointerCapture(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
     };
     on(canvas, 'pointerup', end);
-    on(canvas, 'pointercancel', end);
-    on(canvas, 'pointerleave', () => { this.hoverCell = [-1, -1]; this.onHover?.(null); });
+    on(canvas, 'pointercancel', (ev) => { end(ev); this.editor.end(); });
+    on(canvas, 'pointerleave', () => { this.hoverCell = [-1, -1]; this.hoverIndex = -1; this.onHover?.(null); });
     on(canvas, 'contextmenu', (ev) => ev.preventDefault());
     on(canvas, 'wheel', (ev) => {
       ev.preventDefault();

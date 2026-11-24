@@ -20,14 +20,41 @@ Needs Node 20.19+ or 22.12+.
 
 | Input | Action |
 |---|---|
+| Left click / drag | Use the active tool |
 | Middle drag, Space + drag, right drag | Pan |
 | Mouse wheel | Zoom (anchored at the cursor) |
 | Arrow keys | Pan |
 | Home | Return to the opening view (the bridge) |
 | Space (tap) | Pause / resume simulation |
-| Ripple tool (R), click or drag on water | Ripples |
-| H | Hide / show all panels |
-| F | Fullscreen |
+| Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z) | Undo, redo (also the top-bar buttons) |
+| Delete / Backspace, Esc | Delete the selected object, deselect |
+| [ and ] | Brush size |
+| H, F | Hide / show all panels, fullscreen |
+
+Tool hotkeys: V select, R ripple, E eraser, 1 terrain brush, 2 raise, 3 lower, 4 water brush, 5 source, 6 drain,
+7 river/channel, 8 waterfall, T tree, G grass & flowers, M mushrooms, K rock, B bridge, C cottage, W water mill.
+
+### Editor tools
+| Tool | What it does |
+|---|---|
+| Select | Click an object to select it (inspector: type, size, moss, glow, wheel side, deck height...), drag to move it |
+| Ripple | Click or drag on water |
+| Eraser | Removes objects, plants, springs and drains under the brush |
+| Terrain brush | Paints ground material (grass, meadow, forest floor, moss, dirt, stone path, sand, mud, stone, glowing moss) |
+| Raise / Lower | Hold to raise or lower a smooth mound; steep slopes turn to cliff; lowering clears plants from the pit |
+| Water brush | Hold to pour water or soak it up |
+| Source / Drain | Click to place a spring or drain (rate in m³/s); click a marker again to remove it |
+| River / channel | Drag to carve a channel; its bed never rises along the stroke, so a channel dragged downhill drains to its end |
+| Waterfall | Click a stream: the bed downstream drops by the set height until the original ground is that low anyway (or the map edge), so the fall lasts instead of silting up; the lip becomes stone |
+| Tree, Mushrooms | Click to place, drag to scatter (type or mixed, tree size) |
+| Grass & flowers | Paints wildflowers, tall/short grass, clover, ferns, reeds, moss, or clears plants |
+| Rock | Boulder, big rock or formation (blocks water) |
+| Bridge | Click on a river: the bridge spans the water under the click with its deck above the surface |
+| Cottage, Water mill | Click on dry ground; the ground under the building is levelled. The mill puts its wheel on the side with water |
+
+Each stroke is one undo step (a channel that also removed the trees in its way undoes both). Placements that can't
+work explain why (occupied, needs dry ground, too deep, too wide). Water volume is simulation state and is not
+part of the undo history; springs and drains are.
 
 ## Architecture
 
@@ -43,7 +70,9 @@ src/engine/            framework-free engine (no React)
                        ObjectLayer (depth-tested sprites, sway, glow, lit windows, turning mill wheel)
   gen/                 world generator (river system, falls, lake, mill race, ponds, structures, forest, glade),
                        base terrain and surface materials, deterministic test scenes
-  Engine.ts            frame loop, simulations at a fixed step, layers (water, objects, particles), input
+  edit/                Editor (all tools, strokes, terrain patches, commands), History (undo/redo, composites),
+                       EditorOverlay (brush disc, building footprint preview, spring/drain markers)
+  Engine.ts            frame loop, simulations at a fixed step, layers (water, objects, particles, overlay), input
 src/ui/                React UI (Zustand store for UI state only; the engine is reached through engineRef)
 tests/                 Vitest unit tests
 e2e/                   Playwright browser tests (run against `vite preview`)
@@ -111,8 +140,8 @@ Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random
 | 1. Vite app, ASCII renderer, glyph and colour systems, terrain grid, camera | done (see below) |
 | 2. Water flow, ripples, waterfalls | done (see below) |
 | 3. Generation, vegetation, rocks, bridges, structures | done (see below) |
-| 4. Sandbox tools, selection, undo/redo | next |
-| 5. Weather, animation, lighting, day/night | planned |
+| 4. Sandbox tools, selection, undo/redo | done (see below) |
+| 5. Weather, animation, lighting, day/night | next |
 | 6. Save/load, optimisation, tests, polish | planned |
 
 ### Milestone 1: verified
@@ -155,3 +184,21 @@ Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random
 - Known limitations: the cottage and mill are small at the default zoom (zoom in to see the windows and the wheel);
   standing stones read as plain grey pillars; flat stone areas on the highlands are a little uniform. The relief
   default is now 0.75 rows per metre (slider in the inspector) so falls and slopes read as height.
+
+### Milestone 4: verified
+- 16 editor unit tests (real World, ObjectStore and main-thread WaterSystem): raise while held, with exact undo and
+  redo; a dug basin collects poured water; steep slopes turn to cliff and undo restores the material; the terrain
+  brush, plant brush and eraser; a new edit clears redo; placement, overlap refusal with a message, id-stable
+  undo/redo; drag-scattered trees are one step; a cottage levels its ground and undo restores ground and solid mask;
+  buildings refuse water; select-drag moves (one step), Delete and undo; inspector edits with slider coalescing;
+  the eraser removes objects and springs in one step; springs/drains toggle and undo; **a channel dragged downhill has a
+  non-rising bed and carries water from a spring to its end**; **the waterfall tool drops the bed and water pours
+  over the new lip**; a bridge spans the water with its deck above the surface.
+- 7 browser tests driving the real UI with mouse and keyboard: all 18 tools by button and hotkey, `[`/`]` brush
+  size; raise with a held click, then Ctrl+Z / Ctrl+Y; place a cottage, select it, Delete, undo; a blocked placement
+  shows a message; drag-scatter trees then erase them; the water brush pours water and a spring shows its marker;
+  the waterfall tool lowers the river bed downstream. All 57 unit and 18 browser tests pass.
+- Inspected screenshots: building footprint preview, placed and selected cottage with the inspector, a channel
+  carrying water from a new spring, and a waterfall cut into the generated river (stone lip, falling water, gorge).
+- Known limitations: moving a building does not re-level the ground under it; brush strokes on terrain hidden behind
+  tall objects pick the object's ground cell; Ctrl+S saving arrives with Milestone 6.

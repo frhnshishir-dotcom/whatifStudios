@@ -1,9 +1,12 @@
 import { Icon } from './Icon';
 import { useUI } from '../store';
+import { getEngine } from '../engineRef';
 
-export function TopBar({ onUndo, onRedo, canUndo, canRedo, onSave, onSettings }: {
-  onUndo: () => void; onRedo: () => void; canUndo: boolean; canRedo: boolean; onSave: () => void; onSettings: () => void;
-}) {
+export function TopBar() {
+  const history = useUI((s) => s.history);
+  const showToast = useUI((s) => s.showToast);
+  const onUndo = () => { const l = getEngine()?.editor.undo(); if (l) showToast(`Undo: ${l}`); };
+  const onRedo = () => { const l = getEngine()?.editor.redo(); if (l) showToast(`Redo: ${l}`); };
   const worldName = useUI((s) => s.worldName);
   const saveState = useUI((s) => s.saveState);
   const togglePanels = useUI((s) => s.togglePanels);
@@ -13,10 +16,8 @@ export function TopBar({ onUndo, onRedo, canUndo, canRedo, onSave, onSettings }:
       <div className="world-title" title="World name">{worldName}</div>
       <div className={`save-state ${saveState}`} data-testid="save-state">{saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving…' : 'Unsaved changes'}</div>
       <div className="spacer" />
-      <button className="icon-btn" onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo"><Icon name="undo" /></button>
-      <button className="icon-btn" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)" aria-label="Redo"><Icon name="redo" /></button>
-      <button className="icon-btn" onClick={onSave} title="Save (Ctrl+S)" aria-label="Save"><Icon name="save" /></button>
-      <button className="icon-btn" onClick={onSettings} title="Settings" aria-label="Settings"><Icon name="settings" /></button>
+      <button className="icon-btn" onClick={onUndo} disabled={!history.canUndo} title={`Undo${history.undoLabel ? `: ${history.undoLabel}` : ''} (Ctrl+Z)`} aria-label="Undo" data-testid="undo"><Icon name="undo" /></button>
+      <button className="icon-btn" onClick={onRedo} disabled={!history.canRedo} title={`Redo${history.redoLabel ? `: ${history.redoLabel}` : ''} (Ctrl+Y)`} aria-label="Redo" data-testid="redo"><Icon name="redo" /></button>
       <button className="icon-btn" onClick={togglePanels} title="Hide panels (H)" aria-label="Hide panels"><Icon name="expand" /></button>
     </header>
   );

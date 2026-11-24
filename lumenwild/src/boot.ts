@@ -53,7 +53,7 @@ export function createEngine(seed: number, scene = 'world', opts: { worker?: boo
     if (br) engine.home = [br.x, br.y + 6];
     const water = new WaterSystem(world, { useWorker: share, init: (_sim, view) => { prefillWater(world, view.depth, info); } });
     engine.attachWater(water);
-    water.setSource(info.source[0], info.source[1], RIVER_RATE);
+    engine.editor.setSourceDirect('source', info.source[0], info.source[1], RIVER_RATE);
     water.warmup(600);
     return engine;
   }
