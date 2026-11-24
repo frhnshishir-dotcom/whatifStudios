@@ -11,7 +11,7 @@ export const TOOL_GROUPS: Array<{ name: string; tools: Array<{ id: ToolId; label
 ];
 
 /** Tools whose implementation exists (filled in as milestones land). */
-export const AVAILABLE_TOOLS = new Set<ToolId>(['select']);
+export const AVAILABLE_TOOLS = new Set<ToolId>(['select', 'ripple']);
 
 export function Toolbar() {
   const tool = useUI((s) => s.tool);

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { getEngine } from '../engineRef';
 import { useUI } from '../store';
+import { bindTool } from '../toolBinding';
 
 /** Hosts the world canvas: attaches the engine, tracks size changes and wires engine callbacks into the UI store. */
 export function CanvasView() {
@@ -43,6 +44,9 @@ export function CanvasView() {
     engine.resize(r.width, r.height, window.devicePixelRatio || 1);
     engine.renderer.blitter.invalidate();
   }, [resolutionScale, heightScale]);
+
+  const tool = useUI((s) => s.tool);
+  useEffect(() => { const e = getEngine(); if (e) bindTool(e, tool); }, [tool]);
 
   return <canvas ref={ref} className="world-canvas" data-testid="world-canvas" aria-label="Lumenwild world" />;
 }

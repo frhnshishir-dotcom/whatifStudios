@@ -4,6 +4,9 @@ import { Clock } from './world/Clock';
 import { TerrainShader } from './render/TerrainShader';
 import { Composer } from './render/Composer';
 import { Renderer } from './render/Renderer';
+import { Particles } from './render/Particles';
+import type { WaterSystem } from './water/WaterSystem';
+import { WaterLayer } from './water/WaterLayer';
 
 export interface EngineStats {
   fps: number;
@@ -18,6 +21,10 @@ export interface EngineStats {
   rows: number;
   cellW: number;
   simSteps: number;
+  simMode: 'worker' | 'main' | 'none';
+  water: number;
+  activeChunks: number;
+  particles: number;
 }
 
 export interface HoverInfo { x: number; y: number; i: number; elev: number; mat: number; cover: number; moisture: number; kind: number }
@@ -37,6 +44,9 @@ export class Engine {
   composer: Composer;
   renderer: Renderer | null = null;
   readonly sims: Simulation[] = [];
+  water: WaterSystem | null = null;
+  waterLayer: WaterLayer | null = null;
+  readonly particles = new Particles(4000);
   onStats: ((s: EngineStats) => void) | null = null;
   onHover: ((h: HoverInfo | null) => void) | null = null;
   onPauseChange: ((paused: boolean) => void) | null = null;
@@ -96,9 +106,24 @@ export class Engine {
     this.cleanup = [];
   }
 
+  /** Connect the water simulation: rendering layer + stepping (main-thread mode) or worker control. */
+  attachWater(ws: WaterSystem): void {
+    this.water = ws;
+    this.waterLayer = new WaterLayer(this.world, ws.view, this.shader, this.particles);
+    this.composer.layers.unshift(this.waterLayer);
+    if (ws.mode === 'main') this.sims.push(ws);
+    ws.setRunning(!this.clock.paused, this.clock.speed);
+  }
+
   setPaused(p: boolean): void {
     this.clock.paused = p;
+    this.water?.setRunning(!p, this.clock.speed);
     this.onPauseChange?.(p);
+  }
+
+  setSpeed(v: number): void {
+    this.clock.speed = v;
+    this.water?.setRunning(!this.clock.paused, v);
   }
 
   /** One frame: advance fixed steps, compose, blit. Exposed for tests (render a frame at a given time). */
@@ -124,9 +149,12 @@ export class Engine {
       this.statAcc = 0;
       const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
       const r = this.renderer.stats, b = this.composer.buf;
+      const ws = this.water;
       this.onStats({
-        fps: avg > 0 ? 1000 / avg : 0, frameMs: ft, composeMs: this.composeMs, blitMs: r.blitMs, putMs: r.putMs, simMs: this.simMs,
-        drawnCells: r.drawnCells, cells: b.n, cols: b.cols, rows: b.rows, cellW: this.cam.cellW, simSteps: this.clock.steps,
+        fps: avg > 0 ? 1000 / avg : 0, frameMs: ft, composeMs: this.composeMs, blitMs: r.blitMs, putMs: r.putMs,
+        simMs: ws?.mode === 'worker' ? ws.stats.stepMs : this.simMs,
+        drawnCells: r.drawnCells, cells: b.n, cols: b.cols, rows: b.rows, cellW: this.cam.cellW, simSteps: ws ? ws.stats.steps : this.clock.steps,
+        simMode: ws ? ws.mode : 'none', water: ws ? ws.stats.total : 0, activeChunks: ws ? ws.stats.active : 0, particles: this.particles.n,
       });
     }
     this.updateHover();

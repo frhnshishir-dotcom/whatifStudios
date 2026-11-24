@@ -10,8 +10,9 @@ import { useUI } from './ui/store';
 async function start() {
   const root = createRoot(document.getElementById('root')!);
   await loadFonts();
-  const seed = Number(new URLSearchParams(location.search).get('seed') || 7);
-  const engine = createEngine(seed);
+  const q = new URLSearchParams(location.search);
+  const seed = Number(q.get('seed') || 7);
+  const engine = createEngine(seed, q.get('scene') || 'world', { worker: q.get('worker') !== '0' });
   setEngine(engine);
   useUI.getState().setWorldMeta(engine.world.name, seed);
   // Test/debug hook (read-only use in browser tests).

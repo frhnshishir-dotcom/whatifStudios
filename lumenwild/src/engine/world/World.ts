@@ -2,6 +2,12 @@ import { Mat } from './materials';
 
 export const CHUNK = 16;
 
+/** Buffer factory: ordinary ArrayBuffer, or SharedArrayBuffer when the page is cross-origin isolated. */
+export type Alloc = (bytes: number) => ArrayBuffer | SharedArrayBuffer;
+export const heapAlloc: Alloc = (bytes) => new ArrayBuffer(bytes);
+export const sharedAlloc: Alloc = (bytes) => new SharedArrayBuffer(bytes);
+export const canShare = (): boolean => typeof SharedArrayBuffer !== 'undefined' && (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated === true;
+
 /**
  * The world grid: one cell = 1 m x 1 m. Terrain and decoration layers are typed arrays (row-major, i = y * w + x).
  * Water, objects and simulation state live in their own modules and reference the same dimensions.
@@ -30,11 +36,12 @@ export class World {
   /** Incremented on any terrain change (renderers and serializers can detect edits). */
   terrainVersion = 0;
 
-  constructor(w = 256, h = 256) {
+  /** alloc: buffer factory; pass one that returns SharedArrayBuffer so a simulation worker can read the terrain. */
+  constructor(w = 256, h = 256, alloc: Alloc = heapAlloc) {
     this.w = w;
     this.h = h;
     this.n = w * h;
-    this.elev = new Float32Array(this.n);
+    this.elev = new Float32Array(alloc(this.n * 4));
     this.mat = new Uint8Array(this.n).fill(Mat.Grass);
     this.cover = new Uint8Array(this.n);
     this.coverVar = new Uint8Array(this.n);
