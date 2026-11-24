@@ -154,7 +154,7 @@ async function main() {
   const cfg = {
     cut, engine: 'ascii-engine', scene: a.scene, format: info.format, quality: a.quality, seed: Number(a.seed),
     frame_start: 1, frame_end: total, fps, width: info.width, height: info.height, color_mode: 'RGB', audio: 'forbidden',
-    max_chunk: 300, dark_ranges: (info.meta.darkRanges || []).map(([t0, t1]) => [Math.max(1, Math.round(t0 * fps) + 1), Math.min(total, Math.round(t1 * fps) + 1)]),
+    output_name: `${cut}.mp4`, max_chunk: 300, dark_ranges: (info.meta.darkRanges || []).map(([t0, t1]) => [Math.max(1, Math.round(t0 * fps) + 1), Math.min(total, Math.round(t1 * fps) + 1)]),
     notes: 'Rendered by ascii-engine/tools/render.mjs (Three.js/WebGL, no Blender). Silent: VO/music/SFX are added in CapCut.',
   };
   const renderKeys = ['cut', 'engine', 'scene', 'format', 'quality', 'seed', 'frame_start', 'frame_end', 'fps', 'width', 'height'];

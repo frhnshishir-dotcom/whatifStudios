@@ -1,0 +1,19 @@
+{
+  "cut": "ascii_prototype_final_16x9",
+  "engine": "ascii-engine",
+  "scene": "prototype",
+  "format": "16x9",
+  "quality": "final",
+  "seed": 1,
+  "frame_start": 1,
+  "frame_end": 300,
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "color_mode": "RGB",
+  "audio": "forbidden",
+  "output_name": "ascii_prototype_final_16x9.mp4",
+  "max_chunk": 300,
+  "dark_ranges": [],
+  "notes": "Rendered by ascii-engine/tools/render.mjs (Three.js/WebGL, no Blender). Silent: VO/music/SFX are added in CapCut."
+}

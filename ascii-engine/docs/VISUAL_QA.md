@@ -44,6 +44,15 @@ Renderer for all numbers below: headless Chromium, WebGL 2 on SwiftShader (CPU, 
 - **master vs final:** 4x zoom crops show only marginally smoother edges for ~1.5x the time.
 - **Repo tests:** `python -m pytest` 142 passed (the new configs are accepted by the existing validators).
 
+## Final cuts (verified)
+| Cut | File | Size | Render (SwiftShader) | Verification |
+|---|---|---|---|---|
+| `ascii_prototype_final_9x16` | `episodes/ascii_prototype_final_9x16/output/ascii_prototype_final_9x16.mp4` | 14.7 MB | 184,911 particles; 832 ms/frame wall (browser render median 823 ms); 250 s for 300 frames | `assemble_safe.py` + ffprobe: 720x1280, 30 fps, 300 frames, 10.0 s, H.264 yuv420p, no audio, clean decode |
+| `ascii_prototype_final_16x9` | `episodes/ascii_prototype_final_16x9/output/ascii_prototype_final_16x9.mp4` | 13.6 MB | 810 ms/frame wall (median 798 ms); 243 s | same, 1280x720 |
+
+Six stills were pulled from each MP4 and inspected (empty street, emergence, walk, glitch cut, close shot, dissolve).
+A second assembly of the same frames gave byte-identical file sizes.
+
 ## Evaluation against the brief (current prototype)
 | Criterion | Assessment |
 |---|---|
