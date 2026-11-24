@@ -55,6 +55,7 @@
       words(el, start + 0.25, 0.09);
       tl.fromTo($(".kin", el), { scale: 1 }, { scale: 1.06, duration: d + T, ease: "none" }, start);
       fadeUp(".eyebrow", start + 0.1, 10);
+      fadeUp(".foot", start + 0.8, 0);
     } else if (sc.type === "reveal" || sc.type === "endcard") {
       const obj = $(".object", el);
       if (obj) {
@@ -67,6 +68,8 @@
       fadeUp(".sub", start + 1.2);
       const cta = $(".cta", el);
       if (cta) tl.fromTo(cta, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "back.out(2)" }, start + 1.4);
+      fadeUp(".brand", start + 1.1, 12);
+      fadeUp(".foot", start + 0.6, 0);
       const sweep = $(".sweep", el);
       if (sweep) tl.fromTo(sweep, { xPercent: -120, opacity: 1 }, { xPercent: 120, duration: 1.4, ease: "power2.inOut" }, start + 1.3).set(sweep, { opacity: 0 }, start + 2.75);
     } else if (sc.type === "stat") {
@@ -79,6 +82,13 @@
       fadeUp(".label", start + 0.9);
       fadeUp(".source", start + 1.3, 0);
       tl.fromTo($(".statwrap", el), { scale: 0.92 }, { scale: 1.02, duration: d + T, ease: "none" }, start);
+    } else if (sc.type === "device") {
+      const img = $(".devimg", el);
+      tl.fromTo(img, { yPercent: 35, opacity: 0, rotate: 4 }, { yPercent: 0, opacity: 1, rotate: 0, duration: 1.2 }, start + 0.05);
+      tl.fromTo($(".glow", el), { scale: 0.6, opacity: 0 }, { scale: 1.1, opacity: 0.55, duration: 1.6, ease: "power2.out" }, start + 0.2);
+      $$(".dline", el).forEach((ln, k) => $$(".w > i", ln).forEach((w, j) =>
+        tl.fromTo(w, { yPercent: 115 }, { yPercent: 0, duration: 0.8 }, start + (sc.line_times ? sc.line_times[k] : 0.25 + k * 0.55) + j * 0.05)));
+      fadeUp(".eyebrow", start + 0.1, 10);
     } else if (sc.type === "list") {
       fadeUp(".eyebrow", start + 0.1, 10);
       words($(".title", el) || el, start + 0.2, 0.05);

@@ -114,6 +114,8 @@ def add_text(slide, el):
                 rPr.set("spc", str(int(el["tracking"] * size * 100)))
             if el["upper"]:
                 rPr.set("cap", "all")
+            if el.get("strike"):
+                rPr.set("strike", "sngStrike")
             if el.get("link"):
                 r.hyperlink.address = el["link"]
     return tb
@@ -188,14 +190,21 @@ def add_image(slide, el, slide_w=13.333, slide_h=7.5):
     return pic
 
 
-def scrim_png(out_dir: Path, strength: float) -> Path:
-    p = out_dir / f"scrim_{int(strength * 100)}.png"
+def scrim_png(out_dir: Path, strength: float, direction: str = "bottom") -> Path:
+    p = out_dir / f"scrim_{direction}_{int(strength * 100)}.png"
     if not p.exists():
         h, w = 540, 960
-        y = np.linspace(0, 1, h)[:, None]
-        a = np.clip((y - 0.30) / 0.70, 0, 1) ** 1.4 * strength
         rgba = np.zeros((h, w, 4), np.uint8)
-        rgba[..., 3] = (np.repeat(a, w, 1) * 255).astype(np.uint8)
+        if direction == "left":  # dark on the left, clear on the right, plus a soft floor
+            x = np.linspace(0, 1, w)[None, :]
+            a = np.clip(1 - (x - 0.05) / 0.62, 0, 1) ** 1.3 * strength
+            y = np.linspace(0, 1, h)[:, None]
+            a = np.clip(a + np.clip((y - 0.7) / 0.3, 0, 1) ** 2 * 0.5 * strength, 0, 1)
+            rgba[..., 3] = (a * 255).astype(np.uint8)
+        else:
+            y = np.linspace(0, 1, h)[:, None]
+            a = np.clip((y - 0.30) / 0.70, 0, 1) ** 1.4 * strength
+            rgba[..., 3] = (np.repeat(a, w, 1) * 255).astype(np.uint8)
         out_dir.mkdir(parents=True, exist_ok=True)
         Image.fromarray(rgba, "RGBA").save(p)
     return p
@@ -358,7 +367,7 @@ def build(deck: dict, ds: dict, slides_els: list[list[dict]], out: Path, mode: s
                     slide.background.fill.fore_color.rgb = rgb(el["color"])
                 continue
             if k == "scrim":
-                pic = slide.shapes.add_picture(str(scrim_png(build_dir / "assets", el["strength"])), 0, 0, prs.slide_width, prs.slide_height)
+                pic = slide.shapes.add_picture(str(scrim_png(build_dir / "assets", el["strength"], el.get("dir", "bottom"))), 0, 0, prs.slide_width, prs.slide_height)
                 pic.name = "Scrim"
                 continue
             shp = {"text": add_text, "rect": add_rect, "line": add_line, "ellipse": add_ellipse,
@@ -373,7 +382,8 @@ def build(deck: dict, ds: dict, slides_els: list[list[dict]], out: Path, mode: s
                 shp.name = key
             morphing = key in morph_names[i] and (sl.get("transition") or motion["transition"]) == "morph"
             if k == "video":
-                effects.insert(0, (shp.shape_id, el.get("dur_ms", 10000), "media", "pic"))
+                kind = "media" + (":auto" if el.get("autoplay", True) else ":click") + (":mute" if el.get("muted", True) else "") + (":loop" if el.get("loop", True) else "")
+                effects.insert(0, (shp.shape_id, el.get("dur_ms", 10000), kind, "pic"))
                 continue
             if el.get("order") and not morphing and sl.get("motion", motion["entrance"]) != "none":
                 tag = etree.QName(shp._element).localname

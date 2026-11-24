@@ -116,25 +116,37 @@ def apply(slide, transition: str | None, trans_ms: int, effects: list[tuple[int,
     if not effects:
         return
     effects = list(effects)
-    parts, cid, media = [], 5, []
+    parts, cid, media, click_parts = [], 5, [], []
     for i, (spid, delay, kind, _tag) in enumerate(effects):
-        if kind == "media":  # embedded video: start automatically with the slide
+        if kind.startswith("media"):  # embedded video
+            flags = kind.split(":")[1:]
+            if "click" in flags:  # its own click group: the presenter's next click plays it
+                click_parts.append(
+                    f'<p:par><p:cTn id="{cid}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>'
+                    f'<p:par><p:cTn id="{cid + 1}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>'
+                    f'<p:par><p:cTn id="{cid + 2}" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="clickEffect">'
+                    f'<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:cmd type="call" cmd="playFrom(0.0)">'
+                    f'<p:cBhvr><p:cTn id="{cid + 3}" dur="{int(delay)}" fill="hold"/><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cBhvr></p:cmd>'
+                    f"</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>")
+                media.append((spid, "mute" in flags, "loop" in flags))
+                cid += 4
+                continue
             node = "afterEffect" if i == 0 else "withEffect"
             parts.append(
                 f'<p:par><p:cTn id="{cid}" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="{node}">'
                 f'<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:cmd type="call" cmd="playFrom(0.0)">'
                 f'<p:cBhvr><p:cTn id="{cid + 1}" dur="{int(delay)}" fill="hold"/><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cBhvr></p:cmd>'
                 f"</p:childTnLst></p:cTn></p:par>")
-            media.append(spid)
+            media.append((spid, "mute" in flags, "loop" in flags))
             cid += 2
             continue
         xml, cid = _effect(cid, spid, delay, dur_ms, kind, i == 0)
         parts.append(xml)
     video_nodes = "".join(
-        f'<p:video><p:cMediaNode vol="80000" mute="1"><p:cTn id="{cid + k}" repeatCount="indefinite" fill="hold" display="0">'
+        f'<p:video><p:cMediaNode vol="80000"{' mute="1"' if mute else ''}><p:cTn id="{cid + k}"{' repeatCount="indefinite"' if loop else ''} fill="hold" display="0">'
         f'<p:stCondLst><p:cond delay="indefinite"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cMediaNode></p:video>'
-        for k, spid in enumerate(media))
-    effects = [e for e in effects if e[2] != "media"]
+        for k, (spid, mute, loop) in enumerate(media))
+    effects = [e for e in effects if not e[2].startswith("media")]
     bld = []
     for spid, _d, _k, tag in effects:
         if tag == "sp":
@@ -148,7 +160,8 @@ def apply(slide, transition: str | None, trans_ms: int, effects: list[tuple[int,
         f'<p:par><p:cTn id="4" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>'
         + "".join(parts)
         + "</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>"
-        "</p:childTnLst></p:cTn>"
+        + "".join(click_parts)
+        + "</p:childTnLst></p:cTn>"
         '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
         '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
         "</p:seq>" + video_nodes + "</p:childTnLst></p:cTn></p:par></p:tnLst>"

@@ -1,0 +1,20 @@
+{
+ "scenes": [
+  {
+   "type": "kinetic",
+   "dur": 6.4,
+   "bg": "liquid",
+   "eyebrow": "The entrepreneur · placeholder",
+   "lines": [
+    "For the people building",
+    "something of their [[own.]]"
+   ],
+   "footnote": "Placeholder: AI entrepreneur shot not yet generated",
+   "transition": "cut"
+  }
+ ],
+ "name": "seg_entrepreneur_placeholder",
+ "design_system": "revolut-ng",
+ "format": "16:9",
+ "fps": 30
+}

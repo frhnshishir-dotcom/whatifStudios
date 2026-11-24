@@ -86,22 +86,31 @@ def build_html(spec: dict, out_dir: Path) -> Path:
         t = sc["type"]
         eb = f'<div class="eyebrow">{html.escape(sc["eyebrow"])}</div>' if sc.get("eyebrow") else ""
         if t == "kinetic":
-            body_html = f'<div class="center">{eb}<div class="kin">' + "<br>".join(_words(l) for l in sc["lines"]) + "</div></div>"
+            foot = f'<div class="foot">{html.escape(sc["footnote"])}</div>' if sc.get("footnote") else ""
+            body_html = f'<div class="center">{eb}<div class="kin">' + "<br>".join(_words(l) for l in sc["lines"]) + f"</div></div>{foot}"
         elif t in ("reveal", "endcard"):
             obj = '<div class="object"></div>' if sc.get("object") else ""
             sub = f'<div class="sub">{html.escape(smart_quotes(sc["subtitle"]))}</div>' if sc.get("subtitle") else ""
             cta = f'<div class="cta">{html.escape(sc["cta"])}</div>' if sc.get("cta") else ""
             title = f'<div class="title">{_words(sc["title"])}<div class="sweep"></div></div>' if sc.get("title") else ""
+            foot = f'<div class="foot">{html.escape(sc["footnote"])}</div>' if sc.get("footnote") else ""
+            brand = f'<div class="brand">{html.escape(sc["brand"])}</div>' if sc.get("brand") else ""
             if t == "reveal":
-                body_html = f'{obj}<div class="copy">{eb}{title}{sub}{cta}</div>'
+                body_html = f'{obj}<div class="copy">{eb}{title}{sub}{cta}</div>{foot}'
             else:
-                body_html = f'{obj}<div class="center">{eb}{title}{sub}{cta}</div>'
+                body_html = f'{obj}<div class="center">{eb}{title}{sub}{cta}{brand}</div>{foot}'
         elif t == "stat":
             ring = ('<svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="46" fill="none" stroke-width="1.2"/>'
                     '<circle class="ring-fg" cx="50" cy="50" r="46" fill="none" stroke-width="2.2" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/></svg>')
             body_html = (f'<div class="center">{eb}<div class="statwrap">{ring}<div class="num">{html.escape(sc["value"])}</div></div>'
                          f'<div class="label">{html.escape(smart_quotes(sc.get("label", "")))}</div>'
                          + (f'<div class="source">{html.escape(sc["source"])}</div>' if sc.get("source") else "") + "</div>")
+        elif t == "device":  # interface reveal: lines on the left, a device image rising on the right
+            img = Path(sc["image"])
+            mime = "image/png" if img.suffix.lower() == ".png" else "image/jpeg"
+            lines = "".join(f'<div class="dline">{_words(l)}</div>' for l in sc.get("lines", []))
+            body_html = (f'<div class="devwrap"><div class="devcopy">{eb}{lines}</div>'
+                         f'<div class="devimg"><div class="glow"></div><img src="{_b64(img, mime)}" alt=""></div></div>')
         elif t == "list":
             items = "".join(f'<div class="item"><b>{k + 1:02d}</b><span>{html.escape(smart_quotes(x))}</span></div>' for k, x in enumerate(sc["items"]))
             body_html = f'<div class="list">{eb}<div class="title">{_words(sc.get("title", ""))}</div>{items}</div>'

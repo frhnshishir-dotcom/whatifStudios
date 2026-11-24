@@ -1,0 +1,597 @@
+{
+ "meta": {
+  "title": "Revolut in Nigeria: Understanding Culture Before Entering the Market",
+  "short_title": "Revolut in Nigeria · hypothetical case study",
+  "subtitle": "Cross-Cultural Communication | Hypothetical International Market-Entry Case Study",
+  "author": "",
+  "course": "INSEEC Business School · Cross-Cultural Communication",
+  "date": "November 2026",
+  "academic": true,
+  "file_name": "REVOLUT_NIGERIA_FINAL",
+  "lang": "en-GB",
+  "must_cover": [
+   "Universalism",
+   "Particularism",
+   "Individualism",
+   "Collectivism",
+   "Specific",
+   "Diffuse",
+   "Sequential",
+   "Synchronous",
+   "Objectivity vs Neutrality",
+   "Assigned Status",
+   "Internal Control",
+   "Stereotype",
+   "Age",
+   "Income",
+   "Social class",
+   "B2B",
+   "Company culture",
+   "negotiation",
+   "Campaign",
+   "partnerships"
+  ]
+ },
+ "design_system": "revolut-ng",
+ "sources": [
+  {
+   "id": "cbn2025",
+   "type": "report",
+   "author": "Central Bank of Nigeria",
+   "year": 2025,
+   "title": "Shaping the future of fintech in Nigeria: Innovation, inclusion and integrity (CBN Fintech Report, Policy Insight Series)",
+   "publisher": "Central Bank of Nigeria",
+   "url": "https://www.cbn.gov.ng/Out/2026/CCD/CBN_FINTECH_REPORT_.pdf",
+   "accessed": "2026-11-24",
+   "verified": true,
+   "note": "p. 5: close to 11 billion NIP transactions in 2024, up from 5 billion in 2022; real-time payments since 2011; fraud as reputational burden. p. 9: 26% of adults excluded (2023)."
+  },
+  {
+   "id": "efina2026",
+   "type": "web",
+   "author": "EFInA",
+   "year": 2026,
+   "title": "Access to Financial Services in Nigeria (A2F) 2026 survey: Key highlights",
+   "publisher": "Enhancing Financial Innovation & Access",
+   "url": "https://a2f.ng/a2f-2026-report/",
+   "accessed": "2026-11-24",
+   "verified": true,
+   "note": "64% of adults use DFS; mobile money 12% (2023) to 38% (2026); fieldwork April–May 2026."
+  },
+  {
+   "id": "efina2026b",
+   "type": "web",
+   "author": "EFInA",
+   "year": 2026,
+   "title": "A2F 2026: Making financial inclusion work harder for Nigerians",
+   "publisher": "Enhancing Financial Innovation & Access",
+   "url": "https://a2f.ng/a2f-2026-making-financial-inclusion-work-harder-for-nigerians/",
+   "accessed": "2026-11-24",
+   "verified": true,
+   "note": "Published 9 Oct 2026. Formal inclusion 64% to 73%; exclusion 26% to 21%; ~3/4 of excluded adults in North West and North East; cash remains important."
+  },
+  {
+   "id": "revolut2026",
+   "type": "web",
+   "author": "Revolut",
+   "year": 2026,
+   "title": "Where you can sign up for Revolut",
+   "publisher": "Revolut Help Centre",
+   "url": "https://help.revolut.com/en-GB/help/profile-and-plan/profile-plan/verifying-identity/what-countries-are-supported/",
+   "accessed": "2026-11-24",
+   "verified": true,
+   "note": "Nigeria not in the supported-country list for personal accounts."
+  },
+  {
+   "id": "trompenaars1997",
+   "type": "book",
+   "author": [
+    "Trompenaars, F.",
+    "Hampden-Turner, C."
+   ],
+   "year": 1997,
+   "title": "Riding the waves of culture: Understanding cultural diversity in business (2nd ed.)",
+   "publisher": "Nicholas Brealey",
+   "verified": false,
+   "note": "Framework source named in the course slides; confirm edition in your library before submission."
+  },
+  {
+   "id": "pouchelet2026",
+   "type": "web",
+   "author": "Pouchelet, M.",
+   "year": 2026,
+   "title": "Cross cultural communication [Course slides]",
+   "publisher": "INSEEC Business School",
+   "verified": true,
+   "url": "",
+   "note": "Course PDF provided by the student (COURS_CROSS_CULTURAL_COMMUNICATION_06112026_GB). Trompenaars: pp. 24–34; method: pp. 35–36; Hall context: p. 39; adaptation grid: pp. 50–52."
+  },
+  {
+   "id": "sanchiz2015",
+   "type": "image",
+   "author": "Sanchiz, C.",
+   "year": 2015,
+   "title": "Lagos skyline",
+   "publisher": "Wikimedia Commons",
+   "url": "https://commons.wikimedia.org/wiki/File:Lagos_skyline.jpg",
+   "license": "CC BY-SA 2.0; colour-graded and signage softened for this presentation",
+   "verified": true
+  },
+  {
+   "id": "naturalearth",
+   "type": "image",
+   "author": "Natural Earth",
+   "year": "n.d.",
+   "title": "Admin 0 – Countries, 1:10m (via datasets/geo-countries)",
+   "publisher": "naturalearthdata.com",
+   "url": "https://github.com/datasets/geo-countries",
+   "license": "Public domain",
+   "verified": true
+  }
+ ],
+ "slides": [
+  {
+   "layout": "cover",
+   "image": "assets/images/lagos_skyline_graded.jpg",
+   "alt": "Lagos Island skyline at dusk",
+   "visual": "assets/images/concept_phone_ui.png",
+   "visual_box": [
+    9.15,
+    0.62,
+    3.6,
+    6.3
+   ],
+   "visual_alt": "Conceptual banking app interface with illustrative data",
+   "eyebrow": "Cross-cultural communication · Hypothetical market-entry case study",
+   "title": "REVOLUT IN NIGERIA",
+   "subtitle": "Understanding Culture Before Entering the Market",
+   "meta": "INSEEC Business School · Cross-Cultural Communication",
+   "credit": "Photo: Clara Sanchiz, “Lagos skyline” (2015), CC BY-SA 2.0, Wikimedia Commons; colour-graded, signage softened. Phone: concept interface, illustrative data. Not an official Revolut communication.",
+   "transition": "fade",
+   "motion": "rise",
+   "notes": "Good morning. Our question is simple to ask and hard to answer: how should Revolut adapt its business relationships, communication, marketing and operations to enter Nigeria successfully?\n\nTwo things to be clear about from the start. First, this is a hypothetical case study. Revolut does not currently list Nigeria among the countries where you can open a personal account, so nothing here is an announcement or a description of a real Revolut product. Second, we use the course framework, Trompenaars and Hampden-Turner's seven dimensions, as a lens, not as proof of how any individual behaves.\n\nOur structure follows the course method: market context, cultural profiling, a critical look at stereotypes versus reality, and then concrete recommendations, including a proposed campaign.\n\n[Source: Revolut Help Centre, 'Where you can sign up for Revolut', accessed 24 Nov 2026.]"
+  },
+  {
+   "layout": "stats",
+   "eyebrow": "Market context · Nigeria",
+   "title": "Nigeria has a rapidly evolving digital payments ecosystem",
+   "image": "assets/images/nigeria_dot_map.png",
+   "image_box": [
+    7.55,
+    1.75,
+    5.1,
+    4.85
+   ],
+   "alt": "Dot map of Nigeria with Lagos, Abuja and Kano marked",
+   "items": [
+    {
+     "value": "~11 bn",
+     "label": "instant interbank (NIP) transactions in 2024, up from ~5 bn in 2022"
+    },
+    {
+     "value": "64%",
+     "label": "of Nigerian adults use digital financial services (2026)"
+    },
+    {
+     "value": "38%",
+     "label": "of adults use mobile money in 2026, up from 12% in 2023"
+    }
+   ],
+   "highlight": 0,
+   "takeaway": "Not an empty market: Revolut would compete on trust, reliability, relevance and local adaptation.",
+   "cite": [
+    "cbn2025",
+    "efina2026"
+   ],
+   "transition": "fade",
+   "notes": "Before any cultural analysis, the market context. Nigeria is not a blank space waiting for digital banking.\n\nAccording to the Central Bank of Nigeria's 2025 fintech report, close to 11 billion transactions went through the NIBSS Instant Payment platform in 2024, up from about 5 billion in 2022. Real-time interbank transfers have existed nationally since 2011.\n\nOn the customer side, EFInA's Access to Financial Services survey, fielded in April and May 2026, finds that 64 percent of adults use digital financial services, and mobile money use more than tripled, from 12 to 38 percent of adults since 2023.\n\nA note on method: the brief also mentioned total e-payment values for 2025. Published figures disagree on definitions and periods, and I could not verify them in the original CBN document, so I left them out rather than mix metrics.\n\nThe implication: a competitive, developed ecosystem. Revolut would need to differentiate through trust, reliability, relevance and local adaptation.\n\n[Sources: CBN (2025) pp. 5, 9; EFInA A2F 2026 key highlights.]"
+  },
+  {
+   "layout": "dimensions",
+   "theme": "light",
+   "eyebrow": "Framework · Trompenaars & Hampden-Turner",
+   "title": "Understanding the cultural context behind business decisions",
+   "items": [
+    {
+     "name": "Universalism vs Particularism",
+     "q": "Is the formal contract or the relationship of trust preferred?",
+     "selected": true
+    },
+    {
+     "name": "Individualism vs Collectivism",
+     "q": "Is the purchase decision aimed at personal or group benefit?",
+     "selected": true
+    },
+    {
+     "name": "Objectivity vs Neutrality",
+     "q": "Is it well regarded to show enthusiasm or frustration?"
+    },
+    {
+     "name": "Diffuse vs Specific",
+     "q": "Is the business relationship strictly professional?",
+     "selected": true
+    },
+    {
+     "name": "Assigned Status vs Acquired Status",
+     "q": "Does legitimacy come from skills, or from title, diploma or age?"
+    },
+    {
+     "name": "Sequential vs Synchronous Time",
+     "q": "Is strict adherence to the schedule a priority over the unexpected?",
+     "selected": true
+    },
+    {
+     "name": "Internal Control vs External Control",
+     "q": "Do you want to control your environment or adapt to it?"
+    }
+   ],
+   "panel_tag": "Why these four",
+   "panel": [
+    "Trust: rules versus relationships",
+    "Social influence on financial decisions",
+    "How business relationships are built",
+    "Operational expectations: time and reliability"
+   ],
+   "caveat": "Method note: an analytical lens, not a verified national scorecard. No national scores are used; each pattern is a hypothesis to validate locally.",
+   "cite": [
+    "pouchelet2026",
+    "trompenaars1997"
+   ],
+   "transition": "fade",
+   "notes": "Here are the seven dimensions as named in our course. Each one is paired with the course's profiling question.\n\nThe course asks us to select three to four dominant dimensions for the market. We chose four, highlighted, because they map directly onto what makes or breaks a fintech: trust in rules versus relationships; how social influence shapes financial decisions; how business partnerships are built; and what people expect in terms of time and reliability.\n\nThe other three still matter. For example, assigned versus acquired status may affect how a foreign company presents its leadership to Nigerian partners. But for a digital financial service they are less central to the entry decision.\n\nOne important caveat. I did not use national scores. I found no current, reliable scores for Nigeria I could verify, and in any case the framework describes tendencies, not individuals. So every point on the next slides is phrased as a question to investigate, then as a recommendation.\n\n[Sources: Pouchelet, course slides pp. 24–34; Trompenaars & Hampden-Turner, 1997.]"
+  },
+  {
+   "layout": "dimension",
+   "theme": "light",
+   "eyebrow": "Dimension 1 of 4 · Universalism vs Particularism",
+   "title": "Rules create credibility. Relationships help build trust",
+   "poles": [
+    {
+     "name": "Universalism",
+     "def": "Consistent rules and formal procedures applied to everyone."
+    },
+    {
+     "name": "Particularism",
+     "def": "Context, relationships, reputation and trust shape decisions."
+    }
+   ],
+   "columns": [
+    {
+     "tag": "Hypothesis to validate",
+     "kind": "hypothesis",
+     "body": "Customers may judge a new fintech on formal safeguards such as regulation and KYC, and also on reputation, recommendations and how reachable support is."
+    },
+    {
+     "tag": "Recommendation for Revolut",
+     "kind": "recommendation",
+     "bullets": [
+      "One transparent onboarding and KYC standard",
+      "Accessible, responsive support",
+      "Local credibility through trusted partners"
+     ]
+    },
+    {
+     "tag": "Example",
+     "kind": "example",
+     "body": "A referred customer completes exactly the same verification as anyone else. The relationship opens the door; the rule protects everyone."
+    }
+   ],
+   "cite": [
+    "pouchelet2026"
+   ],
+   "transition": "fade",
+   "notes": "Universalism versus particularism asks: do rules or relationships come first?\n\nIn fintech, both matter at once. Rules are non-negotiable: identity checks, Know Your Customer requirements and regulation apply to every customer. The CBN's own report links Nigeria's digital finance growth to integrity, KYC and fraud prevention. At the same time, the course reminds us that in more particularist settings, trust often travels through relationships and reputation.\n\nSo our hypothesis, to be validated with local research, is that customers judge a new provider both on formal safeguards and on reputation and reachable support.\n\nThe recommendation keeps the rule universal and builds the relationship around it: one transparent onboarding standard, support people can actually reach, and credibility through trusted local partners.\n\nThe example makes the line clear: a referral can bring a customer to the door, but it never replaces verification.\n\n[Sources: course slides pp. 24, 32; CBN (2025) on KYC and fraud prevention.]"
+  },
+  {
+   "layout": "dimension",
+   "theme": "light",
+   "eyebrow": "Dimension 2 of 4 · Individualism vs Collectivism",
+   "title": "Financial decisions can be personal, but social influence matters",
+   "poles": [
+    {
+     "name": "Individualism",
+     "def": "Personal choice, autonomy and individual benefit."
+    },
+    {
+     "name": "Collectivism",
+     "def": "Group influence: family, community and shared recommendations."
+    }
+   ],
+   "columns": [
+    {
+     "tag": "Hypothesis to validate",
+     "kind": "hypothesis",
+     "body": "Referrals, peer networks, family and merchant communities may shape how people discover and come to trust a financial service. This is likely to vary by segment."
+    },
+    {
+     "tag": "Recommendation for Revolut",
+     "kind": "recommendation",
+     "bullets": [
+      "Test referral strategies before scaling",
+      "Credible testimonials, only with permission",
+      "Shareable educational content",
+      "Segment by behaviour, not stereotype"
+     ]
+    },
+    {
+     "tag": "Example",
+     "kind": "example",
+     "body": "A trader discovers a service through another merchant, then decides independently after comparing fees and reliability."
+    }
+   ],
+   "cite": [
+    "pouchelet2026"
+   ],
+   "transition": "fade",
+   "notes": "Individualism versus collectivism asks whether a decision is aimed at personal or group benefit. Trompenaars originally calls the group pole 'communitarianism'; our course uses 'collectivism'.\n\nFor a financial service, this becomes a question about discovery and trust. Who influences the decision to try a new app? It could be family, colleagues, a merchant association, or nobody at all.\n\nWe should not assume the answer. A young professional in Lagos and a trader in a smaller town may behave very differently. That is why we frame it as a hypothesis and recommend testing.\n\nThe recommendations follow: test referral strategies, use real testimonials only with permission, create educational content people want to share, and segment by actual behaviour.\n\nThe example shows both poles at once: the merchant hears about the service through their community, but still makes an individual decision based on fees and reliability.\n\n[Sources: course slides pp. 25, 32; Trompenaars & Hampden-Turner, 1997.]"
+  },
+  {
+   "layout": "dimension",
+   "theme": "light",
+   "eyebrow": "Dimension 3 of 4 · Specific vs Diffuse",
+   "title": "Business relationships can extend beyond the transaction",
+   "poles": [
+    {
+     "name": "Specific",
+     "def": "Task-focused, clear professional boundaries, transaction-centred."
+    },
+    {
+     "name": "Diffuse",
+     "def": "Broader relationship context and long-term trust."
+    }
+   ],
+   "columns": [
+    {
+     "tag": "Hypothesis to validate",
+     "kind": "hypothesis",
+     "body": "Prospective partners, such as banks, payment providers and distributors, may assess the people and continuity behind a proposal as well as its technical quality."
+    },
+    {
+     "tag": "Recommendation for Revolut",
+     "kind": "recommendation",
+     "bullets": [
+      "Invest in long-term local relationships",
+      "Keep consistent partner contacts",
+      "State expectations clearly",
+      "Document agreements and responsibilities"
+     ]
+    },
+    {
+     "tag": "Example",
+     "kind": "example",
+     "body": "A prospective partner evaluates both the technical proposal and the reliability of the team delivering it."
+    }
+   ],
+   "cite": [
+    "pouchelet2026"
+   ],
+   "transition": "fade",
+   "notes": "Specific versus diffuse is about how far a business relationship extends. Is it strictly professional, or does it involve a broader personal bond? The course's example is the need for business dinners and personal connection in more diffuse cultures.\n\nFor Revolut this matters most in the B2B side of market entry: banks, payment providers and distribution partners. The hypothesis is that these partners may judge not only the technical proposal, but also the people behind it and whether they will still be there in two years.\n\nThe recommendations combine both poles. Invest in long-term local relationships and keep the same contacts over time, which is the diffuse side. But also state expectations clearly and document every agreement, which is the specific side. Good relationships and clear contracts reinforce each other.\n\n[Sources: course slides pp. 26, 33.]"
+  },
+  {
+   "layout": "dimension",
+   "theme": "light",
+   "eyebrow": "Dimension 4 of 4 · Sequential vs Synchronous Time",
+   "title": "Cultural expectations and operational speed are not the same thing",
+   "poles": [
+    {
+     "name": "Sequential",
+     "def": "Linear scheduling, one task after another, fixed agenda."
+    },
+    {
+     "name": "Synchronous",
+     "def": "Overlapping activities and flexible coordination."
+    }
+   ],
+   "columns": [
+    {
+     "tag": "Evidence + hypothesis",
+     "kind": "evidence",
+     "body": "Meeting styles may vary, but payment expectations are already real-time: Nigeria has run instant interbank transfers since 2011. Do not infer one national attitude to time."
+    },
+    {
+     "tag": "Recommendation for Revolut",
+     "kind": "recommendation",
+     "bullets": [
+      "Reliable transaction processing",
+      "Transparent delay notifications",
+      "Defined support targets",
+      "Clear dispute resolution",
+      "Coordinated local and global teams"
+     ]
+    },
+    {
+     "tag": "Example",
+     "kind": "example",
+     "body": "A failed transfer needs a clear status and a resolution path, whatever cultural assumptions people hold."
+    }
+   ],
+   "cite": [
+    "cbn2025",
+    "pouchelet2026"
+   ],
+   "transition": "fade",
+   "notes": "Sequential versus synchronous time asks whether people do one thing at a time on a fixed schedule, or several things in parallel with flexible coordination.\n\nHere we need to be careful. It would be easy, and wrong, to slide into the stereotype that time is 'relaxed' in Nigeria. The evidence points the other way for payments: the CBN notes that Nigeria implemented nationwide real-time interbank payments in 2011, well ahead of many advanced economies. Customers already expect money to move instantly.\n\nSo we separate two things. Meeting and negotiation styles may vary between organisations and are worth observing. Operational speed, though, is not negotiable: reliable processing, honest delay notifications, defined support targets, a clear dispute process, and coordination between the Lagos team and global teams.\n\nThe example: if a transfer fails, the customer needs a clear status and a resolution, full stop.\n\n[Sources: CBN (2025) p. 5; course slides pp. 27, 34.]"
+  },
+  {
+   "layout": "myth-reality",
+   "eyebrow": "Critical analysis · Stereotype vs reality",
+   "title": "Cultural tendencies should never become assumptions about every customer",
+   "rows": [
+    {
+     "myth": "Nigerians distrust digital banking",
+     "reality": "64% of adults use digital financial services (EFInA, 2026). Fraud protection and reliability decide trust (CBN, 2025)."
+    },
+    {
+     "myth": "Everyone relies on personal relationships",
+     "reality": "Formal rules still apply to everyone: identity and KYC checks are part of every onboarding."
+    },
+    {
+     "myth": "Everyone prefers cash",
+     "reality": "Cash matters where income is earned in cash, yet mobile money use rose from 12% to 38% of adults, 2023–2026."
+    },
+    {
+     "myth": "All customers have identical needs",
+     "reality": "Needs differ by age, income, location and activity; about 3 in 4 excluded adults live in the North West and North East."
+    },
+    {
+     "myth": "Nigerian businesses are relaxed about deadlines",
+     "reality": "Expectations vary by organisation, and instant interbank payments have been the norm since 2011."
+    }
+   ],
+   "factors": [
+    "Age",
+    "Income",
+    "Social class",
+    "Education",
+    "Geography",
+    "Digital experience",
+    "B2B / B2C",
+    "Company culture"
+   ],
+   "cite": [
+    "efina2026",
+    "efina2026b",
+    "cbn2025"
+   ],
+   "transition": "fade",
+   "notes": "This is the critical heart of the analysis. The course asks us to show how factors like age, social class, the B2B or B2C context and company culture moderate any national tendency.\n\nTake each stereotype in turn. 'Nigerians distrust digital banking': EFInA's 2026 survey finds 64 percent of adults already use digital financial services. What decides trust is fraud protection and reliability; the CBN itself calls fraud an enduring reputational burden.\n\n'Everyone prefers cash': cash still matters where income is earned in cash, but mobile money use more than tripled in three years.\n\n'Everyone has the same needs': financial exclusion is concentrated. About three-quarters of excluded adults live in the North West and North East.\n\nAnd 'relaxed about deadlines' ignores the fact that instant payments have been standard since 2011.\n\nThe moderating factors at the bottom are the real segmentation variables. Culture is one input among them.\n\n[Sources: EFInA A2F 2026 highlights and 9 Oct 2026 release; CBN (2025) pp. 5–6; course pp. 35–36.]"
+  },
+  {
+   "layout": "features",
+   "theme": "light",
+   "eyebrow": "Operational recommendations",
+   "title": "Adapt the way we build relationships, not the standards we promise",
+   "title_y": 0.95,
+   "items": [
+    {
+     "tag": "01 · CUSTOMERS",
+     "title": "Customer communication",
+     "bullets": [
+      "Simple, plain language",
+      "Transparent fees and exchange rates",
+      "Clear transaction status",
+      "Accessible support"
+     ]
+    },
+    {
+     "tag": "02 · PARTNERS",
+     "title": "Business negotiation",
+     "bullets": [
+      "Formal written proposals",
+      "Investment in the relationship",
+      "Regular follow-up",
+      "Documented commitments"
+     ]
+    },
+    {
+     "tag": "03 · TEAMS",
+     "title": "Internal collaboration",
+     "bullets": [
+      "Clear responsibilities",
+      "Agreed deadlines",
+      "Defined escalation",
+      "Respect for local market knowledge"
+     ]
+    }
+   ],
+   "cite": [
+    "pouchelet2026"
+   ],
+   "transition": "fade",
+   "notes": "Now the operational rules of action, which is the last step of the course method.\n\nThe course positions Sub-Saharan Africa in an intermediate communication context: status matters, debate can be explicit, and the relationship counts. Using the course's four levers for adapting a message, which are tone, structure, salutations and call to action, we adapt how we communicate, not what we promise.\n\nFor customers: plain language, fees and exchange rates shown before confirmation, a visible transaction status and support people can reach.\n\nFor partners: formal written proposals, combined with real investment in the relationship, regular follow-up and every commitment documented. This addresses both the particularist and the diffuse dimensions.\n\nInside the company: clear owners, agreed deadlines, a defined escalation path, and genuine respect for the local team's market knowledge, so that headquarters does not overrule people who understand the market better.\n\n[Source: course slides pp. 39, 50–52.]"
+  },
+  {
+   "layout": "campaign",
+   "eyebrow": "Campaign concept",
+   "label": "Proposed concept · not an official Revolut advertisement",
+   "title": "YOUR MONEY. YOUR MOVE.",
+   "line": "Your world doesn't stand still. Your money shouldn't either.",
+   "video": "../../exports/revolut-nigeria/video/REVOLUT_NIGERIA_CAMPAIGN_30SEC.mp4",
+   "poster": "assets/images/campaign_thumbnail.jpg",
+   "alt": "30-second concept film: an entrepreneur, a professional and a student in Lagos",
+   "video_caption": "30-second concept film · AI-generated footage + motion graphics · conceptual interface with illustrative data",
+   "why": [
+    "Three distinct lives, not one 'average customer': segmentation over stereotype",
+    "Stories people recognise and share in their own networks (collectivism)",
+    "Transparency shown, not claimed: fees, rates and status on screen (universalism → trust)",
+    "Ambition and control speak to personal goals (individualism)"
+   ],
+   "transition": "zoom",
+   "motion": "fade",
+   "notes": "This is the proposed campaign: 'Your money. Your move.' To be clear, it is our concept for a hypothetical locally adapted campaign, not a Revolut advertisement.\n\n[Click once to play the 30-second film with sound; click again to move on.]\n\nWhy this concept? It follows directly from the analysis. Instead of one 'average Nigerian', it shows three distinct people: an entrepreneur, a professional and a student. That is our stereotype-versus-reality point, turned into creative.\n\nIt is built to be shared and recognised within people's own networks, which speaks to the collectivist hypothesis. It shows transparency rather than claiming it: fees, rates and transaction status are visible in the interface, which is how we earn trust in a particularist setting while keeping universal rules. And its language of ambition and control speaks to individual goals.\n\nOn production: the people shots are AI-generated video, and the interface is a conceptual mock-up with illustrative data. No real Revolut features are shown."
+  },
+  {
+   "layout": "timeline",
+   "eyebrow": "Recommended market-entry approach",
+   "title": "Build local credibility before scaling",
+   "items": [
+    {
+     "when": "01",
+     "title": "Regulatory assessment",
+     "body": "Define the product model; local legal review of the authorisation route"
+    },
+    {
+     "when": "02",
+     "title": "Local partnerships",
+     "body": "Banks, payment providers and distribution partners"
+    },
+    {
+     "when": "03",
+     "title": "Product localisation",
+     "body": "Naira flows, local payment rails, support and pricing transparency"
+    },
+    {
+     "when": "04",
+     "title": "Controlled pilot",
+     "body": "One segment, one city, clear success metrics"
+    },
+    {
+     "when": "05",
+     "title": "Evidence-led expansion",
+     "body": "Scale what the pilot proves; adapt what it doesn't"
+    }
+   ],
+   "note": "The precise regulatory route depends on the proposed product model and requires local legal assessment. Nothing here assumes an existing licence.",
+   "cite": [
+    "revolut2026"
+   ],
+   "transition": "fade",
+   "notes": "Putting it together, we recommend a five-stage entry that builds credibility before scale.\n\nFirst, a regulatory assessment. Revolut does not currently offer its standard account in Nigeria, and the right route, whether a licence, a partnership or another model, depends on the product and needs local legal advice. We deliberately do not assume any licence.\n\nSecond, local partnerships with banks, payment providers and distributors, built with the long-term relationship approach from the specific-versus-diffuse analysis.\n\nThird, localise the product: naira flows, integration with local payment rails, reachable support, and transparent pricing.\n\nFourth, a controlled pilot: one segment, one city, clear metrics. Lagos is the obvious candidate, but the stereotype analysis warns us that Lagos is not all of Nigeria.\n\nFifth, expand only on evidence.\n\n[Source: Revolut Help Centre, accessed 24 Nov 2026.]"
+  },
+  {
+   "layout": "principles",
+   "bg": "spotlight",
+   "eyebrow": "Conclusion",
+   "title": "Successful market entry starts with understanding people",
+   "items": [
+    {
+     "name": "Rules",
+     "body": "Compliance and transparency"
+    },
+    {
+     "name": "Relationships",
+     "body": "Trust with customers and partners"
+    },
+    {
+     "name": "Community",
+     "body": "Understand social influence"
+    },
+    {
+     "name": "Operations",
+     "body": "Reliable service and clear communication"
+    }
+   ],
+   "statement": "“Revolut's opportunity in Nigeria would not depend only on bringing a global financial product to a new market. It would depend on adapting that product and its business relationships to the realities of the local market.”",
+   "transition": "fade",
+   "notes": "To conclude, four principles summarise the analysis.\n\nRules: compliance and transparency are universal and non-negotiable.\n\nRelationships: trust is built with customers and partners over time.\n\nCommunity: social influence matters, so understand it and test it rather than assume it.\n\nOperations: reliable service and clear communication are where trust is ultimately won or lost.\n\nOur final message: Revolut's opportunity in Nigeria would not depend only on bringing a global product to a new market. It would depend on adapting that product, and its business relationships, to the realities of the local market. And those realities differ by person, place and segment, which is exactly why cultural frameworks are a starting point, not a conclusion.\n\nThank you. We're happy to take your questions."
+  },
+  {
+   "layout": "references",
+   "eyebrow": "Appendix · APA 7",
+   "title": "References",
+   "transition": "fade",
+   "notes": "Appendix: full references in APA 7 format. Figures were verified against the original documents on 24 November 2026; see the separate references document for page numbers."
+  }
+ ]
+}

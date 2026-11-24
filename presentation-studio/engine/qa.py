@@ -132,7 +132,7 @@ def content(deck, minutes) -> list[dict]:
     for i, sl in enumerate(slides, start=1):
         if not sl.get("notes", "").strip():
             issues.append({"level": "WARN", "slide": i, "check": "notes", "msg": "no speaker notes"})
-        t = sl.get("title", "") if sl["layout"] not in ("closing", "statement", "quote", "image-full") else ""
+        t = sl.get("title", "") if sl["layout"] not in ("closing", "statement", "quote", "image-full", "campaign", "cover") else ""
         if t and t.rstrip().endswith(".") and not t.rstrip().endswith("..."):
             issues.append({"level": "WARN", "slide": i, "check": "title-style", "msg": "title ends with a period"})
     for i in range(2, len(slides)):

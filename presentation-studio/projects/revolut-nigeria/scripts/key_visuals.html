@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:SG;src:url(../../../assets/fonts/SpaceGrotesk-Bold.ttf)}
+@font-face{font-family:SGs;src:url(../../../assets/fonts/SpaceGrotesk-SemiBold.ttf)}
+@font-face{font-family:IN;src:url(../../../assets/fonts/Inter-Regular.otf)}
+@font-face{font-family:PM;src:url(../../../assets/fonts/IBMPlexMono-Medium.ttf)}
+*{margin:0;padding:0;box-sizing:border-box}body{background:#0B1020}
+.poster{width:1600px;height:2000px;position:relative;overflow:hidden;background:#0B1020;color:#F4F5F7}
+.cols{position:absolute;left:0;right:0;top:0;height:1380px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.cols div{background-size:cover;position:relative}
+.cols div::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,16,32,0) 55%,rgba(11,16,32,.95) 100%)}
+.cols span{position:absolute;left:34px;bottom:44px;z-index:2;font:20px PM;letter-spacing:.16em;color:#8FB0FF}
+.copy{position:absolute;left:110px;right:110px;bottom:150px}
+.t{font:118px/0.96 SG;letter-spacing:-.035em}.t b{color:#00A86B;font-weight:inherit}
+.l{font:36px/1.35 IN;color:#C9D1DE;margin-top:34px;max-width:1100px}
+.br{margin-top:56px;font:34px SGs;letter-spacing:-.01em}
+.lab{position:absolute;left:110px;right:110px;bottom:64px;font:18px PM;letter-spacing:.16em;color:#7d89a3;text-transform:uppercase}
+.thumb{width:1920px;height:1080px;position:relative;overflow:hidden;background:#0B1020 url(../assets/images/frame_entrepreneur.png) 62% 30%/cover;color:#fff}
+.thumb::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(11,16,32,.92) 0%,rgba(11,16,32,.78) 34%,rgba(11,16,32,0) 62%)}
+.thumb .copy{left:110px;bottom:auto;top:330px;right:auto;width:900px}
+.thumb .t{font-size:104px}.thumb .l{font-size:30px;max-width:900px}
+.thumb .lab{left:110px;bottom:60px;font-size:16px}
+.play{position:absolute;left:110px;top:200px;font:18px PM;letter-spacing:.18em;color:#8FB0FF}
+</style></head><body>
+<div class="poster" id="poster">
+ <div class="cols"><div style="background-image:url(../assets/images/frame_entrepreneur.png);background-position:62% 30%"><span>THE ENTREPRENEUR</span></div>
+ <div style="background-image:url(../assets/images/frame_professional.png);background-position:50% 20%"><span>THE PROFESSIONAL</span></div>
+ <div style="background-image:url(../assets/images/frame_student.png);background-position:36% 15%"><span>THE STUDENT</span></div></div>
+ <div class="copy"><div class="t">YOUR MONEY.<br>YOUR <b>MOVE.</b></div><div class="l">Your world doesn’t stand still. Your money shouldn’t either.</div><div class="br">Revolut · campaign concept</div></div>
+ <div class="lab">Proposed concept — not an official Revolut ad · AI-generated imagery · INSEEC case study</div>
+</div>
+<div class="thumb" id="thumb"><div class="play">▶ 30-SECOND CONCEPT FILM</div>
+ <div class="copy"><div class="t">YOUR MONEY.<br>YOUR <b>MOVE.</b></div><div class="l">Your world doesn’t stand still. Your money shouldn’t either.</div></div>
+ <div class="lab">Proposed concept — not an official Revolut ad · AI-generated footage</div></div>
+</body></html>

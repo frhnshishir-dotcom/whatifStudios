@@ -1,0 +1,25 @@
+{
+ "scenes": [
+  {
+   "type": "kinetic",
+   "dur": 5.4,
+   "bg": "/home/user/whatifStudios/presentation-studio/projects/revolut-nigeria/assets/images/lagos_skyline_graded.jpg",
+   "eyebrow": "Lagos · 06:40",
+   "lines": [
+    "A NEW DAY.",
+    "A NEW [[MOVE.]]"
+   ],
+   "footnote": "Proposed concept — not an official Revolut ad",
+   "transition": "fade"
+  }
+ ],
+ "name": "seg_opener",
+ "design_system": "revolut-ng",
+ "format": "16:9",
+ "fps": 30,
+ "overrides": {
+  "colors": {
+   "accent": "#00A86B"
+  }
+ }
+}

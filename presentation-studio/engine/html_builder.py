@@ -178,7 +178,8 @@ def _text_html(el: dict) -> str:
           f"font-family:'{f['family']}';font-weight:{weight};font-style:{'italic' if el['italic'] else 'normal'};"
           f"font-size:{el['size'] * 2:.1f}px;line-height:{el['lh']};letter-spacing:{el['tracking']}em;"
           f"color:{el['color']};text-align:{el['align']};--acc:{el['accent']};"
-          + ("text-transform:uppercase;" if el["upper"] else ""))
+          + ("text-transform:uppercase;" if el["upper"] else "")
+          + ("text-decoration:line-through;text-decoration-thickness:1.5px;" if el.get("strike") else ""))
 
     def runs(rs):
         return "".join(f'<span class="acc">{esc(t)}</span>' if a else esc(t) for t, a in rs)
@@ -235,10 +236,14 @@ def element_html(el: dict, assets: Assets, ctx_out: Path) -> str:
         rel = assets.add(el["src"])
         poster = f' poster="{assets.add(el["poster"])}"' if el.get("poster") else ""
         bleed = " bleed" if el.get("bleed") else ""
-        return (f'<div class="el vid{bleed}" style="{pos}"{_common(el)}><video src="{rel}"{poster} muted loop playsinline preload="auto" '
+        flags = (" muted data-autoplay=\"1\"" if el.get("autoplay", True) else " controls") + (" muted" if el.get("muted", True) and not el.get("autoplay", True) else "") + (" loop" if el.get("loop", True) else "")
+        return (f'<div class="el vid{bleed}" style="{pos}"{_common(el)}><video src="{rel}"{poster}{flags} playsinline preload="auto" '
                 f'style="object-fit:{el["fit"]}" aria-label="{esc(el.get("alt", ""))}"></video></div>')
     if k == "scrim":
         a = el["strength"]
+        if el.get("dir") == "left":
+            return (f'<div class="el scrim" style="{pos}background:linear-gradient(90deg,rgba(0,0,0,{a:.2f}) 0%,rgba(0,0,0,{a * 0.75:.2f}) 35%,rgba(0,0,0,0) 72%),'
+                    f'linear-gradient(180deg,rgba(0,0,0,0) 65%,rgba(0,0,0,{a * 0.5:.2f}) 100%)"></div>')
         return f'<div class="el scrim" style="{pos}background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,{a * 0.6:.2f}) 65%,rgba(0,0,0,{a:.2f}) 100%)"></div>'
     if k == "chart":
         return f'<div class="el chartbox" style="{pos}"{_common(el)}>{chart_svg(el)}</div>'

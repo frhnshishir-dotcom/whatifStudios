@@ -20,3 +20,11 @@ __pycache__/
 presentation-studio/exports/
 __pycache__/
 presentation-studio/projects/*/assets/*_still.png
+
+# Revolut-Nigeria project: binary media is regenerable or third-party; LFS upload is blocked in cloud sessions
+presentation-studio/projects/*/assets/images/
+presentation-studio/projects/*/assets/video/
+presentation-studio/projects/*/assets/audio/
+presentation-studio/projects/*/research/*.pdf
+presentation-studio/projects/*/research/*.html
+presentation-studio/projects/*/research/course_text_extract.txt

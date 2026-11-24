@@ -76,7 +76,8 @@
   /* ---------- 3D viewers (lazy, only the active slide renders) */
   function videosFor(slide, on) {
     slide.querySelectorAll("video").forEach(v => {
-      if (on && !STATIC) { try { v.currentTime = 0; } catch (e) {} v.play().catch(() => {}); } else v.pause();
+      if (on && !STATIC && v.dataset.autoplay) { try { v.currentTime = 0; } catch (e) {} v.play().catch(() => {}); }
+      else if (!on) v.pause();
     });
   }
   function viewersFor(slide, on) {
@@ -200,7 +201,7 @@
     else if (k === "f" || k === "F") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
     else if (k === "b" || k === "B" || k === ".") { document.body.style.opacity = document.body.style.opacity === "0" ? "" : "0"; }
   });
-  deck.addEventListener("click", e => { if (!e.target.closest(".viewer, a")) next(); });
+  deck.addEventListener("click", e => { if (!e.target.closest(".viewer, a, video")) next(); });
   let tx = null;
   addEventListener("touchstart", e => tx = e.touches[0].clientX, { passive: true });
   addEventListener("touchend", e => { if (tx === null) return; const d = e.changedTouches[0].clientX - tx; if (Math.abs(d) > 40) d < 0 ? next() : prev(); tx = null; });

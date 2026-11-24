@@ -17,8 +17,9 @@ W, H = 13.333, 7.5
 LAYOUTS = (
     "title", "agenda", "section", "statement", "big-number", "split", "features", "timeline",
     "comparison", "chart", "stats", "quote", "product", "image-full", "video", "references", "closing",
+    "cover", "dimensions", "dimension", "myth-reality", "campaign", "principles",
 )
-NO_FOOTER = {"title", "section", "statement", "closing", "image-full", "quote", "video"}
+NO_FOOTER = {"title", "section", "statement", "closing", "image-full", "quote", "video", "cover"}
 
 
 class Ctx:
@@ -112,7 +113,8 @@ def image(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, radi
             "order": order, "bleed": bleed, "radius": radius, "alt": alt, "decor": False}
 
 
-def video(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, poster=None, alt=""):
+def video(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, poster=None, alt="",
+          autoplay=True, muted=True, loop=True):
     """MP4 element: plays in the web deck, embedded (autoplay, muted, loop) in the .pptx, poster frame in PDF."""
     import shutil
     import subprocess
@@ -122,12 +124,13 @@ def video(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, post
         return {"kind": "image", "box": list(box), "src": None, "fit": fit, "key": key, "order": order, "bleed": bleed, "decor": False, "alt": alt}
     if p.stat().st_size > 6_000_000 and shutil.which("ffmpeg"):
         # slide copy: same 1080p look, ~1/5 the size, so decks stay emailable / downloadable
-        lite = ctx.build_dir / "assets" / f"{p.stem}_slide.mp4"
+        lite = ctx.build_dir / "assets" / f"{p.stem}_slide{'' if muted else '_av'}.mp4"
         if not lite.exists() or lite.stat().st_mtime < p.stat().st_mtime:
             lite.parent.mkdir(parents=True, exist_ok=True)
             subprocess.run([shutil.which("ffmpeg"), "-y", "-v", "error", "-i", str(p), "-c:v", "libx264", "-preset", "slow",
                             "-crf", "27", "-maxrate", "1800k", "-bufsize", "3600k", "-vf", "hqdn3d=1.5:1.5:4:4",
-                            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(lite)])
+                            "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
+                           + (["-an"] if muted else ["-c:a", "aac", "-b:a", "160k"]) + [str(lite)])
         if lite.exists():
             p = lite
     pp = ctx.asset(poster) if poster else None
@@ -149,6 +152,7 @@ def video(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, post
         except ValueError:
             pass
     return {"kind": "video", "box": list(box), "src": str(p), "poster": str(pp) if pp else None, "fit": fit, "key": key, "dur_ms": dur_ms,
+            "autoplay": autoplay, "muted": muted, "loop": loop,
             "order": order, "bleed": bleed, "decor": False, "alt": alt}
 
 
@@ -299,11 +303,15 @@ def L_features(ctx, sl, els):
         x = M + i * (cw + g)
         els.append(card(ctx, (x, y, cw, h), order=o + i, key=f"card{i}"))
         els.append(text(ctx, "mono", it.get("tag", f"{i + 1:02d}"), (x + pad, y + pad, cw - 2 * pad, 0.3), color_="accent", order=o + i))
-        tt = text(ctx, "label", it["title"], (x + pad, y + 1.35, cw - 2 * pad, 1.0), size=22 if n <= 3 else 19, min_size=15, order=o + i, max_lines=2)
+        tt = text(ctx, "label", it["title"], (x + pad, y + sl.get("title_y", 1.35), cw - 2 * pad, 1.0), size=22 if n <= 3 else 19, min_size=15, order=o + i, max_lines=2)
         els.append(tt)
-        yb = y + 1.35 + tt["text_h"] + 0.18
-        els.append(text(ctx, "body", it["body"], (x + pad, yb, cw - 2 * pad, y + h - pad - yb), size=16 if n <= 3 else 15,
-                        min_size=13, color_="muted", order=o + i))
+        yb = y + sl.get("title_y", 1.35) + tt["text_h"] + 0.22
+        if it.get("bullets"):
+            els.append(text(ctx, "body", it["bullets"], (x + pad, yb, cw - 2 * pad, y + h - pad - yb), size=16 if n <= 3 else 15,
+                            min_size=13, bullets=True, order=o + i))
+        else:
+            els.append(text(ctx, "body", it["body"], (x + pad, yb, cw - 2 * pad, y + h - pad - yb), size=16 if n <= 3 else 15,
+                            min_size=13, color_="muted", order=o + i))
 
 
 def L_timeline(ctx, sl, els):
@@ -323,7 +331,9 @@ def L_timeline(ctx, sl, els):
         els.append(tt)
         yb = ly + 0.35 + tt["text_h"] + 0.12
         if it.get("body"):
-            els.append(text(ctx, "body", it["body"], (x, yb, colw - 0.3, 6.7 - yb), size=15, min_size=12, color_="muted", order=oo))
+            els.append(text(ctx, "body", it["body"], (x, yb, colw - 0.3, (6.1 if sl.get("note") else 6.7) - yb), size=15, min_size=12, color_="muted", order=oo))
+    if sl.get("note"):
+        els.append(text(ctx, "caption", sl["note"], (M, 6.3, ctx.CW, 0.45), size=12, order=o + 2 + n))
 
 
 def L_comparison(ctx, sl, els):
@@ -375,6 +385,21 @@ def L_stats(ctx, sl, els):
     M, g = ctx.M, ctx.ds["grid"]["gutter"]
     o = header(ctx, sl, els)
     items = sl["items"]
+    if sl.get("image"):  # stats stacked on the left, visual (map, render) on the right
+        els.append(image(ctx, sl["image"], tuple(sl.get("image_box", (7.35, 1.55, 5.4, 5.25))), fit="contain", key="visual", order=o, alt=sl.get("alt", "")))
+        rowh = min(1.2, 3.6 / len(items))
+        for i, it in enumerate(items):
+            y = 2.45 + i * rowh
+            els.append(line(M, y, M + 6.1, y, ctx.ds["colors"]["line"], 0.75, order=o + 1 + i))
+            v = text(ctx, "stat_sm", it["value"], (M, y + 0.14, 2.55, rowh - 0.2), size=sl.get("value_size", 50), min_size=30,
+                     color_="accent_text" if i == sl.get("highlight", 0) else None, order=o + 1 + i, max_lines=1)
+            v["count"] = True
+            els.append(v)
+            els.append(text(ctx, "body", it["label"], (M + 2.75, y + 0.17, 3.35, rowh - 0.24), size=15, min_size=12, order=o + 1 + i))
+        if sl.get("takeaway"):
+            yt = 2.45 + len(items) * rowh + 0.15
+            els.append(text(ctx, "body", sl["takeaway"], (M, yt, 6.1, 6.75 - yt), size=15, min_size=12, color_="muted", order=o + 2 + len(items)))
+        return
     n = len(items)
     cw = (ctx.CW - g * (n - 1)) / n
     for i, it in enumerate(items):
@@ -444,6 +469,162 @@ def L_video(ctx, sl, els):
         els.append(text(ctx, "hero", sl["title"], (M, 5.35, 10.5, 1.3), size=48, min_size=32, color_="#FFFFFF", anchor="bottom", key="title", order=2, max_lines=2))
 
 
+def L_cover(ctx, sl, els):
+    """Cinematic opener: full-bleed photo, side scrim, big title left, optional product visual right."""
+    M = ctx.M
+    els.append(image(ctx, sl["image"], (0, 0, W, H), bleed=True, key="image", order=0, alt=sl.get("alt", "")))
+    els.append({"kind": "scrim", "box": [0, 0, W, H], "strength": sl.get("scrim", 0.85), "dir": "left", "decor": True})
+    if sl.get("visual"):
+        els.append(image(ctx, sl["visual"], tuple(sl.get("visual_box", (8.6, 0.75, 4.0, 6.0))), fit="contain", key="visual", order=4, alt=sl.get("visual_alt", "")))
+    if sl.get("eyebrow"):
+        els.append(text(ctx, "eyebrow", sl["eyebrow"], (M, 2.2, 7.6, 0.3), key="eyebrow", order=1))
+    t = text(ctx, "hero", sl["title"], (M, 2.6, 7.7, 2.2), size=sl.get("size", 84), key="title", order=2, max_lines=2, color_="#FFFFFF")
+    els.append(t)
+    y = 2.6 + t["text_h"] + 0.3
+    if sl.get("subtitle"):
+        st = text(ctx, "subtitle", sl["subtitle"], (M, y, 7.2, 1.0), size=24, color_="#E6E9F0", key="subtitle", order=3)
+        els.append(st)
+        y += st["text_h"] + 0.35
+    if sl.get("meta"):
+        els.append(text(ctx, "mono", sl["meta"], (M, y, 7.4, 0.6), color_="#C7CEDB", order=4, key="meta"))
+    if sl.get("credit"):
+        els.append(text(ctx, "caption", sl["credit"], (M, 6.82, 8.2, 0.5), size=10, color_="#AEB6C6", decor=True))
+
+
+def L_dimensions(ctx, sl, els):
+    """All dimensions of a model as rows; selected ones highlighted; rationale panel + caveat on the right."""
+    M = ctx.M
+    o = header(ctx, sl, els)
+    items = sl["items"]
+    rowh = min(0.6, 4.35 / len(items))
+    lw = 8.0
+    for i, it in enumerate(items):
+        y = 2.4 + i * rowh
+        on = it.get("selected")
+        if on:
+            els.append(rect((M - 0.12, y + 0.04, lw + 0.12, rowh - 0.08), ctx.ds["colors"]["accent"], 0.16, 0.08, order=o + i))
+        els.append(text(ctx, "mono", f"{i + 1:02d}", (M + 0.05, y + (rowh - 0.25) / 2, 0.5, 0.3), size=13,
+                        color_="accent_text" if on else "muted", order=o + i))
+        els.append(text(ctx, "label", it["name"], (M + 0.6, y + 0.07, 3.75, rowh - 0.12), size=17 if on else 16, min_size=13,
+                        anchor="middle", color_=None if on else "muted", order=o + i, max_lines=1))
+        if it.get("q"):
+            els.append(text(ctx, "body", it["q"], (M + 4.45, y + 0.04, lw - 4.55, rowh - 0.08), size=13, min_size=11, anchor="middle",
+                            color_=None if on else "muted", order=o + i, max_lines=2))
+    px = M + lw + 0.45
+    pw = W - M - px
+    els.append(card(ctx, (px, 2.4, pw, 4.35), order=o + len(items)))
+    els.append(text(ctx, "eyebrow", sl.get("panel_tag", "Why these four"), (px + 0.3, 2.65, pw - 0.6, 0.3), order=o + len(items)))
+    els.append(text(ctx, "body", sl["panel"], (px + 0.3, 3.05, pw - 0.6, 2.35), size=15, min_size=12, bullets=True, order=o + len(items)))
+    if sl.get("caveat"):
+        els.append(text(ctx, "caption", sl["caveat"], (px + 0.3, 5.5, pw - 0.6, 1.1), size=12, min_size=10, order=o + len(items) + 1))
+
+
+def L_dimension(ctx, sl, els):
+    """One cultural dimension: two poles (framework) above, then hypothesis / recommendation / example."""
+    M, g = ctx.M, ctx.ds["grid"]["gutter"]
+    o = header(ctx, sl, els)
+    pw = (ctx.CW - g) / 2
+    for i, pole in enumerate(sl["poles"]):
+        x = M + i * (pw + g)
+        els.append(card(ctx, (x, 2.3, pw, 1.32), order=o))
+        els.append(text(ctx, "eyebrow", pole.get("tag", "Framework lens"), (x + 0.3, 2.47, pw - 0.6, 0.28), color_="muted", order=o))
+        els.append(text(ctx, "label", pole["name"], (x + 0.3, 2.75, 2.2, 0.75), size=20, min_size=15, order=o, max_lines=2))
+        els.append(text(ctx, "body", pole["def"], (x + 2.6, 2.75, pw - 2.9, 0.78), size=14, min_size=11.5, color_="muted", order=o))
+    cols = sl["columns"]
+    n = len(cols)
+    cw = (ctx.CW - g * (n - 1)) / n
+    y0 = 3.95
+    for i, c in enumerate(cols):
+        x = M + i * (cw + g)
+        tagc = "green_text" if c.get("kind") == "recommendation" else ("accent_text" if c.get("kind") == "evidence" else "muted")
+        els.append(line(x, y0, x + cw, y0, ctx.ds["colors"]["accent2" if c.get("kind") == "recommendation" else "line"], 1.25, order=o + 1 + i))
+        els.append(text(ctx, "eyebrow", c["tag"], (x, y0 + 0.17, cw, 0.3), color_=tagc, order=o + 1 + i))
+        body = c.get("bullets") or c.get("body")
+        els.append(text(ctx, "body", body, (x, y0 + 0.55, cw, 6.72 - y0 - 0.55), size=15, min_size=12, bullets=bool(c.get("bullets")), order=o + 1 + i))
+
+
+def L_myth_reality(ctx, sl, els):
+    """Split screen: stereotype (left, muted) vs operational reality (right), paired rows, moderating factors below."""
+    M = ctx.M
+    o = header(ctx, sl, els)
+    rows = sl["rows"]
+    lw, gap = 4.6, 0.5
+    rx = M + lw + gap
+    rw = W - M - rx
+    y0, rowh = 2.25, min(0.7, 3.4 / len(rows))
+    els.append(rect((M - 0.15, y0 - 0.05, lw + 0.3, rowh * len(rows) + 0.5), ctx.ds["colors"]["bg_alt"], 0.9, 0.12, order=o))
+    els.append(text(ctx, "eyebrow", sl.get("left_tag", "Stereotype"), (M, y0 + 0.05, lw, 0.3), color_="muted", order=o))
+    els.append(text(ctx, "eyebrow", sl.get("right_tag", "Operational reality"), (rx, y0 + 0.05, rw, 0.3), order=o + 1))
+    for i, r in enumerate(rows):
+        y = y0 + 0.45 + i * rowh
+        st = text(ctx, "body", r["myth"], (M, y, lw, rowh - 0.08), size=16, min_size=12, color_="muted", order=o + 2 + i, max_lines=2)
+        st["strike"] = True
+        els.append(st)
+        els.append(text(ctx, "mono", "→", (M + lw + 0.08, y, 0.35, 0.35), size=15, color_="accent_text", order=o + 2 + i))
+        els.append(text(ctx, "body", r["reality"], (rx, y, rw, rowh - 0.08), size=15, min_size=11.5, order=o + 2 + i, max_lines=2))
+    yf = y0 + 0.45 + len(rows) * rowh + 0.32
+    els.append(text(ctx, "eyebrow", sl.get("factors_tag", "Moderating factors"), (M, yf + 0.07, 2.0, 0.3), color_="green_text", order=o + 2 + len(rows)))
+    from .textfit import text_width_pt
+    st = style(ctx.ds, "mono", ctx.mode)
+    widths = [text_width_pt(f.upper(), st.face, 10) / 72 + 0.3 for f in sl.get("factors", [])]
+    x = M + 2.05
+    gap = max(0.06, min(0.14, (W - M - x - sum(widths)) / max(1, len(widths) - 1)))
+    for f, wch in zip(sl.get("factors", []), widths):
+        els.append(rect((x, yf, wch, 0.42), ctx.ds["colors"]["accent2"], 0.16, 0.21, order=o + 3 + len(rows)))
+        els.append(text(ctx, "mono", f.upper(), (x + 0.13, yf + 0.11, wch - 0.16, 0.28), size=10, color_="green_text", order=o + 3 + len(rows), max_lines=1))
+        x += wch + gap
+
+
+def L_campaign(ctx, sl, els):
+    """Hero creative slide: framed 16:9 video (embedded) + campaign name, line and rationale."""
+    M = ctx.M
+    vw = 7.45
+    vh = vw * 9 / 16
+    vy = 1.6
+    els.append(rect((M - 0.06, vy - 0.06, vw + 0.12, vh + 0.12), ctx.ds["colors"]["line"], 1.0, 0.12, order=1))
+    if sl.get("video"):
+        els.append(video(ctx, sl["video"], (M, vy, vw, vh), fit="cover", key="video", order=1, poster=sl.get("poster"), alt=sl.get("alt", ""),
+                         autoplay=sl.get("video_autoplay", False), muted=sl.get("video_muted", False), loop=sl.get("video_loop", False)))
+    elif sl.get("image"):
+        els.append(image(ctx, sl["image"], (M, vy, vw, vh), key="video", order=1))
+    if sl.get("video_caption"):
+        els.append(text(ctx, "caption", sl["video_caption"], (M, vy + vh + 0.15, vw, 0.5), size=11, order=2))
+    x = M + vw + 0.5
+    w = W - M - x
+    els.append(text(ctx, "eyebrow", sl.get("eyebrow", "Campaign concept"), (x, 0.62, w + 0.2, 0.3), order=1, key="eyebrow"))
+    els.append(text(ctx, "eyebrow", sl.get("label", ""), (M, 0.62, vw, 0.3), color_="green_text", order=1))
+    t = text(ctx, "title", sl["title"], (x, 1.55, w, 1.5), size=34, min_size=24, key="title", order=2, max_lines=3)
+    els.append(t)
+    y = 1.55 + t["text_h"] + 0.2
+    if sl.get("line"):
+        lt = text(ctx, "body", sl["line"], (x, y, w, 0.9), size=16, color_="accent_text", order=3)
+        els.append(lt)
+        y += lt["text_h"] + 0.35
+    els.append(text(ctx, "eyebrow", sl.get("why_tag", "Why it fits Nigeria"), (x, y, w, 0.3), color_="muted", order=4))
+    els.append(text(ctx, "body", sl["why"], (x, y + 0.4, w, 6.75 - y - 0.4), size=14, min_size=11.5, bullets=True, order=4))
+
+
+def L_principles(ctx, sl, els):
+    """Closing: headline, four principle tiles, final statement."""
+    M, g = ctx.M, ctx.ds["grid"]["gutter"]
+    if sl.get("eyebrow"):
+        els.append(text(ctx, "eyebrow", sl["eyebrow"], (M, 0.75, ctx.CW, 0.3), key="eyebrow", order=1))
+    t = text(ctx, "title", sl["title"], (M, 1.1, ctx.CW * 0.9, 1.3), size=44, min_size=30, key="title", order=2, max_lines=2)
+    els.append(t)
+    items = sl["items"]
+    n = len(items)
+    cw = (ctx.CW - g * (n - 1)) / n
+    y = 2.75
+    for i, it in enumerate(items):
+        x = M + i * (cw + g)
+        els.append(card(ctx, (x, y, cw, 1.75), order=3 + i))
+        els.append(text(ctx, "eyebrow", it["name"], (x + 0.3, y + 0.3, cw - 0.6, 0.3), color_="green_text" if i == sl.get("highlight", -1) else "accent_text", order=3 + i))
+        els.append(text(ctx, "label", it["body"], (x + 0.3, y + 0.72, cw - 0.6, 0.85), size=17, min_size=13, order=3 + i, max_lines=3))
+    if sl.get("statement"):
+        els.append(line(M, 4.95, M + 0.9, 4.95, ctx.ds["colors"]["accent2"], 2.0, order=8))
+        els.append(text(ctx, "quote", sl["statement"], (M, 5.15, ctx.CW * 0.92, 1.6), size=22, min_size=16, order=8))
+
+
 def L_references(ctx, sl, els):
     M = ctx.M
     sl.setdefault("title", "References")
@@ -457,7 +638,7 @@ def L_references(ctx, sl, els):
     cw = (ctx.CW - 0.5 * (cols - 1)) / cols
     for c in range(cols):
         chunk = entries[c * per:(c + 1) * per]
-        els.append(text(ctx, "caption", chunk, (M + c * (cw + 0.5), 2.45, cw, 4.3), size=14, min_size=11, order=o + c))
+        els.append(text(ctx, "caption", chunk, (M + c * (cw + 0.5), 1.85, cw, 5.0), size=12.5, min_size=10, order=o + c))
 
 
 def L_closing(ctx, sl, els):
@@ -478,10 +659,17 @@ def build_slide(ctx: Ctx, sl: dict, idx: int) -> list[dict]:
     layout = sl.get("layout")
     if layout not in FUNCS:
         raise ValueError(f"slide {idx}: unknown layout {layout!r}. Choose from: {', '.join(LAYOUTS)}")
+    base = ctx.ds
+    if sl.get("theme") == "light" and "light" in base:
+        from .tokens import deep_merge
+        ctx.ds = deep_merge(base, base["light"])
     els = [background(ctx, sl, layout)]
     n0 = len(ctx.issues)
-    FUNCS[layout](ctx, sl, els)
-    footer(ctx, sl, idx, els)
+    try:
+        FUNCS[layout](ctx, sl, els)
+        footer(ctx, sl, idx, els)
+    finally:
+        ctx.ds = base
     for it in ctx.issues[n0:]:
         it.setdefault("slide", idx)
     return els

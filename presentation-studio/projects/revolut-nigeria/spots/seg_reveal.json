@@ -1,0 +1,26 @@
+{
+ "scenes": [
+  {
+   "type": "device",
+   "dur": 3.4,
+   "bg": "spotlight",
+   "image": "/home/user/whatifStudios/presentation-studio/projects/revolut-nigeria/assets/images/concept_phone_ui.png",
+   "eyebrow": "Concept interface · illustrative data",
+   "lines": [
+    "More control.",
+    "More clarity.",
+    "More [[possibilities.]]"
+   ],
+   "transition": "cut",
+   "line_times": [
+    0.0,
+    1.25,
+    2.45
+   ]
+  }
+ ],
+ "name": "seg_reveal",
+ "design_system": "revolut-ng",
+ "format": "16:9",
+ "fps": 30
+}

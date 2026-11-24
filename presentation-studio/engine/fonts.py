@@ -56,6 +56,17 @@ _BRAND = {
         "regular": ("InstrumentSerif-Regular.ttf", "Instrument Serif", False),
         "italic": ("InstrumentSerif-Italic.ttf", "Instrument Serif", False),
     },
+    "Space Grotesk": {
+        "regular": ("SpaceGrotesk-Regular.ttf", "Space Grotesk", False),
+        "medium": ("SpaceGrotesk-Medium.ttf", "Space Grotesk Medium", False),
+        "semibold": ("SpaceGrotesk-SemiBold.ttf", "Space Grotesk SemiBold", False),
+        "bold": ("SpaceGrotesk-Bold.ttf", "Space Grotesk", True),
+    },
+    "IBM Plex Mono": {
+        "regular": ("IBMPlexMono-Regular.ttf", "IBM Plex Mono", False),
+        "medium": ("IBMPlexMono-Medium.ttf", "IBM Plex Mono Medium", False),
+        "semibold": ("IBMPlexMono-SemiBold.ttf", "IBM Plex Mono SemiBold", False),
+    },
     "JetBrains Mono": {
         "regular": ("JetBrainsMono-Regular.ttf", "JetBrains Mono", False),
         "medium": ("JetBrainsMono-Medium.ttf", "JetBrains Mono Medium", False),
@@ -85,7 +96,7 @@ def _portable(family: str, weight: str) -> FontFace:
     if family == "Instrument Serif":
         f = _system("Caladea-Bold" if heavy else "Caladea-Regular")
         return FontFace(family, weight, f, "Cambria", heavy)
-    if family == "JetBrains Mono":
+    if family in ("JetBrains Mono", "IBM Plex Mono"):
         return FontFace(family, weight, _system("LiberationMono-Regular"), "Courier New", False)
     f = _system("Carlito-Bold" if heavy else "Carlito-Regular")
     return FontFace(family, weight, f, "Calibri", heavy)

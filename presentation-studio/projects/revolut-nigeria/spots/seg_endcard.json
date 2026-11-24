@@ -1,0 +1,23 @@
+{
+ "scenes": [
+  {
+   "type": "endcard",
+   "dur": 3.0,
+   "bg": "horizon",
+   "title": "YOUR MONEY. YOUR [[MOVE.]]",
+   "subtitle": "Your world doesn’t stand still. Your money shouldn’t either.",
+   "brand": "Revolut  ·  campaign concept",
+   "footnote": "Proposed concept — not an official Revolut ad",
+   "transition": "cut"
+  }
+ ],
+ "name": "seg_endcard",
+ "design_system": "revolut-ng",
+ "format": "16:9",
+ "fps": 30,
+ "overrides": {
+  "colors": {
+   "accent": "#00A86B"
+  }
+ }
+}

@@ -40,6 +40,19 @@ def wrap(text: str, face: FontFace, size: float, width_pt: float, tracking: floa
     for para in text.split("\n"):
         words = para.split(" ")
         cur = ""
+        expanded = []
+        for w in words:  # URLs may wrap mid-string (PowerPoint and browsers break them at the box edge)
+            if ("/" in w or w.startswith("http")) and text_width_pt(w, face, size, tracking) > width_pt:
+                chunk = ""
+                for ch in w:
+                    if text_width_pt(chunk + ch, face, size, tracking) > width_pt * 0.98:
+                        expanded.append(chunk)
+                        chunk = ""
+                    chunk += ch
+                expanded.append(chunk)
+            else:
+                expanded.append(w)
+        words = expanded
         for w in words:
             trial = (cur + " " + w).strip() if cur else w
             if text_width_pt(trial, face, size, tracking) <= width_pt or not cur:
@@ -62,7 +75,7 @@ def measure(paragraphs: list[str], face: FontFace, size: float, box_w_in: float,
         wrapped += ls
         n_lines += len(ls)
         for w in p.split():
-            if text_width_pt(w, face, size, tracking) > width_pt:
+            if text_width_pt(w, face, size, tracking) > width_pt and not ("/" in w or w.startswith("http")):
                 word_ok = False
     h_pt = n_lines * size * line_height + max(0, len(paragraphs) - 1) * para_space * size
     return Fit(size, n_lines, h_pt / 72, True, word_ok, wrapped)
