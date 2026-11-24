@@ -1,9 +1,31 @@
 # Visual QA log (Phases 4-5)
 
 Every judgement here comes from rendered PNG frames or from stills pulled out of the encoded MP4, opened and
-inspected. **No reference video was supplied** (not in the request, the repo, or the session uploads), so the
-comparison is against the written style brief. When the video is added, run
-`node tools/compare.mjs --ref reference/<video>.mp4 --cut ascii_prototype_final_9x16` and redo this checklist side by side.
+inspected. Iterations 1-3 were judged against the written brief. The reference video, which had been in the
+session uploads since early on but was missed by the first search, was then studied (`REFERENCE_ANALYSIS.md`)
+and drove the reference pass at the end of this log.
+
+## Reference pass (garden_test, compared with the reference)
+| Iteration | Seen | Change |
+|---|---|---|
+| R1 | The reference figure is a text-textured surface, not a particle cloud; grass is long lines with tip beads; it has a green terminal phase, RGB smear, 4:5 letterbox, a pond with reflections, afterimages | Font atlas, line reeds, pines, pond + reflections, lanterns, pavilion, beam + cross flare, smear, terminal mode, letterbox, ghosts, rings |
+| R2 | First garden stills: the beam sat inside the pavilion's footprint (only the flare showed); terminal phase too dark; random glyph sprites on the body overlapped into grey noise | Beam moved; terminal brightness lifted; **surface-nets body mesh** (36k vertices, 2 s) skinned to the same bones with a rest-mapped glyph surface |
+| R3 | Afterimages almost invisible (ghosts copied only the sparse dots); heavy letters (`M W 0`) read as blocks; leftover feature lines on the face | Surface ghosts; body gain 1.5 to 1.2 with larger cells; glyph style keeps only the iris clusters |
+| R4 | Wide shots full of black sky, unlike the reference's walls of text | Larger pavilion, camera looking slightly down, flat garden with text-covered hills; brighter walls |
+
+Side-by-side sheet: `episodes/ascii_garden_reference_v1_9x16/previews/compare_*.png` (local only: previews are git-ignored).
+- **Matches:** the figure made of text with a head ring and sash, wading with a reflection; reeds with tip beads; amber glyph lanterns; dash-tiled roof; red light washing the grass; the smear glitch; the green terminal phase with red preserved; the 4:5 letterbox.
+- **Still different:** the reference's background text is larger, brighter and more legible; its spire is a wider and denser red cone; its pines are bigger and brighter; its green phase is more saturated. These are scene and tuning parameters, not missing systems.
+- **GLB:** `glb_test --set surface=1` renders the imported CesiumMan as a text-textured surface, skinned and animated (checked on frame 90).
+- **Regression check after the reference pass:** prototype frame 240 was re-rendered and diffed against the pre-pass render.
+  The first attempt differed on the character (33% of pixels). The new `dotChance` option drew a random number even
+  at 1, which shifted the seeded stream, and a mark size range had been changed for every style. Both were fixed (per-style
+  `markSizeMin`, no random draw when `dotChance` is 1). Now 0.11% of pixels differ by exactly 1/255 (float rounding in
+  the refactored shaders), which is invisible. Garden frame 180 re-rendered after the fixes is pixel-identical to the frame in the rendered cut.
+
+Final cut: `episodes/ascii_garden_reference_v1_9x16/output/ascii_garden_reference_v1_9x16.mp4`. 720x1280 with a 720x900 picture,
+30 fps, 480 frames, 16.0 s, H.264 yuv420p, silent, verified by `assemble_safe.py` (ffprobe + full decode). 105k particles
+plus a 36k-vertex text body; 852 ms/frame wall on SwiftShader (median browser render 823 ms), 409 s total; 26 MB.
 
 Renderer for all numbers below: headless Chromium, WebGL 2 on SwiftShader (CPU, 4 cores).
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { common, sharedUniforms, lighting, fog, atlas, sky } from './chunks.js';
+import { common, sharedUniforms, lighting, fog, atlas, sky, water } from './chunks.js';
 
 // SYSTEM A (shader-based): ASCII on any mesh. A world-space cell grid is projected on the dominant axis of the
 // surface (triplanar, box style). Each cell shows one glyph chosen from a luminance ramp, using the lighting
@@ -27,6 +27,9 @@ ${lighting}
 ${fog}
 ${atlas}
 ${sky}
+${water}
+uniform float uRim;
+uniform float uReflect;
 uniform vec2 uCell;          // world size of one glyph cell (w, h)
 uniform float uGlyphSet;
 uniform vec3 uColor;
@@ -48,19 +51,35 @@ uniform float uWinGlow;
 uniform float uHorizon;      // ground only: fade glyph contrast towards the horizon
 uniform float uEmissive;     // minimum luminance (structure visible in shadow)
 uniform float uHueMix;       // 0 = keep own colour, 1 = fully tinted by light colour
+uniform vec2 uScroll;        // RIPPLE: drift of the glyph grid (world units / s)
 varying vec3 vWp;
 varying vec3 vN;
 varying float vDepth;
+#ifdef MAPPED
+varying vec3 vMapP;   // rest-pose position/normal: the glyph grid sticks to a skinned body
+varying vec3 vMapN;
+varying float vShade;
+#endif
 
 void main() {
   vec3 n = normalize(vN);
-  vec3 an = abs(n);
+  vec3 mp = vWp, mn = n;
+#ifdef MAPPED
+  mp = vMapP; mn = normalize(vMapN);
+#endif
+#ifdef REFLECT
+  if (inPond(vWp) < 0.5 || vWp.y > uWater.y) discard;
+#endif
+  vec3 an = abs(mn);
   vec2 coord;
   bool ground = an.y > an.x && an.y > an.z;
-  if (ground) coord = vWp.xz;
-  else if (an.x > an.z) coord = vec2(vWp.z * sign(n.x), vWp.y);
-  else coord = vec2(-vWp.x * sign(n.z), vWp.y);
+  if (ground) coord = mp.xz;
+  else if (an.x > an.z) coord = vec2(mp.z * sign(mn.x), mp.y);
+  else coord = vec2(-mp.x * sign(mn.z), mp.y);
 
+#ifdef RIPPLE
+  coord += uScroll * uTime + vec2(sin(coord.y * 2.7 + uTime * 1.3), cos(coord.x * 1.9 - uTime * 1.1)) * 0.06;
+#endif
   vec2 g = coord / uCell;
   vec2 cell = floor(g);
   vec2 f = fract(g);
@@ -73,6 +92,12 @@ void main() {
   vec3 tint = uColor * mix(vec3(1.0), hue, uHueMix);
   // Emissive floor: structure stays legible in shadow (the ASCII pattern never fully disappears).
   lum = max(lum, uEmissive * (0.75 + 0.5 * hash12(cell * 0.37 + uSeed)));
+#ifdef MAPPED
+  lum *= vShade;
+#endif
+#ifdef RIM
+  lum += uRim * pow(1.0 - abs(dot(n, normalize(cameraPosition - vWp))), 2.0);
+#endif
 
 #ifdef WINDOWS
   if (!ground) {
@@ -117,7 +142,13 @@ void main() {
 
   vec3 col = uBase + tint * glyphA * lum * keep * reveal + revealEdge * uWinColor * 0.6 * aa;
   float fg = fogFactor(vDepth);
+#ifdef REFLECT
+  // Additive mirrored copy: glyph light only, dimmed and fading with depth below the surface.
+  gl_FragColor = vec4((col - uBase) * fg * uReflect * exp(-(uWater.y - vWp.y) * 0.6), 1.0);
+  return;
+#endif
   col = mix(skyColor(normalize(vWp - cameraPosition)), col, fg);
+  if (inPond(vWp) > 0.5 && vWp.y < uWater.y) col = mix(uBase, col, 0.08);
   gl_FragColor = vec4(col * uOpacity, 1.0);
 }
 `;
@@ -133,11 +164,69 @@ function col(c) {
  * horizon (ground only: contrast falloff per metre).
  */
 export function createGlyphSurfaceMaterial(engine, o = {}) {
+  return glyphSurface(engine, o, vertex);
+}
+
+// Skinned variant: three.js skinning chunks (the renderer binds bones for SkinnedMesh), glyph grid mapped in the
+// rest pose, per-vertex shade attribute (aShade: AO x curvature, default 1). Works on imported GLB meshes too.
+const skinnedVertex = /* glsl */ `
+#include <common>
+#include <skinning_pars_vertex>
+attribute float aShade;
+varying vec3 vWp;
+varying vec3 vN;
+varying float vDepth;
+varying vec3 vMapP;
+varying vec3 vMapN;
+varying float vShade;
+uniform vec4 uWater;
+void main() {
+  #include <beginnormal_vertex>
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  #include <begin_vertex>
+  #include <skinning_vertex>
+  vMapP = position * MAP_SCALE;
+  vMapN = normal;
+  vShade = aShade;
+  vec4 wp = modelMatrix * vec4(transformed, 1.0);
+#ifdef REFLECT
+  wp.y = 2.0 * uWater.y - wp.y;
+  wp.x += sin(wp.y * 7.0 + uTime * 2.1) * 0.012;
+#endif
+  vWp = wp.xyz;
+  vN = normalize(mat3(modelMatrix) * objectNormal);
+  vec4 mv = viewMatrix * wp;
+  vDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+/** Glyph surface for skinned meshes (procedural body or GLB). Extra options: mapScale (rest units -> metres), reflect (bool). */
+export function createSkinnedGlyphMaterial(engine, o = {}) {
+  const m = glyphSurface(engine, o, `uniform float uTime;\n#define MAP_SCALE ${(o.mapScale ?? 1).toFixed(6)}\n` + skinnedVertex);
+  m.defines.MAPPED = '';
+  if (o.reflectMode) {
+    m.defines.REFLECT = '';
+    m.transparent = true;
+    m.depthWrite = false;
+    m.blending = THREE.AdditiveBlending;
+  } else {
+    m.polygonOffset = true; // particles lying exactly on the surface stay visible
+    m.polygonOffsetFactor = 1;
+    m.polygonOffsetUnits = 1;
+  }
+  return m;
+}
+
+function glyphSurface(engine, o, vertexShader) {
   const defines = {};
   if (o.windows) defines.WINDOWS = '';
   if (o.horizon) defines.GROUND_HORIZON = '';
+  if (o.ripple) defines.RIPPLE = '';
+  if (o.rim) defines.RIM = '';
   return new THREE.ShaderMaterial({
-    vertexShader: vertex,
+    vertexShader,
     fragmentShader: fragment,
     defines,
     uniforms: {
@@ -162,7 +251,10 @@ export function createGlyphSurfaceMaterial(engine, o = {}) {
       uWinGlow: { value: o.windows?.glow ?? 1.2 },
       uHorizon: { value: o.horizon ?? 0 },
       uEmissive: { value: o.emissive ?? 0.12 },
+      uRim: { value: o.rim ?? 0 },
+      uReflect: { value: o.reflect ?? 0.4 },
       uHueMix: { value: o.hueMix ?? 0.6 },
+      uScroll: { value: new THREE.Vector2(...(o.scroll ?? [0.05, 0.12])) },
     },
   });
 }

@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { ParticleBuilder, makePoints } from '../shaders/ParticleMaterial.js';
 import { createLineMaterial } from '../shaders/LineMaterial.js';
 import { Rng } from '../core/random.js';
-import { sampleSegment, tint } from './helpers.js';
+import { sampleSegment, tint, glowSprite } from './helpers.js';
+import { createGlyphSurfaceMaterial } from '../shaders/GlyphSurfaceMaterial.js';
+import { SET } from '../glyphs/GlyphAtlas.js';
 
 // Environmental structures built from line segments: every segment becomes luminous dashed strokes (particles)
 // plus a 1 px GL line underneath for continuity. Lattice pylons with catenary cables, and portal frames.
@@ -96,4 +98,36 @@ export function createPortal(engine, { at = [0, 0], width = 4, height = 6, depth
   w.object.position.set(x, 0, z);
   w.object.rotation.y = rotationY;
   return w;
+}
+
+/**
+ * Lanterns: a small stone base (glyph surface) and a chamber of dense, bright amber glyphs (the lamp ramp picks
+ * 8 $ # @ Q B as it saturates) with a warm point light and a soft glow. at: [[x, z], ...].
+ */
+export function createLanterns(engine, { at = [], color = '#ffae45', heightAt = () => 0, intensity = 0.9, range = 3.6, seed = 7, lights = true } = {}) {
+  const group = new THREE.Group();
+  group.name = 'lanterns';
+  const rng = new Rng('lantern', seed);
+  const b = new ParticleBuilder();
+  const amber = tint(color);
+  const stoneMat = createGlyphSurfaceMaterial(engine, { glyphSet: SET.TEXT, cell: [0.05, 0.07], color: '#a9b4c2', brightness: 1, gain: 1.4, frag: 0.05, seed, emissive: 0.14 });
+  const list = [];
+  for (const [x, z] of at) {
+    const y = heightAt(x, z);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.42, 0.22).translate(x, y + 0.21, z), stoneMat);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.16, 4).rotateY(Math.PI / 4).translate(x, y + 0.82, z), stoneMat);
+    group.add(base, cap);
+    const n = Math.round(260 * Math.max(engine.density, 0.5));
+    for (let i = 0; i < n; i++) {
+      b.push({ p: [x + rng.range(-0.1, 0.1), y + 0.5 + rng.range(0, 0.22), z + rng.range(-0.1, 0.1)], seed: rng.float(), size: rng.range(0.8, 1.2), bright: rng.range(0.7, 1.3), color: amber });
+    }
+    if (lights) list.push(engine.lightRig.add({ name: 'lantern', position: [x, y + 0.62, z], color, intensity, range }));
+    const glow = glowSprite(engine, { color, size: 1.1, intensity: 0.28, falloff: 2.2 });
+    glow.position.set(x, y + 0.62, z);
+    group.add(glow);
+  }
+  const pts = makePoints(engine, b, { mode: 'glyph', glyphSet: SET.LAMP, color: '#ffffff', size: 0.05, brightness: 1.6, lit: 0, flicker: 0.12, glyphJitter: 0.3, rampGain: 1.0 });
+  pts.name = 'lantern-glyphs';
+  group.add(pts);
+  return { object: group, lights: list, points: pts };
 }

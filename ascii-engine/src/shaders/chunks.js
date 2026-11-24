@@ -116,6 +116,23 @@ vec3 glitchSlice(vec3 p, float seed) {
 }
 `;
 
+// Wind sway shared by stroke particles and line blades (a blade's tip bead must move exactly like its line).
+export const sway = /* glsl */ `
+uniform float uSway;
+uniform float uSwayFreq;
+vec3 swayOffset(vec3 wp, float w, float seed) {
+  float sw = w * w;
+  float wave = sin(uTime * uSwayFreq + wp.x * 0.35 + wp.z * 0.27) + 0.45 * sin(uTime * uSwayFreq * 2.3 + wp.z * 0.9 + seed * 3.0);
+  return vec3(wave * uSway * sw, 0.0, 0.5 * wave * uSway * sw * cos(seed * 6.2831));
+}
+`;
+
+// Water: a circular pond (x, z centre; y level; w radius, 0 = none). Shared by every particle layer.
+export const water = /* glsl */ `
+uniform vec4 uWater;
+float inPond(vec3 p) { return (uWater.w > 0.0 && length(p.xz - uWater.xz) < uWater.w) ? 1.0 : 0.0; }
+`;
+
 export const skinning = /* glsl */ `
 uniform highp sampler2D uBoneTex;
 uniform mat4 uBindMatrix;

@@ -9,7 +9,7 @@ import { keys, extendTimeline } from '../src/anim/Timeline.js';
 
 // GLTF/GLB import test (6 s): any skinned or static model becomes a point cloud, keeps its skeleton and
 // animation clips (driven deterministically with mixer.setTime), and gets the same treatment as the procedural human.
-// URL params: glb=<path or URL> (default assets/models/CesiumMan.glb; run tools/fetch_sample_models.mjs),
+// URL params: glb=<path or URL> (default assets/models/CesiumMan.glb; run tools/fetch_sample_models.mjs), surface=1,
 //             clip=<index>, haloBone=<bone name>, height=<metres to normalise to>, yaw=<radians>.
 
 export const meta = { name: 'glb_test', duration: 6 };
@@ -48,6 +48,7 @@ export async function build(engine, { params }) {
   const haloBone = params.get('haloBone') || 'Skeleton_neck_joint_2';
   const ch = PointCloudCharacter.fromObject(engine, model, {
     count: 70000, sizeScale: 1.0, halo: { bone: haloBone, follow: true, offset: [0, 0.12, -0.12], radius: 0.19 },
+    surface: params.get('surface') === '1', // the model's own mesh drawn as a text-textured surface
   });
   scene.add(ch.group);
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { common } from '../shaders/chunks.js';
+import { common, atlas as atlasChunk } from '../shaders/chunks.js';
 
 // Post chain: HDR scene -> dual-filter bloom (13-tap Karis down, tent up) -> one composite pass with controlled
 // chromatic aberration, block glitch / fragmentation, scanlines, film grain, vignette, AgX tone map, grade, dither.
@@ -63,6 +63,14 @@ void main() {
 // AgX tone map: constants from three.js (MIT), after Troy Sobotka's AgX and Filament.
 const compositeFrag = /* glsl */ `
 ${common}
+${atlasChunk}
+uniform vec4 uRect;          // content rectangle in output pixels (x, y, w, h); outside = letterbox bars
+uniform float uSmear;        // horizontal RGB smear glitch 0..1
+uniform float uTerminal;     // screen-space ASCII terminal mode 0..1
+uniform vec3 uTermColor;
+uniform vec2 uTermCell;      // terminal cell size in output pixels
+uniform float uTermRed;      // keep strong reds red in terminal mode
+uniform float uTextRow;
 uniform sampler2D tScene;
 uniform sampler2D tBloom;
 uniform vec2 uRes;
@@ -119,8 +127,13 @@ vec3 scene(vec2 uv) {
 #endif
 }
 
+vec3 hdr(vec2 uv) { return (scene(uv) + texture(tBloom, uv).rgb * uBloom) * uExposure; }
+vec3 display(vec3 h) { return toSRGB(agx(h)); }
+
 void main() {
-  vec2 uv = vUv;
+  vec2 px = gl_FragCoord.xy - uRect.xy;
+  if (px.x < 0.0 || px.y < 0.0 || px.x >= uRect.z || px.y >= uRect.w) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec2 uv = px / uRect.zw;
   float tq = floor(uFrame / 2.0);
   // Block glitch: rows jump sideways, a few blocks quantise (fragmentation). Only when uGlitch > 0.
   float rgbBoost = 0.0;
@@ -132,22 +145,37 @@ void main() {
     vec2 bc = floor(uv * vec2(9.0, 16.0));
     if (hash12(bc + tq * 1.37) < uGlitch * 0.1) uv = (floor(uv * uRes / 14.0) * 14.0 + 7.0) / uRes;
   }
-  // Controlled RGB displacement: radial, stronger at the frame edge, plus a horizontal kick during glitches.
   vec2 d = uv - 0.5;
   float r = length(d * vec2(uRes.x / uRes.y, 1.0));
-  vec2 off = d * uCA * (0.25 + 2.0 * r * r) + vec2(rgbBoost * 0.006, 0.0);
   vec3 c;
-  c.r = scene(uv + off).r;
-  c.g = scene(uv).g;
-  c.b = scene(uv - off).b;
-  vec3 bl;
-  bl.r = texture(tBloom, uv + off * 1.5).r;
-  bl.g = texture(tBloom, uv).g;
-  bl.b = texture(tBloom, uv - off * 1.5).b;
-  c = (c + bl * uBloom) * uExposure;
+  // Smear glitch: whole bands streak horizontally with the channels pulled apart.
+  float band = floor(uv.y * 36.0 + hash11(tq) * 4.0);
+  float smearOn = uSmear > 0.001 ? step(1.0 - uSmear * 0.8, hash12(vec2(band * 0.37, tq + 11.0))) : 0.0;
+  if (smearOn > 0.5) {
+    float span = (0.05 + 0.3 * hash12(vec2(band, tq))) * uSmear;
+    float dir = hash12(vec2(band, tq + 5.0)) > 0.5 ? 1.0 : -1.0;
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 10; i++) {
+      float f = float(i) / 9.0 * dir;
+      acc.r += hdr(uv - vec2(f * span + span * 0.25, 0.0)).r;
+      acc.g += hdr(uv - vec2(f * span, 0.0)).g;
+      acc.b += hdr(uv - vec2(f * span - span * 0.25, 0.0)).b;
+    }
+    c = acc / 10.0 * (1.0 + 1.2 * uSmear);
+  } else {
+    // Controlled RGB displacement: radial, stronger at the frame edge, plus a horizontal kick during glitches.
+    vec2 off = d * uCA * (0.25 + 2.0 * r * r) + vec2(rgbBoost * 0.006, 0.0);
+    c.r = scene(uv + off).r;
+    c.g = scene(uv).g;
+    c.b = scene(uv - off).b;
+    vec3 bl;
+    bl.r = texture(tBloom, uv + off * 1.5).r;
+    bl.g = texture(tBloom, uv).g;
+    bl.b = texture(tBloom, uv - off * 1.5).b;
+    c = (c + bl * uBloom) * uExposure;
+  }
 
-  c = agx(c);
-  c = toSRGB(c);
+  c = display(c);
 
   // Grade (display space): contrast, saturation, split tone, charcoal lift.
   c = clamp((c - 0.5) * uContrast + 0.5, 0.0, 1.0);
@@ -155,6 +183,24 @@ void main() {
   c = mix(vec3(lum), c, uSat);
   c *= mix(uShadowTint, uHighTint, smoothstep(0.0, 0.7, lum));
   c = c + uLift * (1.0 - c);
+
+  // Terminal mode: the frame redrawn as a grid of monospace glyphs, glyph from the cell's brightness.
+  if (uTerminal > 0.001) {
+    vec2 cell = floor(px / uTermCell);
+    vec2 cuv = (cell + 0.5) * uTermCell / uRect.zw;
+    vec2 q = 0.3 * uTermCell / uRect.zw;
+    vec3 d0 = display(0.25 * (hdr(cuv + vec2(q.x, 0.0)) + hdr(cuv - vec2(q.x, 0.0)) + hdr(cuv + vec2(0.0, q.y)) + hdr(cuv - vec2(0.0, q.y))));
+    float l = pow(dot(d0, vec3(0.2126, 0.7152, 0.0722)), 0.5); // lift: dark scenes still read as dense glyphs
+    vec2 f = fract(px / uTermCell);
+    float glyph = rampGlyph(uTextRow, l * 1.35, (hash12(cell + floor(uFrame / 3.0) * 0.0) - 0.5) * 0.15);
+    float lod = clamp(log2(32.0 / uTermCell.y), 0.0, 3.0);
+    float g = textureLod(uAtlas, atlasUV(glyph, f), lod).r;
+    float redness = clamp((d0.r - max(d0.g, d0.b)) * 3.0, 0.0, 1.0) * uTermRed;
+    vec3 tc = mix(uTermColor, vec3(1.0, 0.16, 0.1), redness);
+    vec3 term = tc * (g * (0.15 + 2.2 * l) + l * 0.35);
+    c = mix(c, term, uTerminal);
+    lum = mix(lum, dot(term, vec3(0.2126, 0.7152, 0.0722)), uTerminal);
+  }
 
   // Vignette, scanlines, grain, fade.
   c *= mix(1.0, smoothstep(1.05, 0.25, r), uVignette);
@@ -168,17 +214,26 @@ void main() {
 `;
 
 export class PostFX {
-  constructor(renderer, { width, height, supersample = 1, bloomLevels = 6 }) {
+  constructor(renderer, { width, height, supersample = 1, bloomLevels = 6, letterbox = 0 }) {
     this.renderer = renderer;
     this.width = width;
     this.height = height;
     this.ss = supersample;
-    this.iw = Math.round(width * supersample);
-    this.ih = Math.round(height * supersample);
+    // Letterbox: the picture has aspect `letterbox` (w/h, e.g. 0.8 for 4:5) centred in the output; bars are black.
+    let cw = width, ch = height;
+    if (letterbox > 0) {
+      if (width / letterbox <= height) ch = Math.round(width / letterbox / 2) * 2; else cw = Math.round((height * letterbox) / 2) * 2;
+    }
+    this.cw = cw;
+    this.ch = ch;
+    this.rect = [(width - cw) / 2, (height - ch) / 2, cw, ch];
+    this.iw = Math.round(cw * supersample);
+    this.ih = Math.round(ch * supersample);
     this.params = {
       exposure: 1.0, bloom: 0.75, bloomRadius: 1.0, threshold: 0.55, knee: 0.45,
       ca: 0.004, scan: 0.045, scanPeriod: 3, grain: 0.035, vignette: 0.45, saturation: 0.9, contrast: 1.08,
       lift: '#08080a', shadowTint: '#e9f0f2', highTint: '#fff4ea', fade: 1, glitch: 0,
+      smear: 0, terminal: 0, termColor: '#38ff6a', termCell: [7, 12], termRed: 1,
       background: '#030304',
     };
     const rtOpts = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: false };
@@ -204,7 +259,10 @@ export class PostFX {
     const v3 = () => new THREE.Vector3();
     this.compMat = mk(compositeFrag, {
       tScene: { value: this.sceneRT.texture }, tBloom: { value: this.mips[0].texture },
-      uRes: { value: new THREE.Vector2(width, height) }, uSceneTexel: { value: new THREE.Vector2(1 / this.iw, 1 / this.ih) },
+      uRes: { value: new THREE.Vector2(cw, ch) }, uSceneTexel: { value: new THREE.Vector2(1 / this.iw, 1 / this.ih) },
+      uRect: { value: new THREE.Vector4(...this.rect) }, uSmear: { value: 0 }, uTerminal: { value: 0 }, uTermColor: { value: v3() },
+      uTermCell: { value: new THREE.Vector2(7, 12) }, uTermRed: { value: 1 }, uTextRow: { value: 8 },
+      uAtlas: { value: null }, uSetLen: { value: new Float32Array(16) },
       uFrame: { value: 0 }, uSS: { value: supersample }, uExposure: { value: 1 }, uBloom: { value: 1 }, uCA: { value: 0 },
       uGlitch: { value: 0 }, uScan: { value: 0 }, uScanPeriod: { value: 3 }, uGrain: { value: 0 }, uVignette: { value: 0 },
       uSat: { value: 1 }, uContrast: { value: 1 }, uLift: { value: v3() }, uShadowTint: { value: v3() }, uHighTint: { value: v3() },
@@ -212,6 +270,13 @@ export class PostFX {
     });
     if (supersample > 1) this.compMat.defines.SUPERSAMPLE = '';
     this._bg = new THREE.Color();
+  }
+
+  /** Glyph atlas for the terminal mode (row = the 'text' set). */
+  setAtlas(atlas, row) {
+    this.compMat.uniforms.uAtlas.value = atlas.texture;
+    this.compMat.uniforms.uSetLen.value = atlas.setLen;
+    this.compMat.uniforms.uTextRow.value = row;
   }
 
   _pass(material, target) {
@@ -266,6 +331,11 @@ export class PostFX {
     c.uSat.value = p.saturation;
     c.uContrast.value = p.contrast;
     c.uFade.value = p.fade;
+    c.uSmear.value = p.smear;
+    c.uTerminal.value = p.terminal;
+    c.uTermCell.value.set(p.termCell[0], p.termCell[1]);
+    c.uTermRed.value = p.termRed;
+    { const k = new THREE.Color(p.termColor).convertLinearToSRGB(); c.uTermColor.value.set(k.r, k.g, k.b); }
     const setC = (v, hex) => { const k = new THREE.Color(hex).convertLinearToSRGB(); v.set(k.r, k.g, k.b); };
     setC(c.uLift.value, p.lift);
     setC(c.uShadowTint.value, p.shadowTint);

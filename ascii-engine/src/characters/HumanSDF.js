@@ -221,3 +221,64 @@ export function featureCurves() {
   add(line([0, 1.55, -0.06], [0, 0.98, -0.11]), { bright: 1.1, density: 1000, tag: 'spine' });
   return curves;
 }
+
+/**
+ * Smooth body mesh from the SDF (surface nets): returns { positions, normals, indices } in rest-pose model space.
+ * h = grid cell size in metres (0.008 gives ~30k vertices). Vertices are projected onto the surface and get
+ * SDF-gradient normals, so the mesh matches the particle surface closely.
+ */
+export function surfaceNets(h = 0.008) {
+  const min = [-0.34, -0.03, -0.22], max = [0.34, 1.83, 0.22];
+  const nx = Math.ceil((max[0] - min[0]) / h) + 1, ny = Math.ceil((max[1] - min[1]) / h) + 1, nz = Math.ceil((max[2] - min[2]) / h) + 1;
+  const idx3 = (i, j, k) => (k * ny + j) * nx + i;
+  const vals = new Float32Array(nx * ny * nz);
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    vals[idx3(i, j, k)] = sdf(min[0] + i * h, min[1] + j * h, min[2] + k * h);
+  }
+  const cellVert = new Int32Array(nx * ny * nz).fill(-1);
+  const pos = [];
+  const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const v = new Float32Array(8);
+  for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    let mask = 0;
+    for (let c = 0; c < 8; c++) { v[c] = vals[idx3(i + corners[c][0], j + corners[c][1], k + corners[c][2])]; if (v[c] < 0) mask |= 1 << c; }
+    if (mask === 0 || mask === 255) continue;
+    let sx = 0, sy = 0, sz = 0, n = 0;
+    for (const [a, b] of edges) {
+      if ((v[a] < 0) === (v[b] < 0)) continue;
+      const t = v[a] / (v[a] - v[b]);
+      sx += corners[a][0] + (corners[b][0] - corners[a][0]) * t;
+      sy += corners[a][1] + (corners[b][1] - corners[a][1]) * t;
+      sz += corners[a][2] + (corners[b][2] - corners[a][2]) * t;
+      n++;
+    }
+    cellVert[idx3(i, j, k)] = pos.length / 3;
+    pos.push(min[0] + (i + sx / n) * h, min[1] + (j + sy / n) * h, min[2] + (k + sz / n) * h);
+  }
+  const ind = [];
+  const quad = (a, b, c, d, flip) => {
+    if (a < 0 || b < 0 || c < 0 || d < 0) return;
+    if (flip) ind.push(a, c, b, a, d, c); else ind.push(a, b, c, a, c, d);
+  };
+  for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const s0 = vals[idx3(i, j, k)] < 0, s1 = vals[idx3(i + 1, j, k)] < 0; // x edges
+    if (s0 !== s1) quad(cellVert[idx3(i, j - 1, k - 1)], cellVert[idx3(i, j, k - 1)], cellVert[idx3(i, j, k)], cellVert[idx3(i, j - 1, k)], s1);
+  }
+  for (let k = 1; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+    const s0 = vals[idx3(i, j, k)] < 0, s1 = vals[idx3(i, j + 1, k)] < 0; // y edges
+    if (s0 !== s1) quad(cellVert[idx3(i - 1, j, k - 1)], cellVert[idx3(i - 1, j, k)], cellVert[idx3(i, j, k)], cellVert[idx3(i, j, k - 1)], s1);
+  }
+  for (let k = 0; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+    const s0 = vals[idx3(i, j, k)] < 0, s1 = vals[idx3(i, j, k + 1)] < 0; // z edges
+    if (s0 !== s1) quad(cellVert[idx3(i - 1, j - 1, k)], cellVert[idx3(i, j - 1, k)], cellVert[idx3(i, j, k)], cellVert[idx3(i - 1, j, k)], s1);
+  }
+  const normals = new Float32Array(pos.length);
+  for (let p = 0; p < pos.length; p += 3) {
+    const q = project([pos[p], pos[p + 1], pos[p + 2]], 2);
+    pos[p] = q[0]; pos[p + 1] = q[1]; pos[p + 2] = q[2];
+    const g = gradient(q[0], q[1], q[2]);
+    normals[p] = g[0]; normals[p + 1] = g[1]; normals[p + 2] = g[2];
+  }
+  return { positions: new Float32Array(pos), normals, indices: ind };
+}

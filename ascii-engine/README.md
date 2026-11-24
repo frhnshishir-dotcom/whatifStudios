@@ -5,7 +5,7 @@ deterministic frame rendering and FFmpeg video output. Three.js + WebGL 2 + cust
 software.** It renders vertical 9:16 (Reels/TikTok/Shorts) and 16:9, previews in real time in a browser, and writes
 frames into the repo's existing pipeline (`tools/pipeline/`: manifest, validation, safe assembly, MP4 verification).
 
-Design and decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). What was rendered, inspected and changed: [`docs/VISUAL_QA.md`](docs/VISUAL_QA.md).
+Design and decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Reference video breakdown: [`docs/REFERENCE_ANALYSIS.md`](docs/REFERENCE_ANALYSIS.md). What was rendered, inspected and changed: [`docs/VISUAL_QA.md`](docs/VISUAL_QA.md).
 
 ## Quick start (Windows laptop)
 
@@ -47,6 +47,8 @@ in `configs/<cut>.json` and run `python tools\pipeline\assemble_safe.py --config
 | `--channel` / `--executable` | Playwright Chromium | `msedge`, `chrome`, or a browser path |
 | `--gpu`, `--headed` | off | GPU flags / visible window |
 | `--seed` | `1` | scene seed |
+| `--letterbox` | scene's `meta.letterbox` | picture aspect inside the frame, e.g. `4:5` (black bars), `0` = off |
+| `--set key=value` | | scene-specific parameter (repeatable), e.g. `--set surface=1` for `glb_test` |
 
 Safety, same rules as the Blender pipeline:
 - Existing frames are **skipped, never overwritten**. Re-running after a crash resumes where it stopped.
@@ -119,12 +121,26 @@ passed to hooks, and `keys()`/GSAP on `engine.timeline`. Every module takes a `s
 |---|---|---|
 | A. ASCII renderer | `src/glyphs/GlyphAtlas.js`, `src/shaders/GlyphSurfaceMaterial.js`, `ParticleMaterial.js` (glyph/stroke modes) | Canvas-built bitmap font + marks, coverage-sorted ramps (`ramp`, `arch`, `veg`, `terrain`, `char`, `stroke`, `code`, `mark`). Glyph choice follows lit luminance. Surface glyphs are triplanar world-space cells with anisotropic AA |
 | B. Point-cloud characters | `src/characters/HumanSDF.js`, `PointCloudCharacter.js`, `poses.js` | Procedural human (SDF anatomy, 20 bones), or any GLTF/GLB via `fromObject()`. GPU skinning from the bone texture, AO and curvature shading, feature clusters, hair strokes, depth-only occluder, halo |
-| C. Environment | `src/env/*` | Sky, Ground (terrain), Street (lanes, curbs, lamps), Building (setbacks, windows, edges, surface glyphs, beacon), Vegetation (trees, shrubs, grass + wind), Atmosphere (dust, embers, code rain), EnergySource, Structures (pylons, cables, portals) |
+| C. Environment | `src/env/*` | Sky, Ground (terrain, ponds as holes), Street (lanes, curbs, lamps), Building (setbacks, windows, edges, surface glyphs, beacon), Pavilion (curved tiled roof, lit panels), Water (pond, ripples), Vegetation (trees, shrubs, grass, line reeds, pines + wind), Atmosphere (dust, embers, code rain), EnergySource (globe, beam), Structures (pylons, cables, portals, lanterns) |
 | D. Shaders | `src/shaders/chunks.js` + materials, `src/post/PostFX.js` | Noise, lighting rig, sky-matched fog, flicker, glitch slicing, emergence, sway, drift, skinning. Post: Karis-average bloom, radial CA + glitch RGB kick, block fragmentation, scanlines, grain, vignette, AgX, grade |
 | E. Animation | `src/anim/Timeline.js`, `CameraRig.js` | Paused GSAP timeline seeked per frame. `keys()`, `glitchBurst()`, `pulse()`. Spline shots with handheld noise and auto-focus |
 | F. Video | `tools/render.mjs`, `png.mjs`, `encode.mjs`, `compare.mjs` | See above |
 
-Example scenes: `prototype` (Phase 3 test scene, 10 s), `character_test` (character turntable, 12 s), `glb_test` (GLB import, 6 s).
+Example scenes: `garden_test` (**reference look**: text-textured figure in a night pond, 16 s, 4:5 letterbox),
+`prototype` (Phase 3 city test, 10 s), `character_test` (character turntable, 12 s), `glb_test` (GLB import, 6 s; add `&surface=1` for the text-body look).
+
+### Reference-look toolkit (from `docs/REFERENCE_ANALYSIS.md`)
+| Want | Use |
+|---|---|
+| Body made of text | `PointCloudCharacter.procedural(engine, { style: 'glyph' })` or `fromObject(engine, gltf.scene, { surface: true })` |
+| Glowing head ring / sash | `hero.addRing({ bone: 'head', plane: 'xz', radius: 0.25 })` |
+| Afterimages | `const ghosts = hero.addGhosts(5)`; `applyPose(ghosts[i], poseAt(t - (i + 1) * 0.085))`; tween `hero.ghostState.intensity` |
+| Pond + reflections | `createPond(engine, { center, radius })` + `createGround({ holes: [...] })`; `addReflection(engine, points)`, `hero.addSurfaceReflection()` |
+| Reeds / grass / pines | `createReeds({ patches })`, `createPines({ pines })` |
+| Lanterns, pavilion, energy spire | `createLanterns()`, `createPavilion()`, `createBeam()` (cross flare included) |
+| Text fonts | glyph sets `text`, `body`, `tile`, `lamp` (IBM Plex Mono, OFL, bundled via npm) |
+| Smear glitch / green terminal phase | tween `engine.post.params.smear` / `.terminal` (`termColor`, `termCell`) |
+| 4:5 picture in a 9:16 frame | `export const meta = { letterbox: 0.8 }` or `--letterbox 4:5` |
 
 ## Performance notes for integrated graphics
 - Lower `--quality` first (particle counts scale with it; sprites grow to keep coverage).
@@ -133,7 +149,7 @@ Example scenes: `prototype` (Phase 3 test scene, 10 s), `character_test` (charac
 - The character build is CPU work at load time (scales with `count`). Lower `count` in `PointCloudCharacter.procedural()` for faster previews.
 
 ## Known limitations
-- **No reference video was supplied.** The look matches the written brief. `tools/compare.mjs` is ready for the real comparison.
+- The reference video is not in the repo (third-party content). Keep it in `ascii-engine/reference/` (git-ignored) for `tools/compare.mjs`.
 - Measured only on SwiftShader (CPU). The Intel UHD numbers need a run on the laptop (the render log prints the renderer string).
 - Procedural hands are mitten-like and fingers aren't articulated. Faces read at medium and close range but aren't portrait-grade.
 - Only the depth-only occluder hides the back of a character. Very thin parts (fingers, ears) can show some back-side particles.

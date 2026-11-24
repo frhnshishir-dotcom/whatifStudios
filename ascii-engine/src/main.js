@@ -1,5 +1,6 @@
 import { Engine } from './core/Engine.js';
 import { resolveFormat, resolveQuality } from './core/presets.js';
+import { loadAtlasFont } from './glyphs/GlyphAtlas.js';
 
 // Entry point. URL parameters:
 //   scene=prototype  mode=preview|render  format=9x16|16x9|1x1|9x16-hd|16x9-hd  size=WxH  quality=preview|draft|final|master
@@ -31,10 +32,14 @@ async function start() {
     width = Math.round((width * quality.previewScale) / 2) * 2;
     height = Math.round((height * quality.previewScale) / 2) * 2;
   }
+  await loadAtlasFont();
   const canvas = document.createElement('canvas');
   document.getElementById('stage').appendChild(canvas);
-  const engine = new Engine({ canvas, width, height, quality, fps, seed, mode });
   const mod = await import(`../scenes/${sceneName}.js`);
+  // Letterbox (picture aspect inside the frame): URL ?letterbox=4:5 | 0.8 | 0 overrides the scene's meta.letterbox.
+  const lb = q.get('letterbox') ?? String(mod.meta?.letterbox ?? 0);
+  const letterbox = lb.includes(':') ? lb.split(':').reduce((x, y) => Number(x) / Number(y)) : Number(lb);
+  const engine = new Engine({ canvas, width, height, quality, fps, seed, mode, letterbox });
   const t0 = performance.now();
   await mod.build(engine, { params: q, format });
   const buildMs = Math.round(performance.now() - t0);

@@ -3,7 +3,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Rng } from '../core/random.js';
 import { ParticleBuilder, createParticleMaterial } from '../shaders/ParticleMaterial.js';
 import { SET } from '../glyphs/GlyphAtlas.js';
-import { JOINTS, PARENTS, BONE_NAMES, PRIMITIVES, sdf, gradient, project, featureCurves, occlusion, curvature } from './HumanSDF.js';
+import { JOINTS, PARENTS, BONE_NAMES, PRIMITIVES, sdf, gradient, project, featureCurves, occlusion, curvature, surfaceNets } from './HumanSDF.js';
+import { createSkinnedGlyphMaterial } from '../shaders/GlyphSurfaceMaterial.js';
 
 // SYSTEM B: point-cloud characters.
 //   PointCloudCharacter.procedural(engine, opts)    procedural human (SDF anatomy + 26-bone skeleton)
@@ -11,6 +12,13 @@ import { JOINTS, PARENTS, BONE_NAMES, PRIMITIVES, sdf, gradient, project, featur
 // Layers per character: luminous body dots (+ bright anatomical feature clusters), ASCII/stroke marks,
 // a depth-only occluder body (keeps the silhouette readable), and an optional halo.
 // Skinning runs in the particle vertex shader through the skeleton's bone texture.
+
+// Styles: 'particles' = luminous point cloud with sparse ASCII marks; 'glyph' = body covered in tiny monospace
+// letters over dim dots (the reference look: a mesh textured with text).
+const STYLES = {
+  particles: { markFraction: 0.16, strokeChance: 0.55, markSet: 'CHAR', dotChance: 1, markSizeMin: 0.6, look: {} },
+  glyph: { surface: true, features: ['iris'], markFraction: 0.04, strokeChance: 0, markSet: 'CHAR', dotChance: 0.22, dotLift: 0.004, markSizeMin: 0.75, look: { bodyBrightness: 0.3, markSize: 0.014, markBrightness: 0.5, rim: 0.4 } },
+};
 
 const DEFAULT_LOOK = {
   bodyColor: '#e4e9f0',
@@ -39,8 +47,9 @@ export class PointCloudCharacter {
 
   // ---------------------------------------------------------------- procedural human
   static procedural(engine, opts = {}) {
-    const o = { seed: 7, count: 110000, markFraction: 0.16, hair: true, halo: true, look: {}, headDensity: 2.4, handDensity: 1.7, ...opts };
-    const look = { ...DEFAULT_LOOK, ...o.look };
+    const style = STYLES[opts.style || 'particles'];
+    const o = { seed: 7, count: 110000, hair: true, halo: true, headDensity: 2.4, handDensity: 1.7, ...style, ...opts };
+    const look = { ...DEFAULT_LOOK, ...style.look, ...(opts.look || {}) };
     const ch = new PointCloudCharacter(engine);
     const rng = new Rng('human', o.seed);
     const density = engine.density;
@@ -66,10 +75,55 @@ export class PointCloudCharacter {
     const boneIndex = Object.fromEntries(BONE_NAMES.map((n, i) => [n, i]));
     const primBone = PRIMITIVES.map((p) => boneIndex[p.bone]);
 
-    // Occluder body: shrunk primitives, rigidly skinned, depth only. Also the SkinnedMesh the points ride on.
-    const occluder = buildOccluder(PRIMITIVES, primBone, 0.012);
-    const mesh = new THREE.SkinnedMesh(occluder, depthOnlyMaterial());
-    mesh.name = 'occluder';
+    // Skin weights: the two nearest bones by primitive distance, blended over ~1.6 cm.
+    const dists = new Float32Array(PRIMITIVES.length);
+    const weightsAt = (x, y, z) => {
+      sdf(x, y, z, dists);
+      const best = new Map();
+      for (let k = 0; k < dists.length; k++) {
+        const b = primBone[k];
+        if (!best.has(b) || dists[k] < best.get(b)) best.set(b, dists[k]);
+      }
+      const sorted = [...best.entries()].sort((a, b) => a[1] - b[1]);
+      const [b1, d1] = sorted[0];
+      const [b2, d2] = sorted[1] ?? [b1, 1];
+      let w2 = Math.exp(-(d2 - d1) / 0.016);
+      if (w2 < 0.03) w2 = 0;
+      const s = 1 + w2;
+      return { skinIndex: [b1, b2, 0, 0], skinWeight: [1 / s, w2 / s, 0, 0] };
+    };
+
+    // Body mesh the particles ride on. Default: shrunk primitives, rigidly skinned, depth only (occluder).
+    // surface: a smooth surface-nets mesh of the SDF, skinned with the same weights and textured with glyphs
+    // (the reference look: a body made of text). It occludes too.
+    let mesh;
+    if (o.surface) {
+      const sn = surfaceNets(density < 0.5 ? 0.012 : 0.008);
+      const nv = sn.positions.length / 3;
+      const si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), shadeA = new Float32Array(nv);
+      for (let v = 0; v < nv; v++) {
+        const p = [sn.positions[v * 3], sn.positions[v * 3 + 1], sn.positions[v * 3 + 2]];
+        const n = [sn.normals[v * 3], sn.normals[v * 3 + 1], sn.normals[v * 3 + 2]];
+        const w = weightsAt(...p);
+        si.set(w.skinIndex, v * 4); sw.set(w.skinWeight, v * 4);
+        const curv = p[1] > 1.5 || Math.abs(p[0]) > 0.21 && p[1] < 0.95 ? THREE.MathUtils.clamp((curvature(p) - 30) / 110, -1, 0.8) : 0;
+        shadeA[v] = (0.25 + 0.75 * occlusion(p, n)) * (1 + 0.5 * curv);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(sn.positions, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(sn.normals, 3));
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+      geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+      geo.setAttribute('aShade', new THREE.Float32BufferAttribute(shadeA, 1));
+      geo.setIndex(sn.indices);
+      const surfOpts = { glyphSet: SET.BODY, cell: [0.0095, 0.0135], color: look.surfaceColor ?? '#e9eef5', base: '#050506', brightness: 1.2, gain: 1.2, jitter: 0.55, frag: 0.05, fragScale: 3, seed: o.seed, emissive: 0.14, hueMix: 0.45, rim: 0.55, emerge: { value: 1, range: [-0.05, 1.85] } };
+      mesh = new THREE.SkinnedMesh(geo, createSkinnedGlyphMaterial(engine, surfOpts));
+      mesh.name = 'body-surface';
+      ch.surfaceOpts = surfOpts;
+    } else {
+      mesh = new THREE.SkinnedMesh(buildOccluder(PRIMITIVES, primBone, 0.012), depthOnlyMaterial());
+      mesh.name = 'occluder';
+    }
     mesh.frustumCulled = false;
     mesh.renderOrder = 10; // after the opaque environment, so it hides particles but never punches holes in it
     mesh.add(ch.bones.root);
@@ -85,7 +139,6 @@ export class PointCloudCharacter {
     const N = Math.round(o.count * density);
     const eps = 0.0035;
     const candPerM3 = (N * 1.2) / (1.95 * 2 * eps);
-    const dists = new Float32Array(PRIMITIVES.length);
     const samples = [];
     PRIMITIVES.forEach((q, i) => {
       if (q.neg) return;
@@ -110,21 +163,6 @@ export class PointCloudCharacter {
     for (let i = samples.length - 1; i > 0; i--) { const j = Math.floor(rng.float() * (i + 1)); [samples[i], samples[j]] = [samples[j], samples[i]]; }
     samples.length = Math.min(samples.length, N);
 
-    const weightsAt = (x, y, z) => {
-      sdf(x, y, z, dists);
-      const best = new Map();
-      for (let k = 0; k < dists.length; k++) {
-        const b = primBone[k];
-        if (!best.has(b) || dists[k] < best.get(b)) best.set(b, dists[k]);
-      }
-      const sorted = [...best.entries()].sort((a, b) => a[1] - b[1]);
-      const [b1, d1] = sorted[0];
-      const [b2, d2] = sorted[1] ?? [b1, 1];
-      let w2 = Math.exp(-(d2 - d1) / 0.016);
-      if (w2 < 0.03) w2 = 0;
-      const s = 1 + w2;
-      return { skinIndex: [b1, b2, 0, 0], skinWeight: [1 / s, w2 / s, 0, 0] };
-    };
 
     const dots = new ParticleBuilder();
     const marks = new ParticleBuilder();
@@ -147,19 +185,21 @@ export class PointCloudCharacter {
       const mul = PRIMITIVES[s.prim].bone === 'head' ? o.headDensity : PRIMITIVES[s.prim].bone.startsWith('hand') ? o.handDensity : 1;
       const shade = ((0.3 + 0.7 * ao) * (1 + 0.45 * curv)) / Math.pow(mul, 0.65);
       // Slight thickness: a few particles float just off the skin (volumetric shimmer).
-      const lift = rng.chance(0.07) ? rng.range(0.002, 0.012) : 0;
+      const lift = (o.dotLift ?? 0) + (rng.chance(0.07) ? rng.range(0.002, 0.012) : 0);
       const pp = [p[0] + g[0] * lift, p[1] + g[1] * lift, p[2] + g[2] * lift];
-      dots.push({ p: pp, n: g, seed, size: rng.range(0.7, 1.35), bright: rng.range(0.65, 1.15) * shade * (lift ? 0.6 : 1), ...sk });
+      // dotChance < 1 only: drawing a random number when it is 1 would shift the seeded stream and change
+      // every existing particle-style character (breaks reproducibility of earlier cuts).
+      if (o.dotChance >= 1 || rng.chance(o.dotChance)) dots.push({ p: pp, n: g, seed, size: rng.range(0.7, 1.35), bright: rng.range(0.65, 1.15) * shade * (lift ? 0.6 : 1), ...sk });
 
       if (rng.chance(o.markFraction)) {
         // Tiny strokes along the limb axis (muscle-fibre direction) or ASCII marks from the character ramp.
         const ax = PRIMITIVES[s.prim].axis;
         const dn = ax[0] * g[0] + ax[1] * g[1] + ax[2] * g[2];
         const t = [ax[0] - g[0] * dn, ax[1] - g[1] * dn, ax[2] - g[2] * dn];
-        const stroke = rng.chance(0.55);
+        const stroke = rng.chance(o.strokeChance);
         marks.push({
           p: [p[0] + g[0] * 0.002, p[1] + g[1] * 0.002, p[2] + g[2] * 0.002], n: g, seed: rng.float(),
-          size: stroke ? rng.range(0.7, 1.1) : rng.range(0.6, 1.0), bright: rng.range(0.5, 1.1),
+          size: stroke ? rng.range(0.7, 1.1) : rng.range(o.markSizeMin ?? 0.6, 1.0), bright: rng.range(0.5, 1.1) * (o.markSet === 'BODY' ? shade : 1),
           tangent: stroke ? t : [0, 0, 0], glyph: stroke ? DASH : -1, ...sk,
         });
       }
@@ -175,6 +215,7 @@ export class PointCloudCharacter {
 
     // Bright anatomical feature clusters.
     for (const c of featureCurves()) {
+      if (o.features && !o.features.includes(c.tag)) continue;
       if (c.cluster) {
         const n = Math.max(3, Math.round(c.cluster * Math.sqrt(density)));
         for (let k = 0; k < n; k++) {
@@ -195,7 +236,8 @@ export class PointCloudCharacter {
           const q = [a[0] + (b[0] - a[0]) * u + rng.gauss() * j, a[1] + (b[1] - a[1]) * u + rng.gauss() * j, a[2] + (b[2] - a[2]) * u];
           const p = project(q, 3);
           const g = gradient(...p);
-          dots.push({ p: [p[0] + g[0] * 0.0015, p[1] + g[1] * 0.0015, p[2] + g[2] * 0.0015], n: g, seed: rng.float(), size: rng.range(0.8, 1.2), bright: c.bright * rng.range(0.8, 1.2) / look.bodyBrightness * 0.45, ...weightsAt(...p) });
+          const fl = 0.0015 + (o.dotLift ?? 0);
+          dots.push({ p: [p[0] + g[0] * fl, p[1] + g[1] * fl, p[2] + g[2] * fl], n: g, seed: rng.float(), size: rng.range(0.8, 1.2), bright: c.bright * rng.range(0.8, 1.2) / look.bodyBrightness * 0.45, ...weightsAt(...p) });
         }
       }
     }
@@ -205,7 +247,7 @@ export class PointCloudCharacter {
       lit: 0.85, rim: look.rim, flicker: look.flicker, emerge: { scale: 7, scatter: 0.9 },
     });
     ch._addSkinnedLayer(marks, mesh, {
-      mode: 'stroke', glyphSet: SET.CHAR, color: look.markColor, color2: look.accent, size: look.markSize,
+      mode: 'stroke', glyphSet: SET[o.markSet], color: look.markColor, color2: look.accent, size: look.markSize,
       brightness: look.markBrightness, lit: 0.9, rim: look.rim * 0.6, flicker: 0.3, glyphMinPx: 5, emerge: { scale: 7, scatter: 1.1 },
     });
     ch.counts = { dots: dots.count, marks: marks.count };
@@ -215,11 +257,93 @@ export class PointCloudCharacter {
     return ch;
   }
 
+  /**
+   * A luminous ring on a bone: dense bright dots on an ellipse with a soft outer glow ring. Rest orientation of the
+   * procedural bones is identity, so plane 'xz' is horizontal (a brim-level halo, a sash) and 'xy' faces forward.
+   * opts: bone, offset [x,y,z] (bone space), radius [rx, rz] or r, plane, count, color, brightness, size, thickness, tilt.
+   */
+  addRing(opts = {}) {
+    const o = { bone: 'head', offset: [0, 0.12, 0], radius: 0.22, plane: 'xz', count: 1400, color: '#ffffff', brightness: 2.2, size: 0.009, thickness: 0.004, tilt: 0, ...opts };
+    const rng = new Rng('ring', o.bone, o.offset.join(','));
+    const [rx, rz] = Array.isArray(o.radius) ? o.radius : [o.radius, o.radius];
+    const b = new ParticleBuilder();
+    const n = Math.round(o.count * Math.max(0.5, this.engine.density));
+    const put = (u, v, w) => (o.plane === 'xz' ? [u, w, v] : [u, v, w]);
+    for (let i = 0; i < n; i++) {
+      const t = rng.range(0, Math.PI * 2);
+      const glow = rng.chance(0.25);
+      const k = 1 + (glow ? Math.abs(rng.gauss()) * 0.08 : 0);
+      const p = put(Math.cos(t) * rx * k + rng.gauss() * o.thickness, Math.sin(t) * rz * k + rng.gauss() * o.thickness, rng.gauss() * o.thickness);
+      b.push({ p, seed: rng.float(), size: glow ? rng.range(0.6, 1.2) : rng.range(0.8, 1.3), bright: glow ? rng.range(0.15, 0.4) : rng.range(0.8, 1.2) });
+    }
+    const pts = new THREE.Points(b.build(), createParticleMaterial(this.engine, {
+      mode: 'dot', color: o.color, size: o.size, brightness: o.brightness, lit: 0, flicker: 0.05, emerge: { scale: 9, scatter: 0.4 },
+    }));
+    pts.frustumCulled = false;
+    const holder = new THREE.Group();
+    holder.position.set(...o.offset);
+    holder.rotation.x = o.tilt;
+    holder.add(pts);
+    (this.bones[o.bone] || this.group).add(holder);
+    this.layers.push({ points: pts, skinned: false });
+    return pts;
+  }
+
+  /**
+   * Afterimage ghosts (procedural characters): n extra skeletons sharing the body particle geometry. Pose each with
+   * applyPose(ghost, pose) like the main character; ghost.opacity scales its brightness. ghostState.intensity fades all.
+   */
+  addGhosts(n = 4, { falloff = 0.62, tint = null, fraction = 0.4 } = {}) {
+    this.ghosts = [];
+    this.ghostState = { intensity: 0 };
+    const bodyLayers = this.layers.filter((l) => l.skinned && l.mesh === this.mesh);
+    for (let g = 0; g < n; g++) {
+      const bones = {};
+      const list = BONE_NAMES.map((name) => {
+        const bone = new THREE.Bone();
+        bone.name = name;
+        bone.position.copy(this.bones[name].position);
+        bones[name] = bone;
+        return bone;
+      });
+      for (const name of BONE_NAMES) if (PARENTS[name]) bones[PARENTS[name]].add(bones[name]);
+      this.group.add(bones.root);
+      const skeleton = new THREE.Skeleton(list, this.skeleton.boneInverses.map((m) => m.clone()));
+      skeleton.computeBoneTexture();
+      const layers = bodyLayers.map((L) => {
+        const m = createParticleMaterial(this.engine, { ...L.points.material.userData.opts, ...(tint ? { color: tint } : {}) });
+        m.uniforms.uBoneTex.value = skeleton.boneTexture;
+        // Same attribute buffers, own draw range: a ghost draws a random subset (samples are stored shuffled).
+        const src = L.points.geometry, geo = new THREE.BufferGeometry();
+        for (const [k, attr] of Object.entries(src.attributes)) geo.setAttribute(k, attr);
+        geo.setDrawRange(0, Math.floor(src.getAttribute('position').count * fraction));
+        const pts = new THREE.Points(geo, m);
+        pts.frustumCulled = false;
+        this.group.add(pts);
+        return pts;
+      });
+      // Glyph-surface bodies get a surface ghost too (additive copy of the text body on the ghost skeleton).
+      if (this.surfaceOpts) {
+        const gm = createSkinnedGlyphMaterial(this.engine, this.surfaceOpts);
+        Object.assign(gm, { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: false });
+        const gmesh = new THREE.SkinnedMesh(this.mesh.geometry, gm);
+        gmesh.frustumCulled = false;
+        gmesh.renderOrder = 12;
+        this.group.add(gmesh);
+        gmesh.bind(skeleton, new THREE.Matrix4());
+        layers.push(gmesh);
+      }
+      this.ghosts.push({ bones, skeleton, layers, opacity: Math.pow(falloff, g + 1) });
+    }
+    return this.ghosts;
+  }
+
   // ---------------------------------------------------------------- GLTF / GLB / any mesh
   /**
    * Convert every mesh under `object` (e.g. gltf.scene) into a point cloud. Skinned meshes keep their skeleton
    * (animate with this.mixer / gltf.animations); the original meshes become depth-only occluders.
-   * opts: count, markFraction, edges (bright feature-edge particles), look, halo {headBone, offset, radius}.
+   * opts: count, markFraction, edges (bright feature-edge particles), look, halo {headBone, offset, radius},
+   * surface (true: the model's own mesh is drawn as a glyph-textured surface instead of a hidden occluder).
    */
   static fromObject(engine, object, opts = {}) {
     const o = { seed: 3, count: 50000, markFraction: 0.2, edges: true, halo: false, look: {}, ...opts };
@@ -274,8 +398,14 @@ export class PointCloudCharacter {
       };
       mk(dots, { mode: 'dot', color: look.bodyColor, size: look.bodySize * (o.sizeScale ?? 1), brightness: look.bodyBrightness, lit: 0.85, rim: look.rim });
       if (marks.count) mk(marks, { mode: 'stroke', glyphSet: SET.CHAR, color: look.markColor, size: look.markSize * (o.sizeScale ?? 1), brightness: look.markBrightness, lit: 0.9, rim: look.rim * 0.6, flicker: 0.3, glyphMinPx: 5 });
-      // The source mesh becomes a depth-only occluder (still skinned by three.js), drawn after the environment.
-      mesh.material = depthOnlyMaterial();
+      // The source mesh becomes a depth-only occluder (still skinned by three.js), drawn after the environment,
+      // or with surface: true a glyph-textured body (text mapped in the mesh's rest pose).
+      if (o.surface) {
+        if (!geo.getAttribute('aShade')) geo.setAttribute('aShade', new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute('position').count).fill(1), 1));
+        const sc = new THREE.Vector3();
+        mesh.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), sc);
+        mesh.material = createSkinnedGlyphMaterial(engine, { glyphSet: SET.BODY, cell: [0.0085, 0.012], color: '#e9eef5', base: '#050506', brightness: 1.15, gain: 1.5, jitter: 0.55, frag: 0.05, fragScale: 3, seed: o.seed, emissive: 0.14, hueMix: 0.45, rim: 0.55, mapScale: (Math.abs(sc.x) + Math.abs(sc.y) + Math.abs(sc.z)) / 3 });
+      } else mesh.material = depthOnlyMaterial();
       mesh.frustumCulled = false;
       mesh.renderOrder = 10;
       if (skinned && !mesh.skeleton.boneTexture) mesh.skeleton.computeBoneTexture();
@@ -283,6 +413,19 @@ export class PointCloudCharacter {
     if (o.halo) ch.addHalo(o.halo === true ? {} : o.halo);
     engine.onAfterMatrix(() => ch._afterMatrix());
     return ch;
+  }
+
+  /** Mirror the glyph body surface into the pond (additive, below the water line). */
+  addSurfaceReflection(amount = 0.35) {
+    if (!this.surfaceOpts) return null;
+    const m = createSkinnedGlyphMaterial(this.engine, { ...this.surfaceOpts, reflectMode: true, reflect: amount });
+    const r = new THREE.SkinnedMesh(this.mesh.geometry, m);
+    r.frustumCulled = false;
+    r.renderOrder = 11;
+    this.group.add(r);
+    r.bind(this.skeleton, this.mesh.bindMatrix.clone());
+    this.surfaceReflection = r;
+    return r;
   }
 
   _addSkinnedLayer(builder, mesh, matOpts) {
@@ -306,6 +449,21 @@ export class PointCloudCharacter {
       u.uDisplace.value = this.state.displace;
       u.uSmear.value = this.state.smear;
       u.uSliceAmt.value = this.state.glitchSlice;
+    }
+    if (this.mesh?.material?.uniforms?.uEmerge) this.mesh.material.uniforms.uEmerge.value = this.state.emerge;
+    if (this.surfaceReflection) this.surfaceReflection.material.uniforms.uEmerge.value = this.state.emerge;
+    if (this.ghosts) {
+      const k = this.ghostState.intensity;
+      for (const gh of this.ghosts) {
+        gh.skeleton.update();
+        for (const pts of gh.layers) {
+          pts.visible = k > 0.001;
+          const u = pts.material.uniforms;
+          if (u.uBindMatrixInverse) u.uBindMatrixInverse.value.copy(this.group.matrixWorld).invert();
+          u.uOpacity.value = k * gh.opacity;
+          if (u.uEmerge) u.uEmerge.value = this.state.emerge;
+        }
+      }
     }
   }
 

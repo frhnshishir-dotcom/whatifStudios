@@ -12,7 +12,7 @@ import { PostFX } from '../post/PostFX.js';
  * Scenes register update hooks (t, engine) and afterMatrix hooks (for skeletons that need world matrices).
  */
 export class Engine {
-  constructor({ canvas, width, height, quality, fps = 30, seed = 1, mode = 'preview' }) {
+  constructor({ canvas, width, height, quality, fps = 30, seed = 1, mode = 'preview', letterbox = 0 }) {
     this.width = width;
     this.height = height;
     this.quality = quality;
@@ -31,12 +31,13 @@ export class Engine {
     this.renderer.sortObjects = true;
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(50, width / height, 0.05, 800);
+    this.camera = new THREE.PerspectiveCamera(50, width / height, 0.05, 800); // aspect set from the picture area in setTime
     this.scene.add(this.camera);
 
     this.lightRig = new LightRig();
     this.atlas = createGlyphAtlas();
-    this.post = new PostFX(this.renderer, { width, height, supersample: quality.supersample, bloomLevels: quality.bloomLevels });
+    this.post = new PostFX(this.renderer, { width, height, supersample: quality.supersample, bloomLevels: quality.bloomLevels, letterbox });
+    this.post.setAtlas(this.atlas, this.atlas.sets.findIndex((s) => s.name === 'text'));
 
     // Tweenable scene-level parameters (GSAP targets). Applied to uniforms every frame.
     this.params = {
@@ -52,7 +53,7 @@ export class Engine {
       uTime: { value: 0 },
       uFrame: { value: 1 },
       uPixelScale: { value: 1 },
-      uAspect: { value: width / height },
+      uAspect: { value: this.post.cw / this.post.ch },
       uGlitch: { value: 0 },
       uCamRight: { value: new THREE.Vector3(1, 0, 0) },
       uCamUp: { value: new THREE.Vector3(0, 1, 0) },
@@ -69,6 +70,7 @@ export class Engine {
       uSkyGlow: { value: new THREE.Vector3(0.1, 0.004, 0.0024) },
       uSkyGlowDir: { value: new THREE.Vector3(0, 0, -1) },
       uSkyGlowAmount: { value: 0 },
+      uWater: { value: new THREE.Vector4(0, 0, 0, 0) },
       uAtlas: { value: this.atlas.texture },
       uSetLen: { value: this.atlas.setLen },
       ...this.lightRig.uniforms,
@@ -106,7 +108,7 @@ export class Engine {
     s.uFogColor.value.set(this._fog.r, this._fog.g, this._fog.b);
 
     const cam = this.camera;
-    cam.aspect = this.width / this.height;
+    cam.aspect = this.post.cw / this.post.ch; // the picture area (letterbox-aware)
     cam.updateProjectionMatrix();
     this.scene.updateMatrixWorld(true);
     for (const fn of this.hooks.afterMatrix) fn(t, this);
@@ -160,7 +162,7 @@ export class Engine {
     return {
       renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
       webgl: gl.getParameter(gl.VERSION),
-      width: this.width, height: this.height, fps: this.fps, duration: this.duration,
+      width: this.width, height: this.height, picture: [this.post.cw, this.post.ch], fps: this.fps, duration: this.duration,
       quality: this.quality.name, density: this.quality.density, supersample: this.quality.supersample,
       particles: points, drawCallsApprox: draws, pointSizeRange: Array.from(gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)),
     };

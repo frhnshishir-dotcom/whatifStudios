@@ -21,16 +21,23 @@ export function createGround(engine, o = {}) {
   const opt = {
     size: 220, segments: 180, seed: 3, amp: 2.4, scale: 0.035,
     flat: (x, z) => 0, cell: [0.24, 0.24], color: '#aab4bc', brightness: 1.0, gain: 1.7,
-    debris: 9000, debrisColor: '#cfd6de', ...o,
+    debris: 9000, debrisColor: '#cfd6de', holes: [], glyphSet: SET.TERRAIN, ...o,
   };
   const geo = new THREE.PlaneGeometry(opt.size, opt.size, opt.segments, opt.segments);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.getAttribute('position');
-  const heightAt = (x, z) => terrainHeight(x, z, opt) * (1 - opt.flat(x, z)) - 0.02;
+  const heightAt = (x, z) => {
+    let h = terrainHeight(x, z, opt) * (1 - opt.flat(x, z)) - 0.02;
+    for (const H of opt.holes) {
+      const d = Math.hypot(x - H.center[0], z - H.center[1]);
+      h -= H.depth * (1 - THREE.MathUtils.smoothstep(d, H.radius * 0.85, H.radius * 1.05));
+    }
+    return h;
+  };
   for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
   geo.computeVertexNormals();
   const mat = createGlyphSurfaceMaterial(engine, {
-    glyphSet: SET.TERRAIN, cell: opt.cell, color: opt.color, brightness: opt.brightness, gain: opt.gain,
+    glyphSet: opt.glyphSet, cell: opt.cell, color: opt.color, brightness: opt.brightness, gain: opt.gain,
     frag: 0.12, fragScale: 0.09, seed: opt.seed, horizon: 0.025, base: '#040405',
   });
   const mesh = new THREE.Mesh(geo, mat);
@@ -44,6 +51,7 @@ export function createGround(engine, o = {}) {
   for (let i = 0; i < n; i++) {
     const r = Math.pow(rng.float(), 1.6) * opt.size * 0.22, a = rng.range(0, Math.PI * 2);
     const x = Math.cos(a) * r, z = Math.sin(a) * r - 6;
+    if (opt.holes.some((H) => Math.hypot(x - H.center[0], z - H.center[1]) < H.radius * 1.05)) continue;
     b.push({ p: [x, heightAt(x, z) + 0.03, z], n: [0, 1, 0], seed: rng.float(), size: rng.range(0.7, 1.4), bright: rng.range(0.4, 1.0), color: col });
   }
   const debris = makePoints(engine, b, { mode: 'glyph', glyphSet: SET.TERRAIN, size: 0.07, brightness: 0.55, lit: 1, flicker: 0.2, glyphJitter: 0.6 });

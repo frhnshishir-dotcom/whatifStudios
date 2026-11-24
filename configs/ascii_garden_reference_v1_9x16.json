@@ -1,0 +1,23 @@
+{
+  "cut": "ascii_garden_reference_v1_9x16",
+  "engine": "ascii-engine",
+  "scene": "garden_test",
+  "format": "9x16",
+  "quality": "final",
+  "seed": 1,
+  "frame_start": 1,
+  "frame_end": 480,
+  "fps": 30,
+  "width": 720,
+  "height": 1280,
+  "picture": [
+    720,
+    900
+  ],
+  "color_mode": "RGB",
+  "audio": "forbidden",
+  "output_name": "ascii_garden_reference_v1_9x16.mp4",
+  "max_chunk": 300,
+  "dark_ranges": [],
+  "notes": "Rendered by ascii-engine/tools/render.mjs (Three.js/WebGL, no Blender). Silent: VO/music/SFX are added in CapCut."
+}

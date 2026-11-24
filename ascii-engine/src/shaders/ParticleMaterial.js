@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { common, sharedUniforms, lighting, fog, atlas, particleFx, skinning } from './chunks.js';
+import { common, sharedUniforms, lighting, fog, atlas, particleFx, skinning, sway, water } from './chunks.js';
 
 // SYSTEM D: the particle shader. One THREE.Points draw per layer. Three modes:
 //   dot    - soft luminous particle (point cloud)
@@ -14,6 +14,8 @@ ${lighting}
 ${fog}
 ${atlas}
 ${particleFx}
+${sway}
+${water}
 #ifdef SKINNED
 ${skinning}
 #endif
@@ -39,8 +41,8 @@ uniform float uEmergeScale;
 uniform float uScatter;
 uniform vec3 uVelocity;
 uniform float uSmear;
-uniform float uSway;
-uniform float uSwayFreq;
+uniform float uTaper;
+uniform float uReflect;
 uniform vec3 uDriftVel;
 uniform vec3 uDriftBox;
 uniform vec3 uDriftCenter;
@@ -78,12 +80,12 @@ void main() {
   vec3 q = wp + uDriftVel * uTime
          + vec3(sin(uTime * 0.31 + seed * 40.0), cos(uTime * 0.23 + seed * 17.0), sin(uTime * 0.27 + seed * 29.0)) * 0.3;
   wp = uDriftCenter + mod(q - uDriftCenter + uDriftBox * 0.5, uDriftBox) - uDriftBox * 0.5;
+  // Optional cone: the cloud narrows with height (energy beams, flames).
+  float hf = clamp((wp.y - (uDriftCenter.y - uDriftBox.y * 0.5)) / uDriftBox.y, 0.0, 1.0);
+  wp.xz = uDriftCenter.xz + (wp.xz - uDriftCenter.xz) * mix(1.0, uTaper, hf);
 #endif
 #ifdef SWAY
-  float sw = aRand.w * aRand.w;
-  float wave = sin(uTime * uSwayFreq + wp.x * 0.35 + wp.z * 0.27) + 0.45 * sin(uTime * uSwayFreq * 2.3 + wp.z * 0.9 + seed * 3.0);
-  wp.x += wave * uSway * sw;
-  wp.z += 0.5 * wave * uSway * sw * cos(seed * 6.2831);
+  wp += swayOffset(wp, aRand.w, seed);
 #endif
   if (uDisplace > 0.0) {
     float dn = vnoise(position * 3.1 + vec3(0.0, uTime * 0.9, seed)) - 0.5;
@@ -107,6 +109,18 @@ void main() {
 #endif
 
   wp = glitchSlice(wp, seed);
+
+  // Water: layers are dimmed below the pond surface; the REFLECT variant mirrors the layer into the pond.
+  float waterA = 1.0;
+#ifdef REFLECT
+  float hAbove = wp.y - uWater.y;
+  wp.y = uWater.y - hAbove;
+  wp.x += sin(wp.y * 7.0 + uTime * 2.1 + wp.z * 2.3) * (0.012 + 0.03 * hAbove);
+  wp.z += cos(wp.y * 5.0 + uTime * 1.7 + wp.x * 1.9) * (0.006 + 0.015 * hAbove);
+  waterA = uReflect * inPond(wp) * step(0.0, hAbove) * exp(-hAbove * 0.6);
+#else
+  if (inPond(wp) > 0.5 && wp.y < uWater.y) waterA = 0.1;
+#endif
 
   vec4 mv = viewMatrix * vec4(wp, 1.0);
   float depth = -mv.z;
@@ -134,6 +148,7 @@ void main() {
   if (total < uMinPoint) { alpha *= (total * total) / (uMinPoint * uMinPoint); total = uMinPoint; }
   total = min(total, uMaxPoint);
   col *= fogFactor(depth);
+  alpha *= waterA;
   if (depth <= 0.0) alpha = 0.0;
 
   gl_PointSize = total;
@@ -219,6 +234,7 @@ export function createParticleMaterial(engine, o = {}) {
   if (o.emerge) defines.EMERGE = '';
   if (o.sway) defines.SWAY = '';
   if (o.drift) defines.DRIFT = '';
+  if (o.reflect) defines.REFLECT = '';
 
   const uniforms = {
     ...engine.shared,
@@ -247,6 +263,8 @@ export function createParticleMaterial(engine, o = {}) {
     uDriftBox: { value: new THREE.Vector3(...(o.drift?.box ?? [20, 10, 20])) },
     uDriftCenter: { value: new THREE.Vector3(...(o.drift?.center ?? [0, 4, 0])) },
     uPulse: { value: 0 },
+    uTaper: { value: o.drift?.taper ?? 1 },
+    uReflect: { value: o.reflectAmount ?? 0.45 },
   };
   if (o.skinned) {
     uniforms.uBoneTex = { value: null };
@@ -270,7 +288,25 @@ export function createParticleMaterial(engine, o = {}) {
     blendDstAlpha: THREE.OneFactor,
   });
   m.userData.mode = mode;
+  m.userData.opts = o;
   return m;
+}
+
+/**
+ * Mirror a particle layer into the pond (engine.shared.uWater). The reflection shares the layer's geometry and
+ * its per-material uniforms (skinning, emergence, pulse...), so it always matches the original. Returns the new
+ * Points, added as a child of the original.
+ */
+export function addReflection(engine, points, amount = 0.45) {
+  const src = points.material;
+  const m = createParticleMaterial(engine, { ...src.userData.opts, reflect: true, reflectAmount: amount });
+  for (const [k, u] of Object.entries(src.uniforms)) if (!(k in engine.shared)) m.uniforms[k] = u;
+  m.uniforms.uReflect = { value: amount };
+  const r = new THREE.Points(points.geometry, m);
+  r.frustumCulled = false;
+  r.name = `${points.name || 'layer'}-reflection`;
+  points.add(r); // child with identity transform: follows any per-frame motion of the source layer
+  return r;
 }
 
 /**

@@ -83,3 +83,44 @@ export function glowSprite(engine, { color = '#ff2a1f', size = 6, intensity = 0.
   m.frustumCulled = false;
   return m;
 }
+
+/** Camera-facing cross flare (anamorphic horizontal streak + thinner vertical streak + white-hot core). */
+export function flareSprite(engine, { color = '#ff2a1f', core = '#ffffff', size = 6, intensity = 1, vertical = 0.6 } = {}) {
+  const c = new THREE.Color(color), k = new THREE.Color(core);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Vector3(c.r, c.g, c.b) },
+      uCore: { value: new THREE.Vector3(k.r, k.g, k.b) },
+      uIntensity: { value: intensity },
+      uVertical: { value: vertical },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv * 2.0 - 1.0;
+        vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        vec2 scale = vec2(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz));
+        mv.xy += position.xy * scale;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor; uniform vec3 uCore; uniform float uIntensity; uniform float uVertical;
+      varying vec2 vUv;
+      void main() {
+        vec2 p = vUv;
+        float h = exp(-abs(p.y) * 140.0) * pow(max(1.0 - abs(p.x), 0.0), 1.5);
+        float v = exp(-abs(p.x) * 160.0) * pow(max(1.0 - abs(p.y), 0.0), 1.5) * uVertical;
+        float core = exp(-dot(p, p) * 900.0);
+        float halo = exp(-dot(p, p) * 60.0) * 0.25;
+        vec3 col = uColor * (h + v + halo) + uCore * core * 3.0;
+        gl_FragColor = vec4(col * uIntensity, 1.0);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+  m.scale.setScalar(size);
+  m.frustumCulled = false;
+  return m;
+}

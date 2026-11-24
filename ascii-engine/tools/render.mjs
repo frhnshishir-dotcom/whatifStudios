@@ -32,6 +32,8 @@ const { values: a } = parseArgs({
     quality: { type: 'string', default: 'final' },
     fps: { type: 'string', default: '30' },
     seed: { type: 'string', default: '1' },
+    letterbox: { type: 'string' },
+    set: { type: 'string', multiple: true, default: [] },
     cut: { type: 'string' },
     start: { type: 'string' },
     end: { type: 'string' },
@@ -99,6 +101,12 @@ async function main() {
 
   const qs = new URLSearchParams({ mode: 'render', scene: a.scene, format: a.format, quality: a.quality, fps: String(fps), seed: a.seed });
   if (a.size) qs.set('size', a.size);
+  if (a.letterbox) qs.set('letterbox', a.letterbox);
+  for (const kv of a.set) { // scene-specific URL parameters, e.g. --set surface=1 --set glb=./assets/models/x.glb
+    const i = kv.indexOf('=');
+    if (i < 1) throw new Error(`--set expects key=value, got ${kv}`);
+    qs.set(kv.slice(0, i), kv.slice(i + 1));
+  }
   const t0 = Date.now();
   await page.goto(`${url}index.html?${qs}`);
   await page.waitForFunction(() => window.__engine?.ready || window.__engineError, null, { timeout: Number(a.timeout) * 1000 });
@@ -153,13 +161,15 @@ async function main() {
   const cfgPath = path.join(root, 'configs', `${cut}.json`);
   const cfg = {
     cut, engine: 'ascii-engine', scene: a.scene, format: info.format, quality: a.quality, seed: Number(a.seed),
-    frame_start: 1, frame_end: total, fps, width: info.width, height: info.height, color_mode: 'RGB', audio: 'forbidden',
+    frame_start: 1, frame_end: total, fps, width: info.width, height: info.height, picture: info.picture, color_mode: 'RGB', audio: 'forbidden',
     output_name: `${cut}.mp4`, max_chunk: 300, dark_ranges: (info.meta.darkRanges || []).map(([t0, t1]) => [Math.max(1, Math.round(t0 * fps) + 1), Math.min(total, Math.round(t1 * fps) + 1)]),
     notes: 'Rendered by ascii-engine/tools/render.mjs (Three.js/WebGL, no Blender). Silent: VO/music/SFX are added in CapCut.',
   };
-  const renderKeys = ['cut', 'engine', 'scene', 'format', 'quality', 'seed', 'frame_start', 'frame_end', 'fps', 'width', 'height'];
+  const renderKeys = ['cut', 'engine', 'scene', 'format', 'quality', 'seed', 'frame_start', 'frame_end', 'fps', 'width', 'height', 'picture'];
   if (fs.existsSync(cfgPath)) {
     const old = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    // Configs written before 'picture' existed are full-frame.
+    if (old.picture === undefined) old.picture = [old.width, old.height];
     const diff = renderKeys.filter((k) => JSON.stringify(old[k]) !== JSON.stringify(cfg[k]));
     if (diff.length) throw new Error(`${path.relative(root, cfgPath)} exists with different render settings (${diff.join(', ')}). Use a new --cut name; existing files are never overwritten.`);
   } else {

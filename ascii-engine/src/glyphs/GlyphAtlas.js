@@ -98,11 +98,39 @@ export const SETS = [
   { name: 'stroke', ramp: false, glyphs: ['DASH', 'LINE', 'DASH2', 'TICK', 'HAIR'] },
   { name: 'code', ramp: true, glyphs: ['1', '7', '0', '2', '3', '4', '5', '6', '8', '9', 'A', 'E', 'F', '$', '&', '?'] },
   { name: 'mark', ramp: false, glyphs: ['DOT', 'DOT2', 'RING', 'SQ', 'SQF', 'DIA', 'CROSS', 'PLUS', 'TRI', 'GRID', 'BAR', 'TICK'] },
+  // Font sets (smooth monospace, IBM Plex Mono, OFL): the terminal-text look of the reference.
+  { name: 'text', ramp: true, font: true, glyphs: ['.', '-', '~', '^', '"', '=', 'r', 'c', 's', 'u', 'o', 'a', '$', '8', '#', '@'] },
+  { name: 'body', ramp: true, font: true, glyphs: [':', ';', '+', '=', 'z', 's', '2', '5', '7', 'x', 'Z', 'S', 'N', 'M', 'W', '0'] },
+  { name: 'tile', ramp: true, font: true, glyphs: ['.', "'", '-', '_', '~', '=', '^', '"'] },
+  { name: 'lamp', ramp: true, font: true, glyphs: ['o', 'a', '$', '8', 'B', 'Q', '#', '@'] },
 ];
+
+export const ATLAS_FONT = 'AtlasMono';
+const FONT_URL = new URL('../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2', import.meta.url);
+
+/** Load the bundled monospace font before building the atlas (falls back to the system monospace if missing). */
+export async function loadAtlasFont() {
+  try {
+    const face = new FontFace(ATLAS_FONT, `url(${FONT_URL.href})`);
+    await face.load();
+    document.fonts.add(face);
+    return true;
+  } catch (e) {
+    console.warn('atlas font not loaded, using system monospace:', e?.message || e);
+    return false;
+  }
+}
 
 export const SET = Object.fromEntries(SETS.map((s, i) => [s.name.toUpperCase(), i]));
 
-function drawGlyph(g, key) {
+function drawGlyph(g, key, font = false) {
+  if (font) {
+    g.font = `500 27px ${ATLAS_FONT}, monospace`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(key, 16, 17);
+    return;
+  }
   if (MARKS[key]) { MARKS[key](g); return; }
   const rows = FONT[key];
   if (!rows) throw new Error(`GlyphAtlas: no glyph for ${JSON.stringify(key)}`);
@@ -113,12 +141,12 @@ function drawGlyph(g, key) {
   }
 }
 
-function coverageOf(key) {
+function coverageOf(key, font) {
   const c = document.createElement('canvas');
   c.width = c.height = CELL;
   const g = c.getContext('2d');
   g.fillStyle = g.strokeStyle = '#fff';
-  drawGlyph(g, key);
+  drawGlyph(g, key, font);
   const d = g.getImageData(0, 0, CELL, CELL).data;
   let s = 0;
   for (let i = 0; i < d.length; i += 4) s += d[i];
@@ -132,7 +160,7 @@ function coverageOf(key) {
 export function createGlyphAtlas({ extraSets = [] } = {}) {
   const sets = [...SETS, ...extraSets].slice(0, GRID).map((s) => {
     if (!s.ramp) return { ...s, glyphs: [...s.glyphs] };
-    const withCov = s.glyphs.map((k) => ({ k, cov: coverageOf(k) }));
+    const withCov = s.glyphs.map((k) => ({ k, cov: coverageOf(k, s.font) }));
     withCov.sort((a, b) => a.cov - b.cov);
     return { ...s, glyphs: withCov.map((x) => x.k), coverage: withCov.map((x) => x.cov) };
   });
@@ -151,7 +179,7 @@ export function createGlyphAtlas({ extraSets = [] } = {}) {
       g.beginPath();
       g.rect(0, 0, CELL, CELL);
       g.clip();
-      drawGlyph(g, k);
+      drawGlyph(g, k, s.font);
       g.restore();
     });
   });

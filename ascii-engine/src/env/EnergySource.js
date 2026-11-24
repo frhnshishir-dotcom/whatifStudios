@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ParticleBuilder, makePoints } from '../shaders/ParticleMaterial.js';
 import { SET } from '../glyphs/GlyphAtlas.js';
 import { Rng } from '../core/random.js';
-import { tint, glowSprite } from './helpers.js';
+import { tint, glowSprite, flareSprite } from './helpers.js';
 
 // Energy source: a boiling crimson core (dense displaced point sphere, white-hot centre), a shell of code glyphs,
 // tilted orbit rings of dashes, a rising particle column, a soft glow sprite and a light-rig entry, so every
@@ -120,4 +120,52 @@ export function createEnergySource(engine, o = {}) {
     for (const r of rings) r.ring.rotation.y = t * r.speed * state.spin;
   };
   return { object: group, column, light, state, update, glow };
+}
+
+/**
+ * Energy beam: a tall cone of rising crimson particles (drift + taper), a white-hot core line, a cross flare high on
+ * the axis, a ground glow and a red light in the rig. update(t) pulses it; state.intensity/pulse are tweenable.
+ */
+export function createBeam(engine, o = {}) {
+  const opt = { at: [0, 0], y0: 0, height: 9, radius: 0.9, color: '#ff2418', hot: '#ffd6c8', intensity: 2.2, range: 9, flareAt: 0.62, seed: 9, ...o };
+  const rng = new Rng('beam', opt.seed);
+  const [x, z] = opt.at, R = opt.radius, H = opt.height, dens = engine.density;
+  const red = tint(opt.color), hot = tint(opt.hot);
+  const group = new THREE.Group();
+  group.name = 'beam';
+
+  const cone = new ParticleBuilder();
+  for (let i = 0; i < 13000 * dens; i++) {
+    const a = rng.range(0, Math.PI * 2), r = R * Math.pow(rng.float(), 0.7);
+    cone.push({ p: [x + Math.cos(a) * r, opt.y0 + rng.range(0, H), z + Math.sin(a) * r], seed: rng.float(), size: rng.range(0.6, 1.3), bright: rng.range(0.4, 1.2) * (1.2 - r / R), color: rng.chance(0.12) ? hot : red });
+  }
+  const conePts = makePoints(engine, cone, {
+    mode: 'dot', color: '#ffffff', size: 0.022, brightness: 2.0, lit: 0, flicker: 0.4,
+    drift: { vel: [0, 1.4, 0], box: [R * 2 + 1, H, R * 2 + 1], center: [x, opt.y0 + H / 2, z], taper: 0.06 },
+  });
+  const core = new ParticleBuilder();
+  for (let i = 0; i < 900 * dens; i++) {
+    core.push({ p: [x + rng.gauss() * 0.02, opt.y0 + rng.range(0, H * 1.05), z + rng.gauss() * 0.02], seed: rng.float(), size: rng.range(0.8, 1.2), bright: rng.range(0.8, 1.4), color: rng.chance(0.5) ? hot : red });
+  }
+  const corePts = makePoints(engine, core, { mode: 'dot', color: '#ffffff', size: 0.014, brightness: 1.6, lit: 0, flicker: 0.3 });
+  const glow = glowSprite(engine, { color: opt.color, size: R * 5, intensity: 0.3, falloff: 2.2 });
+  glow.position.set(x, opt.y0 + 0.5, z);
+  const flare = flareSprite(engine, { color: opt.color, size: H * 0.75, intensity: 1.0 });
+  flare.position.set(x, opt.y0 + H * opt.flareAt, z);
+  group.add(conePts, corePts, glow, flare);
+  const light = engine.lightRig.add({ name: 'beam', position: [x, opt.y0 + 1.4, z], color: opt.color, intensity: opt.intensity, range: opt.range });
+
+  const state = { intensity: 1, pulse: 0 };
+  const update = (t) => {
+    const flick = 1 + 0.08 * Math.sin(t * 23.0) * Math.sin(t * 7.3);
+    const k = state.intensity * (flick + state.pulse);
+    light.intensity = opt.intensity * k;
+    conePts.material.uniforms.uOpacity.value = state.intensity;
+    corePts.material.uniforms.uOpacity.value = state.intensity;
+    conePts.material.uniforms.uPulse.value = state.pulse;
+    glow.material.uniforms.uIntensity.value = 0.3 * k;
+    flare.material.uniforms.uIntensity.value = k * (0.85 + 0.15 * Math.sin(t * 3.1));
+    group.visible = state.intensity > 0.001;
+  };
+  return { object: group, light, state, update, cone: conePts, core: corePts, flare };
 }
