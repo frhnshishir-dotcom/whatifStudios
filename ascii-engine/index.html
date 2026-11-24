@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ASCII Engine</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./node_modules/three/build/three.module.js",
+      "three/addons/": "./node_modules/three/examples/jsm/",
+      "gsap": "./node_modules/gsap/index.js"
+    }
+  }
+  </script>
+  <style>
+    :root { color-scheme: dark; --bg: #050506; --fg: #c9d1da; --dim: #6b737c; --accent: #ff3b2f; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+    #stage { position: absolute; inset: 0 0 56px 0; display: flex; align-items: center; justify-content: center; }
+    canvas { display: block; max-width: 100%; max-height: 100%; background: #000; }
+    body.render #stage { inset: 0; }
+    body.render #ui { display: none; }
+    #ui { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; display: flex; gap: 10px; align-items: center; padding: 0 16px; box-sizing: border-box; border-top: 1px solid #1a1c20; flex-wrap: wrap; }
+    #ui button, #ui select { background: #111317; color: var(--fg); border: 1px solid #2a2d33; padding: 4px 8px; font: inherit; }
+    #ui input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+    #stats { color: var(--dim); white-space: nowrap; }
+    #err { position: absolute; top: 8px; left: 8px; right: 8px; color: #ff6b5f; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="ui">
+    <button id="play">pause</button>
+    <input id="scrub" type="range" min="0" max="1000" value="0">
+    <span id="time">0.00 s</span>
+    <select id="format"><option>9x16</option><option>16x9</option><option>1x1</option></select>
+    <select id="quality"><option>preview</option><option>draft</option><option>final</option></select>
+    <span id="stats"></span>
+  </div>
+  <div id="err"></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

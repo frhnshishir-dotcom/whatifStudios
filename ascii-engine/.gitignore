@@ -1,0 +1,4 @@
+node_modules/
+*.tmp
+assets/models/
+reference/*.frames/

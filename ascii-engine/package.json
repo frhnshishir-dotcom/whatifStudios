@@ -1,0 +1,20 @@
+{
+  "name": "whatif-ascii-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Procedural ASCII / point-cloud 3D visual engine (Three.js + GLSL), with deterministic frame rendering and FFmpeg video output. No Blender.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "preview": "node tools/serve.mjs",
+    "render": "node tools/render.mjs",
+    "still": "node tools/render.mjs --still"
+  },
+  "dependencies": {
+    "gsap": "3.15.1",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "playwright-core": "1.63.0"
+  }
+}
