@@ -41,6 +41,7 @@ interface UIState {
   setHover: (h: HoverInfo | null) => void;
   setWorldMeta: (name: string, seed: number) => void;
   setSaveState: (s: UIState['saveState']) => void;
+  markUnsaved: () => void;
 }
 
 export const useUI = create<UIState>()((set) => ({
@@ -75,4 +76,5 @@ export const useUI = create<UIState>()((set) => ({
   setHover: (hover) => set({ hover }),
   setWorldMeta: (worldName, seed) => set({ worldName, seed }),
   setSaveState: (saveState) => set({ saveState }),
+  markUnsaved: () => set((st) => (st.saveState === 'unsaved' ? st : { saveState: 'unsaved' })),
 }));

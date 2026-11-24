@@ -95,6 +95,7 @@ export class ObjectLayer implements SceneLayer {
         if (sel) { buf.bg[k] = mixPacked(buf.bg[k], 0xff60c090, 0.35); }
         buf.depth[k] = wy + 0.7;
         buf.kind[k] = 5;
+        buf.light[k] = base === Anim.Glow || base === Anim.Spark ? 230 : base === Anim.Window ? Math.round(255 * this.night) : 0;
         buf.pick[k] = wy * w.w + wx;
         drawn++;
       }

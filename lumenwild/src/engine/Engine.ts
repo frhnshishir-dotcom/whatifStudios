@@ -12,6 +12,8 @@ import { ObjectLayer } from './objects/ObjectLayer';
 import type { SceneLayer } from './render/Composer';
 import { Editor, type EditTool } from './edit/Editor';
 import { EditorOverlay } from './edit/EditorOverlay';
+import { Environment } from './env/Environment';
+import { Atmosphere } from './env/Atmosphere';
 
 export interface EngineStats {
   fps: number;
@@ -32,6 +34,12 @@ export interface EngineStats {
   particles: number;
   objects: number;
   objectCells: number;
+  /** Hour of day and current weather (smoothed). */
+  time: number;
+  rain: number;
+  fog: number;
+  wind: number;
+  lights: number;
 }
 
 export interface HoverInfo { x: number; y: number; i: number; elev: number; mat: number; cover: number; moisture: number; kind: number }
@@ -62,6 +70,8 @@ export class Engine {
   private particleLayer: SceneLayer;
   readonly editor: Editor;
   readonly overlay: EditorOverlay;
+  readonly env = new Environment();
+  atmosphere: Atmosphere;
   /** Active editor tool (left-button strokes go to the editor). */
   tool: EditTool = 'select';
   /** World cell under the pointer (-1 = none). */
@@ -92,7 +102,8 @@ export class Engine {
     this.particleLayer = { after: (buf, cam, t) => this.particles.draw(buf, cam, t, this.objectLayer.night) };
     this.editor = new Editor(world, this.objects, null);
     this.overlay = new EditorOverlay(this.editor);
-    this.composer.layers.push(this.objectLayer, this.particleLayer, this.overlay);
+    this.atmosphere = new Atmosphere(this.env, world, this.objects, this.particles);
+    this.composer.layers.push(this.objectLayer, this.particleLayer, this.atmosphere, this.overlay);
     this.bindObjects();
     this.toolHandler = {
       down: (i) => this.editor.begin(this.tool, i),
@@ -108,6 +119,7 @@ export class Engine {
     this.objectLayer = new ObjectLayer(this.world, store, this.water ? this.water.view : null);
     if (k >= 0) this.composer.layers[k] = this.objectLayer;
     this.editor.objects = store;
+    this.atmosphere.objects = store;
     this.bindObjects();
     this.renderer?.blitter.invalidate();
   }
@@ -168,6 +180,7 @@ export class Engine {
     this.composer.layers.unshift(this.waterLayer);
     this.objectLayer.water = ws.view;
     this.editor.water = ws;
+    this.atmosphere.water = ws;
     if (ws.mode === 'main') this.sims.push(ws);
     ws.setRunning(!this.clock.paused, this.clock.speed);
   }
@@ -193,6 +206,9 @@ export class Engine {
     const t1 = performance.now();
     this.editor.tick(Math.min(0.05, dt));
     this.objectLayer.selectedId = this.editor.selectedId;
+    this.objectLayer.wind = this.env.gust;
+    this.objectLayer.windDir = this.env.windDir;
+    this.objectLayer.night = this.env.night;
     this.overlay.tool = this.tool;
     this.overlay.hover = this.hoverIndex;
     if (this.renderer) {
@@ -218,6 +234,7 @@ export class Engine {
         drawnCells: r.drawnCells, cells: b.n, cols: b.cols, rows: b.rows, cellW: this.cam.cellW, simSteps: ws ? ws.stats.steps : this.clock.steps,
         simMode: ws ? ws.mode : 'none', water: ws ? ws.stats.total : 0, activeChunks: ws ? ws.stats.active : 0, particles: this.particles.n,
         objects: this.objects.objects.size, objectCells: this.objectLayer.drawn,
+        time: this.env.time, rain: this.env.rain, fog: this.env.fog, wind: this.env.wind, lights: this.atmosphere.stats.lights,
       });
     }
     this.updateHover();

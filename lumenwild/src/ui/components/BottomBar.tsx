@@ -18,6 +18,13 @@ export function BottomBar() {
           <button key={v} className={speed === v ? 'active' : ''} onClick={() => { setSpeed(v); getEngine()?.setSpeed(v); }}>{v}×</button>
         ))}
       </div>
+      {stats && (
+        <div className="clock" title="Time of day" data-testid="bottom-clock">
+          <Icon name={stats.time >= 6 && stats.time < 18.5 ? 'sun' : 'moon'} size={14} />
+          {String(Math.floor(stats.time)).padStart(2, '0')}:{String(Math.floor((stats.time % 1) * 60)).padStart(2, '0')}
+          {stats.rain > 0.05 && <Icon name="rain" size={14} />}{stats.fog > 0.05 && <Icon name="fog" size={14} />}
+        </div>
+      )}
       <div className="spacer" />
       {stats && (
         <div className="perf" data-testid="perf">

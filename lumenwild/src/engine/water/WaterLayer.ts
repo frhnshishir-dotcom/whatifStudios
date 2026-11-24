@@ -82,11 +82,7 @@ export class WaterLayer implements SceneLayer {
         }
       }
     }
-    P.update(dt, t, (px, py) => {
-      const ix = Math.min(W - 1, Math.max(0, px | 0)), iy = Math.min(H - 1, Math.max(0, py | 0));
-      const i = iy * W + ix;
-      return w.elev[i] + v.depth[i];
-    });
+    // Particles are advanced by the atmosphere layer (one update for all kinds).
   }
 
   drawSurface(i: number, x: number, y: number, o: number, buf: CellBuffer, t: number): void {

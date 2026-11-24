@@ -1,6 +1,7 @@
 import { useUI } from '../store';
 import { MAT_NAMES, COVER_NAMES } from '../../engine/world/materials';
 import { ToolPanel, SelectionPanel } from './ToolPanel';
+import { EnvPanel } from './EnvPanel';
 
 const KIND = ['Void', 'Terrain', 'Cliff face', 'Water', 'Waterfall', 'Object', 'Particle'];
 
@@ -12,6 +13,7 @@ export function Inspector() {
     <aside className="inspector" aria-label="Inspector">
       <SelectionPanel />
       <ToolPanel />
+      <EnvPanel />
       <section className="panel">
         <h3>Cell</h3>
         {hover ? (

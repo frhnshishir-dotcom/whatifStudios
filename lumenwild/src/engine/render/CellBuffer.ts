@@ -14,6 +14,7 @@ export class CellBuffer {
   pick = new Int32Array(0);
   mat = new Uint8Array(0);
   elev = new Uint8Array(0);
+  /** Emissive strength 0..255 (lit windows, glowing mushrooms, fireflies): the night lighting doesn't darken it. */
   light = new Uint8Array(0);
   anim = new Uint8Array(0);
   /** Per-cell kind for the inspector/debug: 0 void, 1 terrain top, 2 face, 3 water, 4 waterfall, 5 object, 6 particle. */
@@ -45,6 +46,7 @@ export class CellBuffer {
     this.pick.fill(-1);
     this.kind.fill(0);
     this.anim.fill(0);
+    this.light.fill(0);
     for (let r = 0; r < rows; r++) this.bg.fill(rowBg[Math.min(r, rowBg.length - 1)], r * cols, (r + 1) * cols);
   }
 }

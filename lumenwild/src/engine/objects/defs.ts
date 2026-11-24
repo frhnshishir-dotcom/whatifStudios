@@ -263,13 +263,13 @@ export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
     label: 'Standing stone', variants: ['rune'],
     props: [{ key: 'glow', label: 'Rune glow', min: 0, max: 1, step: 1 }], defaults: { glow: 1 }, solid: true,
     footprint: () => [[0, 0]], sprite: standingStone,
-    light: (o) => ((o.props.glow ?? 1) > 0 ? { r: 4, color: C('#7ff4e2'), intensity: 0.55, up: 1 } : null),
+    light: (o) => ((o.props.glow ?? 1) > 0 ? { r: 5, color: C('#7ff4e2'), intensity: 0.7, up: 1 } : null),
   },
   mushroom: {
     label: 'Mushrooms', variants: ['red', 'brown', 'glow', 'violet'],
     props: [{ key: 'count', label: 'Cluster', min: 1, max: 3, step: 1 }], defaults: { count: 2 }, solid: false,
     footprint: () => [[0, 0]], sprite: mushroomSprite,
-    light: (o) => (MUSH[o.variant]?.glow ? { r: 3.5, color: MUSH[o.variant].cap, intensity: 0.5, up: 0 } : null),
+    light: (o) => (MUSH[o.variant]?.glow ? { r: 4, color: MUSH[o.variant].cap, intensity: 0.75, up: 0 } : null),
   },
   bridge: {
     label: 'Bridge', variants: ['wood'],
@@ -282,12 +282,12 @@ export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
     label: 'Cottage', variants: ['terracotta', 'slate'],
     props: [], defaults: {}, solid: true,
     footprint: () => rect(5, 3), sprite: cottageSprite,
-    light: () => ({ r: 6, color: C('#ffc46a'), intensity: 0.6, up: 1 }),
+    light: () => ({ r: 8, color: C('#ffc46a'), intensity: 1.05, up: 1 }),
   },
   mill: {
     label: 'Water mill', variants: ['stone'],
     props: [{ key: 'wheelSide', label: 'Wheel side (-1 left, 1 right)', min: -1, max: 1, step: 2 }], defaults: { wheelSide: 1 }, solid: true,
     footprint: () => rect(4, 3), sprite: millSprite,
-    light: () => ({ r: 5, color: C('#ffc46a'), intensity: 0.5, up: 1 }),
+    light: () => ({ r: 7, color: C('#ffc46a'), intensity: 0.9, up: 1 }),
   },
 };

@@ -70,6 +70,8 @@ src/engine/            framework-free engine (no React)
                        ObjectLayer (depth-tested sprites, sway, glow, lit windows, turning mill wheel)
   gen/                 world generator (river system, falls, lake, mill race, ponds, structures, forest, glade),
                        base terrain and surface materials, deterministic test scenes
+  env/                 Environment (time of day, weather targets, ambient light), Atmosphere (weather particles,
+                       grass sway, point lights, emissive glow, fog)
   edit/                Editor (all tools, strokes, terrain patches, commands), History (undo/redo, composites),
                        EditorOverlay (brush disc, building footprint preview, spring/drain markers)
   Engine.ts            frame loop, simulations at a fixed step, layers (water, objects, particles, overlay), input
@@ -109,6 +111,23 @@ e2e/                   Playwright browser tests (run against `vite preview`)
   stripes (`~ ≈ ≋`) travel along the velocity, foam on rapids and at waterfall feet, slow shimmer on calm water.
 - Test world: `?scene=watertest` (channel, 5 m and 3.5 m cliffs with waterfalls, two ponds, a rock in the stream).
 
+### Weather, light and animation
+- **Time of day:** a day-night cycle (8 minutes per day by default, or set the time with the slider). Ambient light
+  is white at noon, golden before sunset and after sunrise, blue moonlight at night; rain and fog dim and grey it.
+- **Lights at night:** cottage and mill windows, glowing mushrooms, rune stones, blossom trees and fireflies cast
+  coloured pools of light; glowing moss lights itself. Emissive glyphs (windows, glowing caps, fireflies, sparkles)
+  are not darkened by the night.
+- **Wind:** gusting wind sways tree canopies (deterministic per tree), sends travelling bands through tall grass,
+  reeds and flowers (glyphs bend with the wind direction), blows leaves from trees and drifts pollen in meadows.
+  Leaves that land on water float away with the current.
+- **Rain:** slanted streaks with the wind; drops landing on water make ripple rings through the wave simulation,
+  on land they splash.
+- **Fog:** a drifting veil, thicker towards the back of the view and in low ground.
+- **Always moving:** water flow, waterfalls, ripples, splashes and mist, fireflies and glade sparkles at night,
+  mushroom and rune glow pulses, lit windows, the turning mill wheel.
+- Weather presets: clear, breezy, rain, storm, fog; or set rain, fog, wind and wind direction directly.
+  Changes fade in over a few seconds.
+
 ### World generation (`?seed=N`, default 7)
 Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random`), in `gen/world.ts`:
 1. **River:** a Catmull-Rom spline meanders from the northern highlands to the southern edge. A chamfer pass gives
@@ -141,8 +160,8 @@ Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random
 | 2. Water flow, ripples, waterfalls | done (see below) |
 | 3. Generation, vegetation, rocks, bridges, structures | done (see below) |
 | 4. Sandbox tools, selection, undo/redo | done (see below) |
-| 5. Weather, animation, lighting, day/night | next |
-| 6. Save/load, optimisation, tests, polish | planned |
+| 5. Weather, animation, lighting, day/night | done (see below) |
+| 6. Save/load, optimisation, tests, polish | next |
 
 ### Milestone 1: verified
 - 13 unit tests (rng, noise, colour, clock, glyph registry and procedural glyph coverage, projection/occlusion/picking,
@@ -202,3 +221,21 @@ Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random
   carrying water from a new spring, and a waterfall cut into the generated river (stone lip, falling water, gorge).
 - Known limitations: moving a building does not re-level the ground under it; brush strokes on terrain hidden behind
   tall objects pick the object's ground cell; Ctrl+S saving arrives with Milestone 6.
+
+### Milestone 5: verified
+- 8 unit tests: noon is neutral and bright, midnight blue and dark, golden hour warm; the clock advances one hour per
+  10 s at a 4-minute day and stops with the cycle off; weather fades in; rain and fog dim the light. Through the real
+  composer and layers: night darkens the frame by more than half and the cottage lights the ground around it (over
+  1.4x brighter than far ground) with emissive windows; wind bends tall grass and no wind bends none; rain falls and
+  sends ripple commands to the water; a leaf landing on a stream turns into a floating leaf and moves downstream with
+  the current; fog veils most of the view.
+- 5 browser tests: the time slider takes the frame from day to night (mean brightness drops over 40%), fireflies
+  gather and emissive cells show; the cycle advances the clock; the storm preset fills the view with rain streaks
+  and rings on the river, and clear weather stops it; wind bends grass and calm stops it, fog flattens contrast;
+  leaves fall in a breeze. All 65 unit and 23 browser tests pass.
+- Inspected screenshots: night at the cottage (lit windows, warm light pool, fireflies), the glade at night (glowing
+  moss, glowing mushrooms, sparkles), a rainstorm over the river, dawn fog, dusk with the inspector.
+- Measured, 126 x 60 characters: 60 fps; compose 1.0-2.0 ms with lighting and fog (the lighting pass is skipped in
+  clear daylight), blit 0.2-0.6 ms (rain and swaying grass redraw more cells).
+- Known limitations: rain does not add water volume to the simulation (it is visual plus ripples); fog is a screen-space
+  veil, not a volumetric effect; leaves only float on water deeper than 5 cm.
