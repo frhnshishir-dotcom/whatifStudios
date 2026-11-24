@@ -1,0 +1,171 @@
+{
+ "name": "Signal",
+ "mode": "dark",
+ "description": "Engineered data look. Deep ink-navy, lime signal accent, monospace labels, perspective grids. AI, engineering, data and science talks.",
+ "use_for": [
+  "ai",
+  "engineering",
+  "data",
+  "science",
+  "cybersecurity"
+ ],
+ "colors": {
+  "bg": "#070A12",
+  "bg_alt": "#0C1220",
+  "surface": "#111A2C",
+  "text": "#EAF0FA",
+  "muted": "#8796AE",
+  "accent": "#C8FF3D",
+  "accent2": "#3DDCFF",
+  "line": "#1E2A40",
+  "on_accent": "#070A12",
+  "chart": [
+   "#C8FF3D",
+   "#3DDCFF",
+   "#EAF0FA",
+   "#5B6B86",
+   "#7A5CFF"
+  ]
+ },
+ "fonts": {
+  "display": {
+   "family": "Inter Display",
+   "weight": "medium"
+  },
+  "body": {
+   "family": "Inter",
+   "weight": "regular"
+  },
+  "mono": {
+   "family": "JetBrains Mono",
+   "weight": "regular"
+  }
+ },
+ "type": {
+  "hero": {
+   "font": "display",
+   "weight": "medium",
+   "size": 80,
+   "min": 54,
+   "lh": 0.98,
+   "track": -0.03
+  },
+  "title": {
+   "font": "display",
+   "weight": "medium",
+   "size": 40,
+   "min": 30,
+   "lh": 1.06,
+   "track": -0.02
+  },
+  "subtitle": {
+   "font": "body",
+   "weight": "regular",
+   "size": 22,
+   "min": 16,
+   "lh": 1.32,
+   "color": "muted"
+  },
+  "body": {
+   "font": "body",
+   "weight": "regular",
+   "size": 18,
+   "min": 14,
+   "lh": 1.42
+  },
+  "label": {
+   "font": "body",
+   "weight": "semibold",
+   "size": 17,
+   "min": 14,
+   "lh": 1.25
+  },
+  "eyebrow": {
+   "font": "mono",
+   "weight": "medium",
+   "size": 12,
+   "min": 10,
+   "lh": 1.2,
+   "track": 0.14,
+   "upper": true,
+   "color": "accent"
+  },
+  "caption": {
+   "font": "body",
+   "weight": "regular",
+   "size": 11,
+   "min": 10,
+   "lh": 1.3,
+   "color": "muted"
+  },
+  "stat": {
+   "font": "display",
+   "weight": "medium",
+   "size": 150,
+   "min": 80,
+   "lh": 0.92,
+   "track": -0.045
+  },
+  "stat_sm": {
+   "font": "display",
+   "weight": "medium",
+   "size": 64,
+   "min": 40,
+   "lh": 0.95,
+   "track": -0.03
+  },
+  "index": {
+   "font": "display",
+   "weight": "light",
+   "size": 180,
+   "min": 120,
+   "lh": 0.9,
+   "track": -0.04,
+   "color": "accent"
+  },
+  "quote": {
+   "font": "display",
+   "weight": "light",
+   "italic": false,
+   "size": 40,
+   "min": 26,
+   "lh": 1.16,
+   "track": -0.01
+  },
+  "mono": {
+   "font": "mono",
+   "weight": "regular",
+   "size": 12,
+   "min": 10,
+   "lh": 1.3,
+   "color": "muted"
+  }
+ },
+ "surfaces": {
+  "card_alpha": 0.6,
+  "card_line_alpha": 0.16,
+  "radius": 0.1,
+  "glass": true
+ },
+ "backgrounds": {
+  "default": "solid",
+  "title": "grid",
+  "section": "grid",
+  "closing": "horizon",
+  "product": "spotlight",
+  "statement": "solid"
+ },
+ "grid": {
+  "margin": 0.75,
+  "gutter": 0.3
+ },
+ "motion": {
+  "transition": "fade",
+  "entrance": "rise",
+  "duration_ms": 900,
+  "stagger_ms": 110,
+  "ease": "cubic-bezier(.16,1,.3,1)",
+  "pptx_transition_ms": 900,
+  "pptx_entrance_ms": 600
+ }
+}

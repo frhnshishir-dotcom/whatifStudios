@@ -1,0 +1,28 @@
+[
+ {
+  "id": "wb_it_net_user_zs",
+  "type": "dataset",
+  "author": "World Bank",
+  "year": 2026,
+  "title": "Individuals using the Internet (% of population)",
+  "publisher": "World Development Indicators",
+  "url": "https://data.worldbank.org/indicator/IT.NET.USER.ZS",
+  "accessed": "2026-11-24",
+  "license": "CC BY 4.0",
+  "verified": true,
+  "note": "Underlying data: ITU World Telecommunication/ICT Indicators Database"
+ },
+ {
+  "id": "wb_it_cel_sets_p2",
+  "type": "dataset",
+  "author": "World Bank",
+  "year": 2026,
+  "title": "Mobile cellular subscriptions (per 100 people)",
+  "publisher": "World Development Indicators",
+  "url": "https://data.worldbank.org/indicator/IT.CEL.SETS.P2",
+  "accessed": "2026-11-24",
+  "license": "CC BY 4.0",
+  "verified": true,
+  "note": "Underlying data: ITU World Telecommunication/ICT Indicators Database"
+ }
+]

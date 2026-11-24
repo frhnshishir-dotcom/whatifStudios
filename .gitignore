@@ -15,3 +15,8 @@ desktop.ini
 .DS_Store
 __pycache__/
 *.pyc
+
+# Presentation Studio: generated outputs (rebuild with studio.py build)
+presentation-studio/exports/
+__pycache__/
+presentation-studio/projects/*/assets/*_still.png

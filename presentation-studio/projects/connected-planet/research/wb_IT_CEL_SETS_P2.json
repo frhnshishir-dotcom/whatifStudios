@@ -1,0 +1,60 @@
+{
+ "indicator": "IT.CEL.SETS.P2",
+ "fetched": "2026-11-24T08:59:12+00:00",
+ "series": {
+  "WLD": {
+   "name": "World",
+   "values": {
+    "2005": 33.9,
+    "2006": 41.7,
+    "2007": 50.6,
+    "2008": 59.7,
+    "2009": 68,
+    "2010": 76.6,
+    "2011": 84.2,
+    "2012": 88.5,
+    "2013": 93.1,
+    "2014": 96.7,
+    "2015": 96.1,
+    "2016": 99.3,
+    "2017": 101.4,
+    "2018": 103.1,
+    "2019": 105.9,
+    "2020": 104.8,
+    "2021": 106.7,
+    "2022": 108,
+    "2023": 109.8,
+    "2024": 110.4
+   }
+  },
+  "SSF": {
+   "name": "Sub-Saharan Africa",
+   "values": {
+    "2005": 11.9905095836555,
+    "2006": 17.6782496829208,
+    "2007": 23.0558320274898,
+    "2008": 31.6966758556946,
+    "2009": 37.4114164834,
+    "2010": 44.0939840180983,
+    "2011": 52.1634151225671,
+    "2012": 58.5825096571309,
+    "2013": 64.7110646670392,
+    "2014": 69.3784866915021,
+    "2015": 73.3,
+    "2016": 71.5,
+    "2017": 70.8,
+    "2018": 74.4,
+    "2019": 77.4,
+    "2020": 80.8,
+    "2021": 83,
+    "2022": 87.6,
+    "2023": 90,
+    "2024": 89.2
+   }
+  }
+ },
+ "name": "Mobile cellular subscriptions (per 100 people)",
+ "source_note": "Mobile cellular telephone subscriptions are subscriptions to a public mobile telephone service that provide access to the PSTN using cellular technology. The indicator includes (and is split into) the number of postpaid subscriptions, and the number of active prepaid accounts (i.e. that have been used during the last three months). The indicator applies to all mobile cellular subscriptions that offer voice communications. It excludes subscriptions via data cards or USB modems, subscriptions to public mobile data services, private trunked mobile radio, telepoint, radio paging and telemetry services.",
+ "source_org": "World Telecommunication/ICT Indicators Database, International Telecommunication Union (ITU)",
+ "lastupdated": "2026-11-11"
+}

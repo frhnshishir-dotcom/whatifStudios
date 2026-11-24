@@ -1,0 +1,413 @@
+{
+ "meta": {
+  "title": "The Connected Planet",
+  "short_title": "The Connected Planet · World Bank WDI",
+  "subtitle": "How seven in ten people came online, and who is still waiting",
+  "author": "Presentation Studio demo",
+  "course": "Showcase deck",
+  "date": "November 2026",
+  "audience": "General audience, 6-minute talk",
+  "duration_min": 6,
+  "academic": true,
+  "file_name": "connected-planet",
+  "lang": "en"
+ },
+ "design_system": "monolith",
+ "slides": [
+  {
+   "layout": "title",
+   "eyebrow": "World Bank data · 2005–2024",
+   "title": "The Connected [[Planet]]",
+   "subtitle": "How seven in ten people came online, and who is still waiting",
+   "fx": "particles",
+   "transition": "fade",
+   "notes": "Twenty years ago, going online was something most of the world had never done. Today it is the default for most people, but not for everyone. In the next six minutes I'll show how fast that changed, where it changed fastest, and where the gap is still wide. Every number comes from the World Bank's World Development Indicators, which republish data from the International Telecommunication Union."
+  },
+  {
+   "layout": "statement",
+   "eyebrow": "Where we started",
+   "text": "In 2005, about [[one in six]] people used the internet.",
+   "cite": [
+    "wb_it_net_user_zs"
+   ],
+   "transition": "fade",
+   "notes": "In 2005 the World Bank puts global internet use at 15.6 percent of the population. That's roughly one person in six. Smartphones as we know them did not exist yet, and most of the people who were online lived in high-income countries."
+  },
+  {
+   "layout": "big-number",
+   "eyebrow": "Where we are",
+   "value": "71.2%",
+   "label": "of the world's population used the internet in 2024",
+   "context": "That is up from 15.6% in 2005, a gain of 55.6 percentage points in under twenty years. Mobile subscriptions passed one per person in 2017 and reached 110 per 100 people by 2024.",
+   "cite": [
+    "wb_it_net_user_zs",
+    "wb_it_cel_sets_p2"
+   ],
+   "transition": "fade",
+   "notes": "By 2024 the figure is 71.2 percent: seven in ten people. That's a gain of more than 55 percentage points in under twenty years. Mobile phones carried much of that growth. Mobile subscriptions passed one per person worldwide in 2017. One caution: subscriptions count SIM cards, not people, so one person can hold several."
+  },
+  {
+   "layout": "chart",
+   "eyebrow": "Internet users, % of population",
+   "title": "The fastest growth came from the lowest starting points",
+   "chart": {
+    "type": "line",
+    "categories": [
+     "2005",
+     "2006",
+     "2007",
+     "2008",
+     "2009",
+     "2010",
+     "2011",
+     "2012",
+     "2013",
+     "2014",
+     "2015",
+     "2016",
+     "2017",
+     "2018",
+     "2019",
+     "2020",
+     "2021",
+     "2022",
+     "2023",
+     "2024"
+    ],
+    "series": [
+     {
+      "name": "World",
+      "values": [
+       15.6,
+       17.2,
+       20.2,
+       22.8,
+       25.3,
+       28.4,
+       30.9,
+       33.3,
+       35.3,
+       37.4,
+       39.9,
+       43.6,
+       46.3,
+       49.4,
+       53.9,
+       60.1,
+       63.8,
+       67,
+       69.2,
+       71.2
+      ]
+     },
+     {
+      "name": "North America",
+      "values": [
+       68.3,
+       69.3,
+       74.8,
+       74.3,
+       71.9,
+       72.5,
+       71,
+       75.5,
+       72.8,
+       74.4,
+       76.1,
+       86.1,
+       87.8,
+       89.1,
+       89.7,
+       90.5,
+       91.5,
+       92.6,
+       93.3,
+       94.4
+      ]
+     },
+     {
+      "name": "South Asia",
+      "values": [
+       2.1,
+       2.6,
+       3.7,
+       4.1,
+       4.9,
+       7.1,
+       9.4,
+       10.4,
+       11.7,
+       13,
+       14.7,
+       16.7,
+       18.8,
+       20.9,
+       29.7,
+       42.5,
+       48,
+       54.2,
+       58.3,
+       62.8
+      ]
+     },
+     {
+      "name": "Sub-Saharan Africa",
+      "values": [
+       2,
+       2.6,
+       3.1,
+       3.6,
+       4.3,
+       6,
+       7.5,
+       9.2,
+       11.2,
+       13.4,
+       16.2,
+       18.3,
+       20,
+       22,
+       24.4,
+       26.7,
+       29,
+       31.1,
+       32.3,
+       33.6
+      ]
+     }
+    ],
+    "unit": "%",
+    "max": 100,
+    "highlight": 2,
+    "colors": [
+     "#F5F5F2",
+     "#6E6E75",
+     "#FF5A1F",
+     "#FFB38A"
+    ],
+    "alt": "Line chart of internet users as a share of population, 2005 to 2024, for the World, North America, South Asia and Sub-Saharan Africa"
+   },
+   "callout": {
+    "value": "+55.7 pts",
+    "label": "South Asia, 2010 → 2024 (7.1% → 62.8%)"
+   },
+   "takeaway": "North America was already above 68% in 2005. South Asia climbed from single digits, with its sharpest jump between 2019 and 2020.",
+   "cite": [
+    "wb_it_net_user_zs"
+   ],
+   "notes": "Here are four lines. North America, in grey, started high and flattened out near saturation. The orange line is South Asia. It was at 7 percent in 2010 and reached almost 63 percent in 2024. Its sharpest single jump came between 2019 and 2020, from about 30 to 42 percent. The world average, in white, sits between them."
+  },
+  {
+   "layout": "timeline",
+   "eyebrow": "World, internet users",
+   "title": "Two decades, five milestones",
+   "items": [
+    {
+     "when": "2005",
+     "title": "One in six",
+     "body": "15.6% of people online"
+    },
+    {
+     "when": "2010",
+     "title": "More than one in four",
+     "body": "28.4%"
+    },
+    {
+     "when": "2015",
+     "title": "Two in five",
+     "body": "39.9%"
+    },
+    {
+     "when": "2019",
+     "title": "A majority online",
+     "body": "53.9%, the first year above half"
+    },
+    {
+     "when": "2024",
+     "title": "Seven in ten",
+     "body": "71.2%"
+    }
+   ],
+   "cite": [
+    "wb_it_net_user_zs"
+   ],
+   "transition": "fade",
+   "notes": "Five milestones. One in six in 2005. More than a quarter by 2010. Two in five by 2015. 2019 is the first year a majority of the world was online, at 53.9 percent. And seven in ten by 2024."
+  },
+  {
+   "layout": "section",
+   "index": "02",
+   "title": "The gap that remains",
+   "subtitle": "Access grew everywhere, but not equally.",
+   "bg": "aurora",
+   "transition": "fade",
+   "notes": "So the story is growth. But growth has not been even, and the second half of this talk is about the gap."
+  },
+  {
+   "layout": "chart",
+   "eyebrow": "Internet users in 2024, % of population",
+   "title": "The gap that remains",
+   "transition": "morph",
+   "chart": {
+    "type": "bar",
+    "categories": [
+     "North America",
+     "Europe & Central Asia",
+     "East Asia & Pacific",
+     "World",
+     "South Asia",
+     "Sub-Saharan Africa"
+    ],
+    "series": [
+     {
+      "name": "2024",
+      "values": [
+       94.4,
+       90.9,
+       86.6,
+       71.2,
+       62.8,
+       33.6
+      ]
+     }
+    ],
+    "unit": "%",
+    "decimals": 1,
+    "max": 100,
+    "highlight": [
+     5
+    ],
+    "alt": "Bar chart of internet users in 2024 by region"
+   },
+   "callout": {
+    "value": "33.6%",
+    "label": "of people in Sub-Saharan Africa used the internet in 2024"
+   },
+   "takeaway": "North America's rate is 2.8 times Sub-Saharan Africa's.",
+   "cite": [
+    "wb_it_net_user_zs"
+   ],
+   "notes": "In 2024, 94 percent of people in North America used the internet. In Sub-Saharan Africa it was 33.6 percent, about one in three. The North American rate is 2.8 times higher. Europe and East Asia are both above 85 percent."
+  },
+  {
+   "layout": "stats",
+   "eyebrow": "Sub-Saharan Africa, 2024",
+   "title": "Phones arrived faster than the internet did",
+   "items": [
+    {
+     "value": "89.2",
+     "label": "mobile subscriptions per 100 people"
+    },
+    {
+     "value": "33.6%",
+     "label": "of people used the internet"
+    },
+    {
+     "value": "16.2%",
+     "label": "internet use in 2015, nine years earlier"
+    }
+   ],
+   "highlight": 1,
+   "cite": [
+    "wb_it_cel_sets_p2",
+    "wb_it_net_user_zs"
+   ],
+   "notes": "In Sub-Saharan Africa there were 89 mobile subscriptions per 100 people in 2024, but only a third of people used the internet. Subscriptions are SIM cards, not people, so this is not a precise comparison. Still, it suggests the network reaches many people who are not yet online. Internet use has doubled since 2015, from 16 to 34 percent."
+  },
+  {
+   "layout": "product",
+   "eyebrow": "Interactive",
+   "title": "Every dot, a connection",
+   "viewer": {
+    "kind": "globe",
+    "accent": "#FF5A1F",
+    "color": "#F5F5F2",
+    "bg": "#0B0B0C",
+    "distance": 4.4
+   },
+   "callouts": [
+    {
+     "title": "71.2% online",
+     "body": "World, 2024"
+    },
+    {
+     "title": "110 per 100",
+     "body": "Mobile subscriptions, world, 2024"
+    },
+    {
+     "title": "+55.6 points",
+     "body": "World internet use, 2005 → 2024"
+    },
+    {
+     "title": "2.8×",
+     "body": "North America vs Sub-Saharan Africa, 2024"
+    }
+   ],
+   "cite": [
+    "wb_it_net_user_zs",
+    "wb_it_cel_sets_p2"
+   ],
+   "transition": "zoom",
+   "notes": "This globe is live in the web version: drag across it and it turns. It's a visual anchor rather than a map. The four numbers around it are the headline figures from the data we've just seen."
+  },
+  {
+   "layout": "split",
+   "eyebrow": "Reading the data",
+   "title": "What the numbers say",
+   "image": "assets/globe_still.png",
+   "alt": "Dotted globe render",
+   "image_side": "right",
+   "bullets": [
+    "Growth was fastest where it started lowest: South Asia gained 55.7 points from 2010 to 2024",
+    "East Asia & Pacific passed 80% in 2022",
+    "North America grew slowest, because it was already above 70% by 2007",
+    "Sub-Saharan Africa doubled since 2015 but is still at one in three"
+   ],
+   "cite": [
+    "wb_it_net_user_zs"
+   ],
+   "transition": "fade",
+   "notes": "Four things to take away. First, the biggest gains came from the lowest starting points. Second, East Asia and the Pacific passed 80 percent in 2022. Third, North America grew slowly because it was already near the top. Fourth, Sub-Saharan Africa has doubled since 2015 but is still at about one in three."
+  },
+  {
+   "layout": "features",
+   "eyebrow": "Method",
+   "title": "How this deck was made",
+   "items": [
+    {
+     "tag": "DATA",
+     "title": "Fetched, not retyped",
+     "body": "Every figure comes straight from the World Bank WDI API, saved with its fetch date."
+    },
+    {
+     "tag": "DESIGN",
+     "title": "One system, every format",
+     "body": "The Monolith design system drives the PowerPoint, the PDF and the web deck from one spec."
+    },
+    {
+     "tag": "QA",
+     "title": "Checked before it ships",
+     "body": "Overflow, overlap, contrast, citations and animation timing are tested automatically."
+    }
+   ],
+   "transition": "fade",
+   "notes": "A note on method. The numbers were pulled from the World Bank API and saved with the date they were fetched, so they can be checked. One design system produced the PowerPoint, the PDF and the web version from a single file. And each version was checked automatically for layout, contrast and citations."
+  },
+  {
+   "layout": "references",
+   "eyebrow": "Sources",
+   "title": "References",
+   "transition": "fade",
+   "notes": "Both datasets are from the World Bank's World Development Indicators, compiled from the International Telecommunication Union. They're licensed CC BY 4.0."
+  },
+  {
+   "layout": "closing",
+   "eyebrow": "In one sentence",
+   "title": "Seven in ten are online. [[The next three]] are the hardest to reach.",
+   "subtitle": "Data: World Bank WDI (ITU), retrieved 24 November 2026",
+   "fx": "particles",
+   "transition": "fade",
+   "notes": "Seven in ten people are online. The remaining three live mostly where incomes are lowest and growth has been slowest. That's where the next twenty years of this story will be decided. Thank you."
+  }
+ ]
+}

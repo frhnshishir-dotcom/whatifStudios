@@ -1,0 +1,171 @@
+{
+ "name": "Monolith",
+ "mode": "dark",
+ "description": "Dark keynote minimalism. Near-black stage, warm white type, one ember accent. Product reveals, tech launches, big-idea talks.",
+ "use_for": [
+  "product launch",
+  "technology",
+  "pitch",
+  "keynote"
+ ],
+ "colors": {
+  "bg": "#0B0B0C",
+  "bg_alt": "#121214",
+  "surface": "#1A1A1D",
+  "text": "#F5F5F2",
+  "muted": "#9A9A9F",
+  "accent": "#FF5A1F",
+  "accent2": "#FFB38A",
+  "line": "#2E2E33",
+  "on_accent": "#0B0B0C",
+  "chart": [
+   "#FF5A1F",
+   "#F5F5F2",
+   "#6E6E75",
+   "#FFB38A",
+   "#3A3A40"
+  ]
+ },
+ "fonts": {
+  "display": {
+   "family": "Inter Display",
+   "weight": "semibold"
+  },
+  "body": {
+   "family": "Inter",
+   "weight": "regular"
+  },
+  "mono": {
+   "family": "JetBrains Mono",
+   "weight": "regular"
+  }
+ },
+ "type": {
+  "hero": {
+   "font": "display",
+   "weight": "semibold",
+   "size": 80,
+   "min": 54,
+   "lh": 0.98,
+   "track": -0.03
+  },
+  "title": {
+   "font": "display",
+   "weight": "semibold",
+   "size": 40,
+   "min": 30,
+   "lh": 1.06,
+   "track": -0.02
+  },
+  "subtitle": {
+   "font": "body",
+   "weight": "regular",
+   "size": 22,
+   "min": 16,
+   "lh": 1.32,
+   "color": "muted"
+  },
+  "body": {
+   "font": "body",
+   "weight": "regular",
+   "size": 18,
+   "min": 14,
+   "lh": 1.42
+  },
+  "label": {
+   "font": "body",
+   "weight": "semibold",
+   "size": 17,
+   "min": 14,
+   "lh": 1.25
+  },
+  "eyebrow": {
+   "font": "body",
+   "weight": "semibold",
+   "size": 12,
+   "min": 10,
+   "lh": 1.2,
+   "track": 0.14,
+   "upper": true,
+   "color": "accent"
+  },
+  "caption": {
+   "font": "body",
+   "weight": "regular",
+   "size": 11,
+   "min": 10,
+   "lh": 1.3,
+   "color": "muted"
+  },
+  "stat": {
+   "font": "display",
+   "weight": "semibold",
+   "size": 150,
+   "min": 80,
+   "lh": 0.92,
+   "track": -0.045
+  },
+  "stat_sm": {
+   "font": "display",
+   "weight": "semibold",
+   "size": 64,
+   "min": 40,
+   "lh": 0.95,
+   "track": -0.03
+  },
+  "index": {
+   "font": "display",
+   "weight": "light",
+   "size": 180,
+   "min": 120,
+   "lh": 0.9,
+   "track": -0.04,
+   "color": "accent"
+  },
+  "quote": {
+   "font": "display",
+   "weight": "light",
+   "italic": false,
+   "size": 40,
+   "min": 26,
+   "lh": 1.16,
+   "track": -0.01
+  },
+  "mono": {
+   "font": "mono",
+   "weight": "regular",
+   "size": 12,
+   "min": 10,
+   "lh": 1.3,
+   "color": "muted"
+  }
+ },
+ "surfaces": {
+  "card_alpha": 0.55,
+  "card_line_alpha": 0.1,
+  "radius": 0.16,
+  "glass": true
+ },
+ "backgrounds": {
+  "default": "solid",
+  "title": "spotlight",
+  "section": "aurora",
+  "closing": "spotlight",
+  "product": "spotlight",
+  "statement": "solid",
+  "big-number": "solid"
+ },
+ "grid": {
+  "margin": 0.75,
+  "gutter": 0.3
+ },
+ "motion": {
+  "transition": "fade",
+  "entrance": "rise",
+  "duration_ms": 900,
+  "stagger_ms": 110,
+  "ease": "cubic-bezier(.16,1,.3,1)",
+  "pptx_transition_ms": 900,
+  "pptx_entrance_ms": 600
+ }
+}
