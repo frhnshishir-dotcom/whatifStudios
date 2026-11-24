@@ -26,6 +26,18 @@ _SIMPLE = {
     "zoom": '<p:zoom/>',
     "rise": "<p:fade/>",
     "cut": "<p:cut/>",
+    "iris": "<p:circle/>",
+    "shutter": '<p:split orient="horz" dir="out"/>',
+    "blur": "<p:fade/>",
+}
+# PowerPoint 2010+ transitions (p14) with a Fade fallback for older viewers / LibreOffice
+_P14 = {
+    "flip": '<p14:flip dir="r"/>',
+    "cube": '<p14:prism isContent="1"/>',
+    "vortex": '<p14:vortex dir="r"/>',
+    "zoom": "<p14:flythrough/>",
+    "gallery": '<p14:gallery dir="l"/>',
+    "ripple": "<p14:ripple/>",
 }
 
 
@@ -53,6 +65,13 @@ def transition_xml(kind: str, ms: int) -> etree._Element:
             f'<mc:Choice xmlns:p159="{NS_P159}" Requires="p159">'
             f'<p:transition xmlns:p14="{NS_P14}" spd="slow" p14:dur="{int(ms)}"><p159:morph option="byObject"/></p:transition>'
             f"</mc:Choice><mc:Fallback><p:transition spd=\"slow\"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>"
+        )
+    elif kind in _P14:
+        xml = (
+            f'<mc:AlternateContent xmlns:mc="{NS_MC}" xmlns:p="{NS_P}">'
+            f'<mc:Choice xmlns:p14="{NS_P14}" Requires="p14">'
+            f'<p:transition spd="slow" p14:dur="{int(ms * 1.3)}">{_P14[kind]}</p:transition>'
+            f"</mc:Choice><mc:Fallback><p:transition spd=\"slow\">{_SIMPLE.get(kind, '<p:fade/>')}</p:transition></mc:Fallback></mc:AlternateContent>"
         )
     else:
         inner = _SIMPLE.get(kind, "<p:fade/>")
@@ -96,10 +115,26 @@ def apply(slide, transition: str | None, trans_ms: int, effects: list[tuple[int,
         _insert_after_clrmap(sld, transition_xml(transition, trans_ms))
     if not effects:
         return
-    parts, cid = [], 5
+    effects = list(effects)
+    parts, cid, media = [], 5, []
     for i, (spid, delay, kind, _tag) in enumerate(effects):
+        if kind == "media":  # embedded video: start automatically with the slide
+            node = "afterEffect" if i == 0 else "withEffect"
+            parts.append(
+                f'<p:par><p:cTn id="{cid}" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="{node}">'
+                f'<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:cmd type="call" cmd="playFrom(0.0)">'
+                f'<p:cBhvr><p:cTn id="{cid + 1}" dur="{int(delay)}" fill="hold"/><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cBhvr></p:cmd>'
+                f"</p:childTnLst></p:cTn></p:par>")
+            media.append(spid)
+            cid += 2
+            continue
         xml, cid = _effect(cid, spid, delay, dur_ms, kind, i == 0)
         parts.append(xml)
+    video_nodes = "".join(
+        f'<p:video><p:cMediaNode vol="80000" mute="1"><p:cTn id="{cid + k}" repeatCount="indefinite" fill="hold" display="0">'
+        f'<p:stCondLst><p:cond delay="indefinite"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cMediaNode></p:video>'
+        for k, spid in enumerate(media))
+    effects = [e for e in effects if e[2] != "media"]
     bld = []
     for spid, _d, _k, tag in effects:
         if tag == "sp":
@@ -116,7 +151,7 @@ def apply(slide, transition: str | None, trans_ms: int, effects: list[tuple[int,
         "</p:childTnLst></p:cTn>"
         '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
         '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
-        "</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>"
+        "</p:seq>" + video_nodes + "</p:childTnLst></p:cTn></p:par></p:tnLst>"
         + (f"<p:bldLst>{''.join(bld)}</p:bldLst>" if bld else "")
         + "</p:timing>"
     )

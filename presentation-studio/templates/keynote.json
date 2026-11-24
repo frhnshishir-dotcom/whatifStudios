@@ -1,0 +1,146 @@
+{
+ "meta": {
+  "title": "Product name",
+  "subtitle": "One promise, in one line",
+  "duration_min": 10,
+  "author": "Your name",
+  "course": "Course / event",
+  "date": "Month YYYY",
+  "template_note": "launch / pitch / keynote arc"
+ },
+ "design_system": "monolith",
+ "sources": [],
+ "slides": [
+  {
+   "layout": "title",
+   "eyebrow": "Introducing",
+   "title": "The [[headline]]",
+   "subtitle": "The promise in one line",
+   "fx": "particles",
+   "notes": "Hook: one surprising, true sentence."
+  },
+  {
+   "layout": "statement",
+   "eyebrow": "The problem",
+   "text": "One sentence about the [[pain]] your audience feels.",
+   "notes": "Stakes."
+  },
+  {
+   "layout": "big-number",
+   "eyebrow": "Why now",
+   "value": "00%",
+   "label": "The one number that proves the problem (cite it)",
+   "context": "Context sentence with year and source.",
+   "notes": "Proof."
+  },
+  {
+   "layout": "section",
+   "index": "01",
+   "title": "The idea",
+   "subtitle": "Chapter subtitle",
+   "bg": "nebula",
+   "transition": "cube",
+   "notes": "Movement one."
+  },
+  {
+   "layout": "product",
+   "eyebrow": "Meet it",
+   "title": "Hero object",
+   "viewer": {
+    "kind": "sculpture"
+   },
+   "transition": "zoom",
+   "callouts": [
+    {
+     "title": "Feature one",
+     "body": "Benefit"
+    },
+    {
+     "title": "Feature two",
+     "body": "Benefit"
+    },
+    {
+     "title": "Feature three",
+     "body": "Benefit"
+    },
+    {
+     "title": "Feature four",
+     "body": "Benefit"
+    }
+   ],
+   "notes": "Reveal."
+  },
+  {
+   "layout": "features",
+   "eyebrow": "How it works",
+   "title": "Three things it does",
+   "items": [
+    {
+     "title": "One",
+     "body": "Benefit-first sentence."
+    },
+    {
+     "title": "Two",
+     "body": "Benefit-first sentence."
+    },
+    {
+     "title": "Three",
+     "body": "Benefit-first sentence."
+    }
+   ],
+   "notes": ""
+  },
+  {
+   "layout": "stats",
+   "eyebrow": "Results",
+   "title": "What changes",
+   "items": [
+    {
+     "value": "0x",
+     "label": "label"
+    },
+    {
+     "value": "0%",
+     "label": "label"
+    },
+    {
+     "value": "0",
+     "label": "label"
+    }
+   ],
+   "notes": ""
+  },
+  {
+   "layout": "timeline",
+   "eyebrow": "Roadmap",
+   "title": "What happens next",
+   "items": [
+    {
+     "when": "Q1",
+     "title": "Step"
+    },
+    {
+     "when": "Q2",
+     "title": "Step"
+    },
+    {
+     "when": "Q3",
+     "title": "Step"
+    },
+    {
+     "when": "Q4",
+     "title": "Step"
+    }
+   ],
+   "notes": ""
+  },
+  {
+   "layout": "closing",
+   "eyebrow": "In one sentence",
+   "title": "The line they [[remember]]",
+   "subtitle": "Call to action",
+   "fx": "particles",
+   "notes": "Close."
+  }
+ ]
+}

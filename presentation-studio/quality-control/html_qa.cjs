@@ -38,9 +38,11 @@ const path = require("path");
       const ink = [];
       for (const el of texts) {
         const label = (el.textContent || "").trim().slice(0, 40);
-        if (el.scrollHeight > el.clientHeight + 3) out.push({ level: "FAIL", check: "html-overflow", msg: `text taller than its box by ${el.scrollHeight - el.clientHeight}px: "${label}"` });
+        const fs = parseFloat(getComputedStyle(el).fontSize), lhpx = parseFloat(getComputedStyle(el).lineHeight) || fs * 1.2;
+        // a real overflow is at least one extra line; glyph overhang of tight display type is not
+        if (el.scrollHeight > el.clientHeight + Math.max(3, fs * 0.3)) out.push({ level: "FAIL", check: "html-overflow", msg: `text taller than its box by ${el.scrollHeight - el.clientHeight}px: "${label}"` });
         const r = document.createRange(); r.selectNodeContents(el);
-        const rects = [...r.getClientRects()].filter(q => q.width > 1 && q.height > 1);
+        const rects = [...r.getClientRects()].filter(q => q.width > 1 && q.height > 1).map(q => { const lh = lhpx * sc; if (q.height <= lh) return q; const c = (q.top + q.bottom) / 2; return { left: q.left, right: q.right, top: c - lh / 2, bottom: c + lh / 2, width: q.width, height: lh }; });
         if (!rects.length) continue;
         const u = rects.reduce((a, q) => ({ l: Math.min(a.l, q.left), t: Math.min(a.t, q.top), r: Math.max(a.r, q.right), b: Math.max(a.b, q.bottom) }), { l: 1e9, t: 1e9, r: -1e9, b: -1e9 });
         const bx = { l: (u.l - deckR.left) / sc, t: (u.t - deckR.top) / sc, r: (u.r - deckR.left) / sc, b: (u.b - deckR.top) / sc };
@@ -85,7 +87,10 @@ const path = require("path");
     const anim = { reached: [], hidden_after_build: [], ms_per_slide: 2600 };
     for (let i = 1; i <= n; i++) {
       if (i > 1) await p2.keyboard.press("ArrowRight");
-      await p2.waitForTimeout(anim.ms_per_slide);
+      await p2.waitForTimeout(600);
+      // wait until every finite animation (transition + builds) has finished, max 10 s
+      await p2.waitForFunction(() => document.getAnimations().filter(a => a.playState === "running" && a.effect && a.effect.getComputedTiming().iterations !== Infinity).length === 0, null, { timeout: 10000 }).catch(() => {});
+      await p2.waitForTimeout(300);
       const st = await p2.evaluate(() => {
         const s = document.querySelector(".slide.active");
         const hidden = [...s.querySelectorAll("[data-order]")].filter(e => parseFloat(getComputedStyle(e).opacity) < 0.98).map(e => (e.textContent || e.className).trim().slice(0, 30));

@@ -1,0 +1,73 @@
+{
+ "name": "connected-planet-teaser",
+ "design_system": "monolith",
+ "format": "16:9",
+ "fps": 30,
+ "scenes": [
+  {
+   "type": "kinetic",
+   "dur": 2.8,
+   "bg": "nebula",
+   "eyebrow": "2005",
+   "lines": [
+    "One in six",
+    "people were [[online]]."
+   ],
+   "transition": "fade"
+  },
+  {
+   "type": "stat",
+   "dur": 3.2,
+   "bg": "beams",
+   "eyebrow": "2024",
+   "value": "71.2%",
+   "label": "of the world now uses the internet",
+   "source": "World Bank WDI (ITU), 2026",
+   "transition": "whip"
+  },
+  {
+   "type": "reveal",
+   "dur": 3.6,
+   "bg": "spotlight",
+   "object": {
+    "kind": "globe",
+    "accent": "#FF5A1F",
+    "color": "#F5F5F2",
+    "bg": "#0B0B0C",
+    "distance": 4.6,
+    "dolly": 1.0
+   },
+   "eyebrow": "The connected planet",
+   "title": "Every dot, a [[connection]]",
+   "transition": "iris"
+  },
+  {
+   "type": "list",
+   "dur": 3.6,
+   "bg": "aurora",
+   "eyebrow": "Internet use, 2024",
+   "title": "Not everywhere, [[yet]]",
+   "items": [
+    "North America \u00b7 94.4%",
+    "East Asia & Pacific \u00b7 86.6%",
+    "South Asia \u00b7 62.8%",
+    "Sub-Saharan Africa \u00b7 33.6%"
+   ],
+   "transition": "shutter"
+  },
+  {
+   "type": "endcard",
+   "dur": 3.0,
+   "bg": "liquid",
+   "object": {
+    "kind": "orbits",
+    "accent": "#FF5A1F",
+    "distance": 4.0
+   },
+   "title": "The next [[three in ten]]",
+   "subtitle": "are the hardest to reach.",
+   "cta": "Watch the talk",
+   "transition": "flash"
+  }
+ ]
+}

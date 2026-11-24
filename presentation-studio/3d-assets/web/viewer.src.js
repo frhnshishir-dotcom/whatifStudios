@@ -85,6 +85,38 @@ function device(opts) {
   return g;
 }
 
+function sculpture(opts) {
+  // Iridescent chrome knot: an abstract "hero object" for launches and title cards.
+  const g = new THREE.Group();
+  const m = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color("#ffffff"), metalness: 1, roughness: 0.06,
+    iridescence: 1, iridescenceIOR: 1.7, iridescenceThicknessRange: [120, 680], clearcoat: 1, clearcoatRoughness: 0.05,
+  });
+  g.add(new THREE.Mesh(new THREE.TorusKnotGeometry(0.62, 0.2, 360, 56, 2, 3), m));
+  g.scale.setScalar(0.62);
+  return g;
+}
+
+function orbits(opts) {
+  // Concentric glowing rings around a glass core: platforms, ecosystems, "connected" ideas.
+  const g = new THREE.Group();
+  const accent = new THREE.Color(opts.accent || "#ff6a2b");
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.3, 64, 48),
+    new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.04, transparent: true, opacity: 0.28, clearcoat: 1, depthWrite: false })));
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.09, 32, 24), new THREE.MeshBasicMaterial({ color: accent })));
+  for (let i = 0; i < 3; i++) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7 + i * 0.24, 0.006 + i * 0.002, 12, 220),
+      new THREE.MeshBasicMaterial({ color: i === 0 ? accent : new THREE.Color(opts.color || "#f5f5f2"), transparent: true, opacity: 0.9 - i * 0.2 }));
+    ring.rotation.set(1.15 + i * 0.32, (i - 1) * 0.55, i * 0.4);
+    ring.userData.spin = 0.4 + i * 0.25;
+    g.add(ring);
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: accent }));
+    moon.userData.ring = ring; moon.userData.r = 0.7 + i * 0.24; moon.userData.phase = i * 2.1;
+    g.add(moon);
+  }
+  return g;
+}
+
 export function mount(el, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, opts.maxPixelRatio || 1.5));
@@ -94,7 +126,7 @@ export function mount(el, opts = {}) {
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = opts.envIntensity ?? 0.6;
+  scene.environmentIntensity = opts.envIntensity ?? (opts.kind === "sculpture" ? 1.4 : 0.6);
   const camera = new THREE.PerspectiveCamera(opts.fov || 30, 1, 0.1, 100);
   camera.position.set(0, 0, opts.distance || 4.2);
   const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(3, 4, 5); scene.add(key);
@@ -110,6 +142,8 @@ export function mount(el, opts = {}) {
       subject.add(m);
     });
   } else if (opts.kind === "device") subject = device(opts);
+  else if (opts.kind === "sculpture") subject = sculpture(opts);
+  else if (opts.kind === "orbits") subject = orbits(opts);
   else subject = globe(opts);
   scene.add(subject);
 
@@ -117,6 +151,7 @@ export function mount(el, opts = {}) {
     const w = el.clientWidth || 1, h = el.clientHeight || 1;
     renderer.setSize(w, h, false); renderer.domElement.style.width = "100%"; renderer.domElement.style.height = "100%";
     camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
   }
   resize();
   new ResizeObserver(resize).observe(el);
@@ -124,9 +159,17 @@ export function mount(el, opts = {}) {
   let raf = 0, t0 = performance.now(), px = 0, py = 0;
   el.addEventListener("pointermove", e => { const r = el.getBoundingClientRect(); px = (e.clientX - r.left) / r.width - 0.5; py = (e.clientY - r.top) / r.height - 0.5; });
   const speed = opts.speed ?? 0.25;
+  function pose(t) {
+    subject.rotation.y = (opts.kind === "device" ? -0.5 : 0) + t * speed;
+    if (opts.kind === "sculpture") subject.rotation.x = 0.3 + t * speed * 0.45;
+    if (opts.kind === "orbits") subject.children.forEach(c => {
+      if (c.userData.spin) c.rotation.z = t * c.userData.spin;
+      if (c.userData.ring) { const a = t * 0.9 + c.userData.phase, r = c.userData.r; c.position.copy(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, 0).applyEuler(c.userData.ring.rotation)); }
+    });
+  }
   function frame(now) {
     const t = (now - t0) / 1000;
-    subject.rotation.y = (opts.kind === "device" ? -0.5 : 0) + t * speed;
+    pose(t);
     camera.position.x += (px * 0.6 - camera.position.x) * 0.05;
     camera.position.y += (-py * 0.4 - camera.position.y) * 0.05;
     camera.lookAt(0, 0, 0);
@@ -137,6 +180,7 @@ export function mount(el, opts = {}) {
     start() { if (!raf) { t0 = performance.now() - 0; raf = requestAnimationFrame(frame); } },
     stop() { cancelAnimationFrame(raf); raf = 0; },
     renderOnce() { renderer.render(scene, camera); },
+    setTime(t, dolly = 0) { pose(t); camera.position.set(0, 0, (opts.distance || 4.2) - dolly); camera.lookAt(0, 0, 0); renderer.render(scene, camera); },
     poster() { renderer.render(scene, camera); return renderer.domElement.toDataURL("image/png"); },
   };
 }

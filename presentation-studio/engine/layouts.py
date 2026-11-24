@@ -16,9 +16,9 @@ from .tokens import color, style
 W, H = 13.333, 7.5
 LAYOUTS = (
     "title", "agenda", "section", "statement", "big-number", "split", "features", "timeline",
-    "comparison", "chart", "stats", "quote", "product", "image-full", "references", "closing",
+    "comparison", "chart", "stats", "quote", "product", "image-full", "video", "references", "closing",
 )
-NO_FOOTER = {"title", "section", "statement", "closing", "image-full", "quote"}
+NO_FOOTER = {"title", "section", "statement", "closing", "image-full", "quote", "video"}
 
 
 class Ctx:
@@ -112,6 +112,36 @@ def image(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, radi
             "order": order, "bleed": bleed, "radius": radius, "alt": alt, "decor": False}
 
 
+def video(ctx, src, box, *, fit="cover", key=None, order=None, bleed=False, poster=None, alt=""):
+    """MP4 element: plays in the web deck, embedded (autoplay, muted, loop) in the .pptx, poster frame in PDF."""
+    import shutil
+    import subprocess
+    p = ctx.asset(src)
+    if p is None or not p.exists():
+        ctx.issues.append({"level": "FAIL", "check": "missing-video", "msg": f"video not found: {src}"})
+        return {"kind": "image", "box": list(box), "src": None, "fit": fit, "key": key, "order": order, "bleed": bleed, "decor": False, "alt": alt}
+    pp = ctx.asset(poster) if poster else None
+    if pp is None or not pp.exists():
+        pp = ctx.build_dir / "assets" / f"{p.stem}_poster.jpg"
+        ff = shutil.which("ffmpeg")
+        if not pp.exists() and ff:
+            pp.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run([ff, "-y", "-v", "error", "-ss", "1.5", "-i", str(p), "-frames:v", "1", "-q:v", "2", str(pp)])
+        if not pp.exists():
+            ctx.issues.append({"level": "WARN", "check": "video-poster", "msg": f"no poster frame for {p.name} (install ffmpeg or set 'poster')"})
+            pp = None
+    dur_ms = 10000
+    fp = shutil.which("ffprobe")
+    if fp:
+        r = subprocess.run([fp, "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(p)], capture_output=True, text=True)
+        try:
+            dur_ms = int(float(r.stdout.strip()) * 1000)
+        except ValueError:
+            pass
+    return {"kind": "video", "box": list(box), "src": str(p), "poster": str(pp) if pp else None, "fit": fit, "key": key, "dur_ms": dur_ms,
+            "order": order, "bleed": bleed, "decor": False, "alt": alt}
+
+
 def card(ctx, box, order=None, key=None):
     s = ctx.ds["surfaces"]
     c = ctx.ds["colors"]
@@ -173,7 +203,7 @@ def L_title(ctx, sl, els):
     y = 2.35
     if sl.get("eyebrow"):
         els.append(text(ctx, "eyebrow", sl["eyebrow"], (M, y, 9, 0.3), key="eyebrow", order=1))
-    t = text(ctx, "hero", sl["title"], (M, y + 0.4, 10.8, 2.5), key="title", order=2, max_lines=2)
+    t = text(ctx, "hero", sl["title"], (M, y + 0.4, ctx.CW, 2.5), key="title", order=2, max_lines=2)
     els.append(t)
     if sl.get("subtitle"):
         els.append(text(ctx, "subtitle", sl["subtitle"], (M, y + 0.4 + t["text_h"] + 0.3, 8.6, 1.1), key="subtitle", order=3))
@@ -229,7 +259,10 @@ def L_split(ctx, sl, els):
     ix = W - iw if side == "right" else 0
     tx = M if side == "right" else iw + 0.6
     tw = W - iw - M - 0.6
-    els.append(image(ctx, sl.get("image"), (ix, 0, iw, H), bleed=True, key="image", order=1, alt=sl.get("alt", "")))
+    if sl.get("video"):
+        els.append(video(ctx, sl["video"], (ix, 0, iw, H), bleed=True, key="image", order=1, poster=sl.get("poster"), alt=sl.get("alt", "")))
+    else:
+        els.append(image(ctx, sl.get("image"), (ix, 0, iw, H), bleed=True, key="image", order=1, alt=sl.get("alt", "")))
     y = 1.35
     if sl.get("eyebrow"):
         els.append(text(ctx, "eyebrow", sl["eyebrow"], (tx, y, tw, 0.3), key="eyebrow", order=2))
@@ -363,6 +396,8 @@ def L_product(ctx, sl, els):
     if sl.get("viewer"):
         els.append({"kind": "viewer", "box": list(vb), "viewer": sl["viewer"], "poster": str(ctx.asset(sl["poster"])) if sl.get("poster") else None,
                     "order": 3, "key": "hero", "decor": False})
+    elif sl.get("video"):
+        els.append(video(ctx, sl["video"], vb, fit="contain", key="hero", order=3, poster=sl.get("poster")))
     elif sl.get("image"):
         els.append(image(ctx, sl["image"], vb, fit="contain", key="hero", order=3))
     cos = sl.get("callouts", [])[:4]
@@ -388,6 +423,17 @@ def L_image_full(ctx, sl, els):
         els.append(text(ctx, "caption", sl["caption"], (M, 6.62, 11, 0.5), color_="#D8D8D8", order=3))
 
 
+def L_video(ctx, sl, els):
+    """Full-bleed video (ad spot, product film, b-roll) with an optional title over a scrim."""
+    M = ctx.M
+    els.append(video(ctx, sl.get("video"), (0, 0, W, H), bleed=True, key="video", order=0, poster=sl.get("poster"), alt=sl.get("alt", "")))
+    if sl.get("title"):
+        els.append({"kind": "scrim", "box": [0, 0, W, H], "strength": sl.get("scrim", 0.7), "decor": True})
+        if sl.get("eyebrow"):
+            els.append(text(ctx, "eyebrow", sl["eyebrow"], (M, 5.0, 9, 0.3), order=1))
+        els.append(text(ctx, "hero", sl["title"], (M, 5.35, 10.5, 1.3), size=48, min_size=32, color_="#FFFFFF", anchor="bottom", key="title", order=2, max_lines=2))
+
+
 def L_references(ctx, sl, els):
     M = ctx.M
     sl.setdefault("title", "References")
@@ -401,7 +447,7 @@ def L_references(ctx, sl, els):
     cw = (ctx.CW - 0.5 * (cols - 1)) / cols
     for c in range(cols):
         chunk = entries[c * per:(c + 1) * per]
-        els.append(text(ctx, "body", chunk, (M + c * (cw + 0.5), 2.45, cw, 4.3), size=13, min_size=10, color_="muted", order=o + c))
+        els.append(text(ctx, "caption", chunk, (M + c * (cw + 0.5), 2.45, cw, 4.3), size=14, min_size=11, order=o + c))
 
 
 def L_closing(ctx, sl, els):

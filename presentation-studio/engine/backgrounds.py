@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from .tokens import hex_to_rgb, luminance
 
-KINDS = ("spotlight", "aurora", "horizon", "grid", "mesh", "vignette")
+KINDS = ("spotlight", "aurora", "horizon", "grid", "mesh", "vignette", "nebula", "beams", "liquid")
 W, H = 2400, 1350  # 16:9, sharp on 1440p projectors, small as JPEG
 
 
@@ -25,6 +25,20 @@ def _blob(xx, yy, cx, cy, rx, ry):
 
 def _grain(img, amount, rng):
     return img + rng.normal(0, amount, img.shape[:2])[..., None].astype(np.float32)
+
+
+def _fbm(rng, h, w, octaves=6, base=4):
+    """Fractal value noise (numpy only): smooth cloud structure for nebulae."""
+    out = np.zeros((h, w), np.float32)
+    amp, tot = 1.0, 0.0
+    for o in range(octaves):
+        n = base * 2 ** o
+        g = rng.random((n + 1, int(n * w / h) + 2)).astype(np.float32)
+        im = Image.fromarray((g * 255).astype(np.uint8)).resize((w, h), Image.BICUBIC)
+        out += amp * np.asarray(im, np.float32) / 255
+        tot += amp
+        amp *= 0.55
+    return out / tot
 
 
 def render(kind: str, colors: dict, seed: int = 1, w: int = W, h: int = H) -> Image.Image:
@@ -82,6 +96,43 @@ def render(kind: str, colors: dict, seed: int = 1, w: int = W, h: int = H) -> Im
             img = img + (c - img) * (k * g)[..., None]
     elif kind == "vignette":
         pass
+    elif kind == "nebula":
+        n = _fbm(rng, h, w, 7, 2)
+        n2 = _fbm(rng, h, w, 5, 2)
+        sweep = np.exp(-((yy - 0.25 - 0.55 * xx) / 0.28) ** 2)  # galaxy-like diagonal band
+        cloud = (np.clip((n - 0.35) * 2.2, 0, 1) ** 1.3) * sweep
+        cloud = np.asarray(Image.fromarray((np.clip(cloud, 0, 1) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(6)), np.float32) / 255
+        mix = np.clip(n2 * 1.4 - 0.2, 0, 1)[..., None]
+        col = acc * (1 - mix) + acc2 * mix
+        k = 0.55 if dark else 0.35
+        img = img + (col - img) * (cloud[..., None] * k) if not dark else img + col * cloud[..., None] * k
+        if dark:  # star field
+            stars = rng.random((h, w)) > 0.9993
+            img += (stars * rng.uniform(0.3, 1.0, (h, w)))[..., None].astype(np.float32)
+    elif kind == "beams":
+        ox, oy = 0.82, -0.25
+        ang = np.arctan2(yy - oy, (xx - ox) * (w / h))
+        rays = np.zeros_like(xx)
+        for i in range(7):
+            a0, wd = rng.uniform(1.75, 2.55), rng.uniform(0.012, 0.05)
+            rays += np.exp(-((ang - a0) / wd) ** 2) * rng.uniform(0.4, 1.0)
+        dist = np.sqrt(((xx - ox) * w / h) ** 2 + (yy - oy) ** 2)
+        rays *= np.exp(-dist * 0.9)
+        glow = _blob(xx, yy, ox, oy + 0.1, 0.35, 0.35)
+        lit = acc * 0.6 + np.ones(3, np.float32) * 0.4
+        add = (rays * 0.45 + glow * 0.18)[..., None]
+        img = img + lit * add if dark else img + (acc - img) * np.clip(add, 0, 1) * 0.6
+    elif kind == "liquid":
+        x2, y2 = xx * 5.0, yy * 5.0 * h / w * 1.6
+        for _ in range(4):  # domain warping: flowing, chrome-like bands
+            x2, y2 = x2 + 0.55 * np.sin(y2 * 1.9 + rng.uniform(0, 6)), y2 + 0.55 * np.cos(x2 * 1.6 + rng.uniform(0, 6))
+        bands = 0.5 + 0.5 * np.sin(x2 * 2.2 + y2 * 1.4)
+        sheen = np.clip((bands - 0.82) * 5, 0, 1) ** 2
+        mix = bands[..., None]
+        col = acc * mix + acc2 * (1 - mix)
+        k = 0.45 if dark else 0.28
+        img = img * (1 - k) + col * k if dark else img + (col - img) * k
+        img += (np.ones(3) * (0.35 if dark else 0.25))[None, None] * sheen[..., None]
     else:
         raise ValueError(f"unknown background kind {kind!r}; choose from {KINDS}")
 

@@ -1,0 +1,149 @@
+{
+ "meta": {
+  "title": "Research question as a title",
+  "subtitle": "Course code: assignment name",
+  "duration_min": 12,
+  "academic": true,
+  "must_cover": [],
+  "author": "Your name",
+  "course": "Course / event",
+  "date": "Month YYYY",
+  "template_note": "university / school assignment"
+ },
+ "design_system": "scholar",
+ "sources": [],
+ "slides": [
+  {
+   "layout": "title",
+   "eyebrow": "Course code",
+   "title": "Your [[research]] question",
+   "subtitle": "What this presentation answers",
+   "notes": ""
+  },
+  {
+   "layout": "agenda",
+   "title": "Agenda",
+   "items": [
+    "Context",
+    "Framework and method",
+    "Findings",
+    "Discussion and limitations",
+    "Conclusion"
+   ],
+   "notes": ""
+  },
+  {
+   "layout": "statement",
+   "eyebrow": "Context",
+   "text": "The one fact that frames the [[problem]].",
+   "notes": ""
+  },
+  {
+   "layout": "section",
+   "index": "01",
+   "title": "Framework and method",
+   "notes": ""
+  },
+  {
+   "layout": "comparison",
+   "eyebrow": "Method",
+   "title": "How we approached it",
+   "left": {
+    "tag": "Data",
+    "title": "Sources",
+    "bullets": [
+     "What",
+     "Where",
+     "When"
+    ]
+   },
+   "right": {
+    "tag": "Analysis",
+    "title": "Approach",
+    "bullets": [
+     "Model or framework",
+     "Steps",
+     "Assumptions"
+    ]
+   },
+   "notes": ""
+  },
+  {
+   "layout": "section",
+   "index": "02",
+   "title": "Findings",
+   "notes": ""
+  },
+  {
+   "layout": "chart",
+   "eyebrow": "Finding 1",
+   "title": "Findings as a sentence",
+   "transition": "morph",
+   "chart": {
+    "type": "column",
+    "categories": [
+     "A",
+     "B",
+     "C"
+    ],
+    "series": [
+     {
+      "name": "Value",
+      "values": [
+       1,
+       2,
+       3
+      ]
+     }
+    ],
+    "highlight": 2
+   },
+   "takeaway": "So what?",
+   "notes": ""
+  },
+  {
+   "layout": "split",
+   "eyebrow": "Finding 2",
+   "title": "Second finding",
+   "bullets": [
+    "Evidence",
+    "Evidence",
+    "Implication"
+   ],
+   "image": "assets/replace-me.jpg",
+   "notes": ""
+  },
+  {
+   "layout": "comparison",
+   "eyebrow": "Discussion",
+   "title": "Strengths and limitations",
+   "left": {
+    "tag": "Strengths",
+    "title": "What holds",
+    "bullets": [
+     "..."
+    ]
+   },
+   "right": {
+    "tag": "Limitations",
+    "title": "What to treat with care",
+    "bullets": [
+     "..."
+    ]
+   },
+   "notes": ""
+  },
+  {
+   "layout": "closing",
+   "eyebrow": "Conclusion",
+   "title": "The answer in one [[sentence]]",
+   "subtitle": "Recommendation or next step",
+   "notes": ""
+  },
+  {
+   "layout": "references",
+   "title": "References",
+   "notes": ""
+  }
+ ]
+}

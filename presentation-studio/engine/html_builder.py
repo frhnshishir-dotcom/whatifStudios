@@ -95,7 +95,7 @@ def chart_svg(el: dict) -> str:
         return "".join(out)
 
     pad_l, pad_b, pad_t = 86, 56, 34
-    pad_r = 190 if t == "line" else 20
+    pad_r = 250 if t == "line" else 20
     if t == "bar":
         pad_l = max(120, 15 * max(len(c) for c in cats))
     pw, ph = W - pad_l - pad_r, H - pad_t - pad_b
@@ -146,7 +146,7 @@ def chart_svg(el: dict) -> str:
         step = max(1, math.ceil(n / 8))
         xs = [pad_l + pw * i / max(1, n - 1) for i in range(n)]
         for i, c in enumerate(cats):
-            if i % step == 0 or i == n - 1:
+            if (i % step == 0 and n - 1 - i >= step * 0.6) or i == n - 1:
                 out.append(f'<text x="{xs[i]:.1f}" y="{pad_t + ph + 38:.1f}" font-size="22" fill="{muted}" text-anchor="middle">{esc(str(c))}</text>')
         hs = spec.get("highlight", 0)
         ends = []
@@ -162,7 +162,7 @@ def chart_svg(el: dict) -> str:
             if ends[k][0] - ends[k - 1][0] < 30:
                 ends[k][0] = ends[k - 1][0] + 30
         for y, name, lv, col in ends:
-            out.append(f'<text class="endlab" x="{pad_l + pw + 14:.1f}" y="{y + 8:.1f}" font-size="22" fill="{col}" font-weight="600">{_fmt(lv, spec)} <tspan fill="{muted}" font-weight="400">{esc(name)}</tspan></text>')
+            out.append(f'<text class="endlab" x="{pad_l + pw + 14:.1f}" y="{y + 8:.1f}" font-size="22" fill="{col}" font-weight="600">{_fmt(lv, {**spec, 'decimals': spec.get('label_decimals', spec.get('decimals', 0))})} <tspan fill="{muted}" font-weight="400">{esc(name)}</tspan></text>')
     out.append("</svg>")
     return "".join(out)
 
@@ -231,6 +231,12 @@ def element_html(el: dict, assets: Assets, ctx_out: Path) -> str:
         bleed = " bleed" if el.get("bleed") else ""
         return (f'<div class="el img{bleed}" style="{pos}border-radius:{px(el.get("radius", 0))}"{_common(el)}>'
                 f'<img src="{rel}" alt="{esc(el.get("alt", ""))}" style="object-fit:{el["fit"]}" decoding="async"></div>')
+    if k == "video":
+        rel = assets.add(el["src"])
+        poster = f' poster="{assets.add(el["poster"])}"' if el.get("poster") else ""
+        bleed = " bleed" if el.get("bleed") else ""
+        return (f'<div class="el vid{bleed}" style="{pos}"{_common(el)}><video src="{rel}"{poster} muted loop playsinline preload="auto" '
+                f'style="object-fit:{el["fit"]}" aria-label="{esc(el.get("alt", ""))}"></video></div>')
     if k == "scrim":
         a = el["strength"]
         return f'<div class="el scrim" style="{pos}background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,{a * 0.6:.2f}) 65%,rgba(0,0,0,{a:.2f}) 100%)"></div>'

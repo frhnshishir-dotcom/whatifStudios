@@ -7,7 +7,7 @@
   "course": "Showcase deck",
   "date": "November 2026",
   "audience": "General audience, 6-minute talk",
-  "duration_min": 6,
+  "duration_min": 5,
   "academic": true,
   "file_name": "connected-planet",
   "lang": "en"
@@ -22,6 +22,13 @@
    "fx": "particles",
    "transition": "fade",
    "notes": "Twenty years ago, going online was something most of the world had never done. Today it is the default for most people, but not for everyone. In the next six minutes I'll show how fast that changed, where it changed fastest, and where the gap is still wide. Every number comes from the World Bank's World Development Indicators, which republish data from the International Telecommunication Union."
+  },
+  {
+   "layout": "video",
+   "video": "../../exports/connected-planet/video/connected-planet-teaser.mp4",
+   "alt": "17-second teaser: internet use from one in six to seven in ten",
+   "transition": "iris",
+   "notes": "Before the numbers, a 17-second teaser that sets up the story. It plays by itself, muted, and loops."
   },
   {
    "layout": "statement",
@@ -347,7 +354,7 @@
     "wb_it_net_user_zs",
     "wb_it_cel_sets_p2"
    ],
-   "transition": "zoom",
+   "transition": "cube",
    "notes": "This globe is live in the web version: drag across it and it turns. It's a visual anchor rather than a map. The four numbers around it are the headline figures from the data we've just seen."
   },
   {

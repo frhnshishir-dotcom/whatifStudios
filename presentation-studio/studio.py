@@ -6,6 +6,7 @@
   python studio.py new <project> [--template keynote] [--system monolith]
   python studio.py build <project> [--fonts brand|portable] [--fast]
   python studio.py qa <project>                    re-run QA on the last build
+  python studio.py promo <project> <spot>          render projects/<p>/spots/<spot>.json to MP4 (ad / promo video)
   python studio.py bg <system> <kind> <out.jpg>    one procedural background
   python studio.py fonts                           where the fonts are + how to install them
   python studio.py vendor                          rebuild the Three.js viewer bundle (needs node/npm)
@@ -141,6 +142,7 @@ def main():
     b = sub.add_parser("build"); b.add_argument("project"); b.add_argument("--fonts", choices=["brand", "portable"], default="brand")
     b.add_argument("--fast", action="store_true", help="skip the animated walk-through"); b.add_argument("--no-render", action="store_true")
     q = sub.add_parser("qa"); q.add_argument("project")
+    pr = sub.add_parser("promo"); pr.add_argument("project"); pr.add_argument("spot"); pr.add_argument("--format", choices=["16:9", "9:16", "1:1", "4:5"])
     g = sub.add_parser("bg"); g.add_argument("system"); g.add_argument("kind"); g.add_argument("out"); g.add_argument("--seed", type=int, default=3)
     a = ap.parse_args()
     if a.cmd == "systems":
@@ -164,6 +166,18 @@ def main():
     elif a.cmd == "qa":
         a.fonts, a.fast, a.no_render = "brand", True, False
         sys.exit(cmd_build(a))
+    elif a.cmd == "promo":
+        from engine import promo
+        spec = json.loads((PROJECTS / a.project / "spots" / f"{a.spot}.json").read_text(encoding="utf-8"))
+        if a.format:
+            spec["format"] = a.format
+            spec["name"] = f"{spec.get('name', a.spot)}_{a.format.replace(':', 'x')}"
+        t0 = time.time()
+        r = promo.render(spec, EXPORTS / a.project / "video")
+        st = r["probe"]["streams"][0]
+        print(f"✓ {r['mp4'].relative_to(STUDIO)}  {st['width']}x{st['height']} {st['codec_name']} {st['pix_fmt']} "
+              f"{st['r_frame_rate']} fps, {st['nb_read_frames']} frames, {float(r['probe']['format']['duration']):.2f} s  ({time.time() - t0:.0f}s)")
+        print(f"  poster {r['poster'].relative_to(STUDIO)} · frames {r['frames'].relative_to(STUDIO)}")
     elif a.cmd == "bg":
         from engine import backgrounds
         ds = tokens.load(a.system)

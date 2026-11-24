@@ -105,3 +105,9 @@ For the posted reel (CapCut export, with audio), run `tools/pipeline/reel_check.
 - **vidIQ**: signed in as shishir.farhn@gmail.com with **no YouTube channel authorized**. Connect Farhn47 in vidIQ before using channel analytics. Keyword, title and trend research work without it.
 - **OpusClip**: Starter plan, so no API/MCP access (Pro needed). Not required.
 Check that there are no missing or undersized PNGs before encoding. Pull 4-6 stills from the MP4 and look at them, including the hook text and every story event.
+
+## Presentation Studio (separate from the video episodes)
+`presentation-studio/` builds presentations: editable PPTX, PDF, cinematic HTML, slide PNGs, speaker scripts and MP4 ad spots, all from one `deck.json`.
+Manual: `presentation-studio/PRESENTATION_STUDIO.md`. Audit and handover: `presentation-studio/documentation/AUDIT_REPORT.md`.
+When the owner says **"CREATE A WORLD-CLASS PRESENTATION"** (or asks for any deck or slides), follow `.claude/skills/world-class-presentation/SKILL.md`.
+Never fabricate statistics, quotes or sources; every number is cited. `exports/` is generated and gitignored.

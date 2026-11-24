@@ -218,6 +218,7 @@ def add_chart(slide, el):
     ch.font.size = Pt(12)
     ch.font.color.rgb = rgb(el["muted"])
     multi = len(spec["series"]) > 1
+    ch.has_title = False
     ch.has_legend = multi or spec["type"] == "donut"
     if ch.has_legend:
         ch.legend.position = XL_LEGEND_POSITION.BOTTOM
@@ -233,7 +234,8 @@ def add_chart(slide, el):
         va.major_gridlines.format.line.width = Pt(0.5)
         va.format.line.fill.background()
         va.tick_labels.font.size = Pt(11)
-        va.tick_labels.number_format = fmt
+        va.tick_labels.number_format = '#,##0' + (f'"{spec["unit"]}"' if spec.get('unit') else '')
+        va.major_unit = spec.get('major_unit', (spec.get('max') or 100) / 4)
         va.tick_labels.number_format_is_linked = False
         if "max" in spec:
             va.maximum_scale = spec["max"]
@@ -245,6 +247,13 @@ def add_chart(slide, el):
         ca.has_major_gridlines = False
         if spec["type"] == "bar":
             ca.reverse_order = True  # top-to-bottom like the HTML chart
+        n = len(spec["categories"])
+        if n > 8:
+            cax = ca._element
+            skip = cax.makeelement(qn('c:tickLblSkip'), {'val': str(-(-n // 6))})
+            anchor = next((c for c in cax if c.tag.split('}')[1] in ('tickMarkSkip', 'noMultiLvlLbl', 'extLst')), None)
+            anchor.addprevious(skip) if anchor is not None else cax.append(skip)
+            ca.tick_labels.font.size = Pt(11)
     if spec["type"] in ("column", "bar"):
         plot.gap_width = spec.get("gap", 60)
         plot.overlap = -10 if multi else 0
@@ -285,6 +294,21 @@ def add_chart(slide, el):
         plot.data_labels.number_format_is_linked = False
         plot.data_labels.font.color.rgb = rgb(el["text"])
     return gf
+
+
+def add_video(slide, el):
+    x, y, w, h = el["box"]
+    poster = el.get("poster")
+    if el["fit"] == "contain" and poster:
+        with Image.open(poster) as im:
+            iw, ih = im.size
+        s = min(w / iw, h / ih)
+        nw, nh = iw * s, ih * s
+        x, y, w, h = x + (w - nw) / 2, y + (h - nh) / 2, nw, nh
+    mv = slide.shapes.add_movie(el["src"], Inches(x), Inches(y), Inches(w), Inches(h),
+                                poster_frame_image=poster, mime_type="video/mp4")
+    mv._is_video = True
+    return mv
 
 
 def add_viewer_poster(slide, el, issues, idx):
@@ -338,7 +362,7 @@ def build(deck: dict, ds: dict, slides_els: list[list[dict]], out: Path, mode: s
                 pic.name = "Scrim"
                 continue
             shp = {"text": add_text, "rect": add_rect, "line": add_line, "ellipse": add_ellipse,
-                   "image": add_image, "chart": add_chart}.get(k)
+                   "image": add_image, "chart": add_chart, "video": add_video}.get(k)
             shp = shp(slide, el) if shp else (add_viewer_poster(slide, el, issues, i + 1) if k == "viewer" else None)
             if shp is None:
                 continue
@@ -348,6 +372,9 @@ def build(deck: dict, ds: dict, slides_els: list[list[dict]], out: Path, mode: s
             elif key:
                 shp.name = key
             morphing = key in morph_names[i] and (sl.get("transition") or motion["transition"]) == "morph"
+            if k == "video":
+                effects.insert(0, (shp.shape_id, el.get("dur_ms", 10000), "media", "pic"))
+                continue
             if el.get("order") and not morphing and sl.get("motion", motion["entrance"]) != "none":
                 tag = etree.QName(shp._element).localname
                 delay = (el["order"] - 1) * motion["stagger_ms"] * 1.6

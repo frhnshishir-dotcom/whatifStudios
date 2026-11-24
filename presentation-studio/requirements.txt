@@ -1,0 +1,6 @@
+# Presentation Studio (Python 3.11+). Node 18+ with Playwright and FFmpeg are also used (see PRESENTATION_STUDIO.md).
+python-pptx>=1.0
+Pillow>=10
+numpy>=1.26
+lxml>=5
+pymupdf>=1.24

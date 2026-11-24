@@ -74,7 +74,13 @@
   }
 
   /* ---------- 3D viewers (lazy, only the active slide renders) */
+  function videosFor(slide, on) {
+    slide.querySelectorAll("video").forEach(v => {
+      if (on && !STATIC) { try { v.currentTime = 0; } catch (e) {} v.play().catch(() => {}); } else v.pause();
+    });
+  }
   function viewersFor(slide, on) {
+    videosFor(slide, on);
     slide.querySelectorAll(".viewer").forEach(el => {
       if (!window.StudioViewer) return;
       let v = viewers.get(el);
@@ -121,6 +127,12 @@
     zoom: { in: [{ opacity: 0, transform: "scale(1.12)" }, { opacity: 1, transform: "none" }], out: [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.9)" }] },
     wipe: { in: [{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0 0 0)" }], out: [{ opacity: 1 }, { opacity: .6 }] },
     push: { in: [{ transform: "translateX(100%)" }, { transform: "none" }], out: [{ transform: "none" }, { transform: "translateX(-35%)", opacity: .4 }] },
+    iris: { in: [{ clipPath: "circle(0% at 50% 50%)" }, { clipPath: "circle(75% at 50% 50%)" }], out: [{ opacity: 1, transform: "none" }, { opacity: .3, transform: "scale(.96)" }] },
+    shutter: { in: [{ clipPath: "inset(50% 0 50% 0)" }, { clipPath: "inset(0 0 0 0)" }], out: [{ opacity: 1 }, { opacity: .2 }] },
+    flip: { in: [{ transform: "perspective(2400px) rotateY(-75deg) translateZ(-200px)", opacity: 0 }, { transform: "perspective(2400px) rotateY(0) translateZ(0)", opacity: 1 }], out: [{ transform: "perspective(2400px) rotateY(0)", opacity: 1 }, { transform: "perspective(2400px) rotateY(75deg) translateZ(-200px)", opacity: 0 }] },
+    cube: { in: [{ transform: "perspective(2400px) translateX(50%) rotateY(-90deg) translateX(50%)" }, { transform: "perspective(2400px) translateX(0) rotateY(0) translateX(0)" }], out: [{ transform: "perspective(2400px) translateX(0) rotateY(0) translateX(0)" }, { transform: "perspective(2400px) translateX(-50%) rotateY(90deg) translateX(-50%)" }] },
+    vortex: { in: [{ opacity: 0, transform: "rotate(-12deg) scale(1.6)", filter: "blur(24px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }], out: [{ opacity: 1, transform: "none", filter: "blur(0)" }, { opacity: 0, transform: "rotate(10deg) scale(.6)", filter: "blur(18px)" }] },
+    blur: { in: [{ opacity: 0, filter: "blur(40px)", transform: "scale(1.04)" }, { opacity: 1, filter: "blur(0)", transform: "none" }], out: [{ opacity: 1, filter: "blur(0)" }, { opacity: 0, filter: "blur(30px)" }] },
   };
   const keysOf = s => new Set([...s.querySelectorAll("[data-key]")].map(e => e.dataset.key));
 
@@ -157,8 +169,10 @@
     const back = dir < 0 && kind === "push";
     const inF = back ? [{ transform: "translateX(-100%)" }, { transform: "none" }] : t.in;
     const a = to.animate(inF, opt); from.animate(t.out, opt);
-    build(to); viewersFor(to, true); particles(to, true);
-    a.finished.finally(() => { from.classList.remove("leaving"); from.getAnimations().forEach(x => x.cancel()); to.getAnimations().forEach(x => x.cancel()); busy = false; });
+    let done = false;
+    const finish = () => { if (done) return; done = true; from.classList.remove("leaving"); from.getAnimations().forEach(x => x.cancel()); a.cancel(); busy = false; };
+    a.finished.then(finish, finish); setTimeout(finish, DUR * 2 + 400);
+    try { build(to); viewersFor(to, true); particles(to, true); } catch (e) { console.warn(e); }
   }
 
   /* ---------- HUD + presenter */
