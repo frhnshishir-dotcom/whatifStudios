@@ -20,7 +20,7 @@ self.onmessage = (e: MessageEvent) => {
   const m = e.data;
   if (m.type === 'init') {
     const buffers = m.buffers as WaterBuffers;
-    sim = new WaterSim(m.w, m.h, new Float32Array(m.elev), buffers, m.params as Partial<WaterParams>);
+    sim = new WaterSim(m.w, m.h, new Float32Array(m.elev), buffers, m.params as Partial<WaterParams>, m.solid ? new Uint8Array(m.solid) : undefined);
     last = performance.now();
     loop();
   } else if (m.type === 'cmd') queue.push(...(m.cmds as WaterCmd[]));

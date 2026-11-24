@@ -103,6 +103,40 @@ export function drawProcedural(ch: string, out: Uint8Array, w: number, h: number
       }
       break;
     }
+    case '╱': case '╲': case '╳': {
+      // Anti-aliased diagonal(s) corner to corner, thickness ~t.
+      const diag = (up: boolean) => {
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          const u = (x + 0.5) / w, v = (y + 0.5) / h;
+          const d = Math.abs(up ? u + v - 1 : u - v) * Math.min(w, h) / Math.SQRT2;
+          const a = Math.max(0, Math.min(1, t * 0.75 + 0.5 - d));
+          if (a > 0) out[y * w + x] = Math.max(out[y * w + x], Math.round(a * 255));
+        }
+      };
+      if (ch !== '╲') diag(true);
+      if (ch !== '╱') diag(false);
+      break;
+    }
+    case '┼': case '┬': case '┴': case '├': case '┤': case '┌': case '┐': case '└': case '┘': {
+      const L = '┼┬┴┤┐┘'.includes(ch), R = '┼┬┴├┌└'.includes(ch), U = '┼┴├┤└┘'.includes(ch), D = '┼┬├┤┌┐'.includes(ch);
+      const x0 = cx - t / 2, y0 = cy - t / 2;
+      if (L) rect(0, y0, x0 + t, y0 + t);
+      if (R) rect(x0, y0, w, y0 + t);
+      if (U) rect(x0, 0, x0 + t, y0 + t);
+      if (D) rect(x0, y0, x0 + t, h);
+      break;
+    }
+    case '╭': case '╮': case '╯': case '╰': {
+      // Quarter arc joining two edge midpoints, centred on a cell corner.
+      const ox = ch === '╭' || ch === '╰' ? w : 0, oy = ch === '╭' || ch === '╮' ? h : 0;
+      const r = Math.min(w, h) / 2;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const d = Math.hypot((x + 0.5 - ox) * (r / (w / 2)), (y + 0.5 - oy) * (r / (h / 2)));
+        const a = Math.max(0, Math.min(1, t * 0.75 + 0.5 - Math.abs(d - r)));
+        if (a > 0) out[y * w + x] = Math.round(a * 255);
+      }
+      break;
+    }
     default: throw new Error(`no procedural drawing for ${ch}`);
   }
 }

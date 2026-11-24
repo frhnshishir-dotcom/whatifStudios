@@ -12,10 +12,12 @@ export class Camera {
   x = 0;
   y = 0;
   zoomIndex = 4; // 9 px cells: ~120 x 60 characters on a laptop screen
-  heightScale = 0.55;
+  heightScale = 0.75;
   /** Viewport size in device pixels (set by the renderer). */
   viewW = 1;
   viewH = 1;
+  /** Screen rows the highest terrain is lifted by (maxElev * heightScale), so the far edge stays reachable. */
+  maxLift = 0;
 
   get cellW(): number { return ZOOM_STEPS[this.zoomIndex]; }
   get cellH(): number { return Math.round(this.cellW * CELL_ASPECT); }
@@ -47,9 +49,10 @@ export class Camera {
     return true;
   }
 
-  centerOn(wx: number, wy: number, worldW: number, worldH: number): void {
+  /** Centre the view on a world cell standing at height z (the projection lifts it by z * heightScale rows). */
+  centerOn(wx: number, wy: number, worldW: number, worldH: number, z = 0): void {
     this.x = wx - this.viewW / this.cellW / 2;
-    this.y = wy - this.viewH / this.cellH / 2;
+    this.y = wy - Math.round(z * this.heightScale) - this.viewH / this.cellH / 2;
     this.clampTo(worldW, worldH);
   }
 
@@ -58,6 +61,6 @@ export class Camera {
     const visW = this.viewW / this.cellW, visH = this.viewH / this.cellH;
     const m = 4;
     this.x = visW >= worldW ? (worldW - visW) / 2 : clamp(this.x, -m, worldW - visW + m);
-    this.y = visH >= worldH ? (worldH - visH) / 2 : clamp(this.y, -m - 8, worldH - visH + m);
+    this.y = visH >= worldH ? (worldH - visH) / 2 : clamp(this.y, -m - 8 - this.maxLift, worldH - visH + m);
   }
 }

@@ -44,7 +44,7 @@ export const useUI = create<UIState>()((set) => ({
   panelsHidden: false,
   paused: false,
   speed: 1,
-  settings: { resolutionScale: 1, heightScale: 0.55, simQuality: 'high', lowPerf: false },
+  settings: { resolutionScale: 1, heightScale: 0.75, simQuality: 'high', lowPerf: false },
   stats: null,
   hover: null,
   saveState: 'unsaved',

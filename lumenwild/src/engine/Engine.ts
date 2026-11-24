@@ -7,6 +7,9 @@ import { Renderer } from './render/Renderer';
 import { Particles } from './render/Particles';
 import type { WaterSystem } from './water/WaterSystem';
 import { WaterLayer } from './water/WaterLayer';
+import { ObjectStore } from './objects/ObjectStore';
+import { ObjectLayer } from './objects/ObjectLayer';
+import type { SceneLayer } from './render/Composer';
 
 export interface EngineStats {
   fps: number;
@@ -25,6 +28,8 @@ export interface EngineStats {
   water: number;
   activeChunks: number;
   particles: number;
+  objects: number;
+  objectCells: number;
 }
 
 export interface HoverInfo { x: number; y: number; i: number; elev: number; mat: number; cover: number; moisture: number; kind: number }
@@ -44,9 +49,15 @@ export class Engine {
   composer: Composer;
   renderer: Renderer | null = null;
   readonly sims: Simulation[] = [];
+  /** Where the view opens (and the Home key returns to). */
+  home: [number, number] | null = null;
   water: WaterSystem | null = null;
   waterLayer: WaterLayer | null = null;
   readonly particles = new Particles(4000);
+  objects: ObjectStore;
+  objectLayer: ObjectLayer;
+  /** Draws particles last (after objects), depth-tested. */
+  private particleLayer: SceneLayer;
   onStats: ((s: EngineStats) => void) | null = null;
   onHover: ((h: HoverInfo | null) => void) | null = null;
   onPauseChange: ((paused: boolean) => void) | null = null;
@@ -68,6 +79,26 @@ export class Engine {
     this.world = world;
     this.shader = new TerrainShader(world);
     this.composer = new Composer(world, this.shader);
+    this.objects = new ObjectStore(world);
+    this.objectLayer = new ObjectLayer(world, this.objects, null);
+    this.particleLayer = { after: (buf, cam, t) => this.particles.draw(buf, cam, t, this.objectLayer.night) };
+    this.composer.layers.push(this.objectLayer, this.particleLayer);
+    this.bindObjects();
+  }
+
+  /** Use an existing object store (generated together with the world). */
+  setObjects(store: ObjectStore): void {
+    const k = this.composer.layers.indexOf(this.objectLayer);
+    this.objects = store;
+    this.objectLayer = new ObjectLayer(this.world, store, this.water ? this.water.view : null);
+    if (k >= 0) this.composer.layers[k] = this.objectLayer;
+    this.bindObjects();
+    this.renderer?.blitter.invalidate();
+  }
+
+  /** Object edits that change the solid mask wake the water there. */
+  private bindObjects(): void {
+    this.objects.onChange = (x0, y0, x1, y1) => this.water?.terrainChanged(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
   }
 
   /** Replace the world (generation, load): rebuilds caches, keeps layers. */
@@ -78,6 +109,14 @@ export class Engine {
     this.composer = new Composer(world, this.shader);
     this.composer.layers.push(...layers);
     this.renderer?.blitter.invalidate();
+  }
+
+  /** Centre the view on a world cell, accounting for its elevation in the oblique projection. */
+  focus(x: number, y: number): void {
+    const w = this.world;
+    this.shader.update();
+    this.cam.maxLift = Math.max(this.cam.maxLift, this.shader.maxElev * this.cam.heightScale);
+    this.cam.centerOn(x, y, w.w, w.h, w.elevAt(Math.round(x), Math.round(y)));
   }
 
   attach(canvas: HTMLCanvasElement): void {
@@ -111,6 +150,7 @@ export class Engine {
     this.water = ws;
     this.waterLayer = new WaterLayer(this.world, ws.view, this.shader, this.particles);
     this.composer.layers.unshift(this.waterLayer);
+    this.objectLayer.water = ws.view;
     if (ws.mode === 'main') this.sims.push(ws);
     ws.setRunning(!this.clock.paused, this.clock.speed);
   }
@@ -135,6 +175,7 @@ export class Engine {
     for (let s = 0; s < steps; s++) for (const sim of this.sims) sim.step(this.clock.dt);
     const t1 = performance.now();
     if (this.renderer) {
+      this.cam.maxLift = Math.max(0, this.shader.maxElev * this.cam.heightScale);
       const buf = this.composer.compose(this.cam, this.clock.simTime);
       const t2 = performance.now();
       this.renderer.draw(buf, this.cam);
@@ -155,6 +196,7 @@ export class Engine {
         simMs: ws?.mode === 'worker' ? ws.stats.stepMs : this.simMs,
         drawnCells: r.drawnCells, cells: b.n, cols: b.cols, rows: b.rows, cellW: this.cam.cellW, simSteps: ws ? ws.stats.steps : this.clock.steps,
         simMode: ws ? ws.mode : 'none', water: ws ? ws.stats.total : 0, activeChunks: ws ? ws.stats.active : 0, particles: this.particles.n,
+        objects: this.objects.objects.size, objectCells: this.objectLayer.drawn,
       });
     }
     this.updateHover();
@@ -242,6 +284,7 @@ export class Engine {
       }
       const step = 8 / Math.max(1, this.cam.cellW / 8);
       const pan = (dx: number, dy: number) => this.cam.panPixels(dx * this.cam.cellW * step, dy * this.cam.cellH * step, this.world.w, this.world.h);
+      if (ev.code === 'Home') { const [hx, hy] = this.home ?? [this.world.w / 2, this.world.h / 2]; this.focus(hx, hy); }
       if (ev.code === 'ArrowLeft') pan(1, 0);
       if (ev.code === 'ArrowRight') pan(-1, 0);
       if (ev.code === 'ArrowUp') pan(0, 1);

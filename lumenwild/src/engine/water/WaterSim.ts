@@ -88,6 +88,8 @@ export class WaterView {
 
 export class WaterSim extends WaterView {
   readonly elev: Float32Array;
+  /** Object obstacles (1 = wall). Optional: an all-zero mask when not given. */
+  readonly solid: Uint8Array;
   readonly fL: Float32Array;
   readonly fR: Float32Array;
   readonly fU: Float32Array;
@@ -107,9 +109,10 @@ export class WaterSim extends WaterView {
   private drainList: number[] = [];
   private rand = mulberry32(12345);
 
-  constructor(w: number, h: number, elev: Float32Array, buffers: WaterBuffers = allocWaterBuffers(w * h), params: Partial<WaterParams> = {}) {
+  constructor(w: number, h: number, elev: Float32Array, buffers: WaterBuffers = allocWaterBuffers(w * h), params: Partial<WaterParams> = {}, solid?: Uint8Array) {
     super(w, h, buffers);
     this.elev = elev;
+    this.solid = solid ?? new Uint8Array(w * h);
     this.fL = new Float32Array(buffers.fL);
     this.fR = new Float32Array(buffers.fR);
     this.fU = new Float32Array(buffers.fU);
@@ -198,8 +201,12 @@ export class WaterSim extends WaterView {
     this.fallTo.fill(-1);
   }
 
-  /** Terrain changed in a rectangle: wake the chunks there. */
+  /** Terrain or obstacles changed in a rectangle: wake the chunks there; water inside new obstacles is displaced. */
   terrainChanged(x0: number, y0: number, x1: number, y1: number): void {
+    for (let y = Math.max(0, y0); y <= Math.min(this.h - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(this.w - 1, x1); x++) {
+      const i = y * this.w + x;
+      if (this.solid[i] && this.depth[i] > 0) { this.removed += this.depth[i]; this.depth[i] = 0; this.fL[i] = this.fR[i] = this.fU[i] = this.fD[i] = 0; }
+    }
     for (let cy = Math.max(0, (y0 / CHUNK) | 0); cy <= Math.min(this.chunksY - 1, (y1 / CHUNK) | 0); cy++)
       for (let cx = Math.max(0, (x0 / CHUNK) | 0); cx <= Math.min(this.chunksX - 1, (x1 / CHUNK) | 0); cx++) this.chunkWater[cy * this.chunksX + cx] += 1;
   }
@@ -217,7 +224,7 @@ export class WaterSim extends WaterView {
 
   // ------------------------------------------------------------------ step
   step(dt: number): void {
-    const { w, h, elev, depth, fL, fR, fU, fD, params: p } = this;
+    const { w, h, elev, depth, fL, fR, fU, fD, solid, params: p } = this;
     // Active chunks: water or sources last step, dilated by one chunk (water moves < 1 cell per step).
     const CX = this.chunksX, CY = this.chunksY, act = this.active;
     act.fill(0);
@@ -250,17 +257,17 @@ export class WaterSim extends WaterView {
           const i = y * w + x;
           const d = depth[i];
           this.fall[i] = 0;
-          if (d <= 1e-7) { fL[i] = 0; fR[i] = 0; fU[i] = 0; fD[i] = 0; continue; }
+          if (d <= 1e-7 || solid[i]) { fL[i] = 0; fR[i] = 0; fU[i] = 0; fD[i] = 0; continue; }
           const b = elev[i], hi = b + d;
           let l = 0, r = 0, u = 0, dn = 0;
           if (x > 0) l = fL[i] * damp + k * (hi - elev[i - 1] - depth[i - 1]); else if (edge) l = fL[i] * damp + k * EDGE_DROP;
           if (x < w - 1) r = fR[i] * damp + k * (hi - elev[i + 1] - depth[i + 1]); else if (edge) r = fR[i] * damp + k * EDGE_DROP;
           if (y > 0) u = fU[i] * damp + k * (hi - elev[i - w] - depth[i - w]); else if (edge) u = fU[i] * damp + k * EDGE_DROP;
           if (y < h - 1) dn = fD[i] * damp + k * (hi - elev[i + w] - depth[i + w]); else if (edge) dn = fD[i] * damp + k * EDGE_DROP;
-          if (l < 0) l = 0;
-          if (r < 0) r = 0;
-          if (u < 0) u = 0;
-          if (dn < 0) dn = 0;
+          if (l < 0 || (x > 0 && solid[i - 1])) l = 0;
+          if (r < 0 || (x < w - 1 && solid[i + 1])) r = 0;
+          if (u < 0 || (y > 0 && solid[i - w])) u = 0;
+          if (dn < 0 || (y < h - 1 && solid[i + w])) dn = 0;
           const sum = l + r + u + dn;
           if (sum * dt > d) { const s = d / (sum * dt); l *= s; r *= s; u *= s; dn *= s; }
           fL[i] = l; fR[i] = r; fU[i] = u; fD[i] = dn;
@@ -315,7 +322,8 @@ export class WaterSim extends WaterView {
   }
 
   private stepRipples(act: Uint8Array): void {
-    const { w, h, depth, params: p } = this;
+    const { w, h, params: p } = this;
+    const depth = this.depth;
     const par = this.header[0];
     const cur = par ? this.rippleB : this.rippleA, nxt = par ? this.rippleA : this.rippleB;
     const c2 = p.rippleC2, damp = p.rippleDamping, minD = p.rippleMinDepth, CX = this.chunksX;

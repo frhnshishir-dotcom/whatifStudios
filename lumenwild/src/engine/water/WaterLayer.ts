@@ -155,8 +155,4 @@ export class WaterLayer implements SceneLayer {
     buf.kind[o] = 3;
     return true;
   }
-
-  after(buf: CellBuffer, cam: Camera, t: number): void {
-    this.particles.draw(buf, cam, t);
-  }
 }

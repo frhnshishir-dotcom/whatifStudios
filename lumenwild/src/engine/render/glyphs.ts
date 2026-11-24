@@ -24,8 +24,9 @@ export const GLYPH_DEFS: GlyphDef[] = [
   ...center('✧✦❂☼✶✷✸❖', 0.9),
   // Shapes for structures
   ...center('▲△◢◣⌂◆◇◈▬▭▮▯⬩', 0.95),
+  ...center('◓◒●◉■□▪▫☗⚘⚙☽✱✻❉▴▵◂▸◍◌✺❃✲', 0.92),
   // Procedural: shades, blocks, quadrants, lines, small circle
-  ...proc('░▒▓█▄▀▌▐▖▗▘▝│┃║╎╏─═｡'),
+  ...proc('░▒▓█▄▀▌▐▖▗▘▝│┃║╎╏─═｡╱╲╳┼┬┴├┤┌┐└┘╭╮╯╰'),
 ];
 
 /** char -> glyph index. */

@@ -26,7 +26,7 @@ const MAT_LOOK: Record<number, MatLook> = {
   [Mat.Cliff]: look([[0, '#1f211b'], [0.55, '#474a40'], [1, '#6c6f62']], '#b8bcac', 0.3, '▓▒░▓', 0.2),
   [Mat.Mud]: look([[0, '#1a140d'], [0.55, '#3a2d1f'], [1, '#56452e']], '#9a8460', 0.28, '~·.,', 0.45),
   [Mat.ForestFloor]: look([[0, '#0c160c'], [0.55, '#1f3219'], [1, '#33502a']], '#8aa060', 0.3, ",.·`'", 0.4),
-  [Mat.Glade]: look([[0, '#0d1d1e'], [0.55, '#1c4644'], [1, '#2c7470']], '#b8fff0', 0.45, '·˚.✧', 0.4),
+  [Mat.Glade]: look([[0, '#0d1a14'], [0.55, '#1d3f30'], [1, '#2f5f47']], '#a6ffe4', 0.62, '·˚✧.✦·', 0.5),
 };
 
 interface CoverLook { tint: RGB; contrast: number; glyphs: Uint16Array; blank: number }
@@ -149,6 +149,15 @@ export class TerrainShader {
     const w = this.world;
     const m = w.mat[i];
     const look = base ? BASE_FACE : rockyMats.has(m) ? ROCK_FACE : m === Mat.Moss ? MOSS_FACE : SOIL_FACE;
+    // Short steps on vegetated ground (gentle slopes facing the viewer) read as a shaded grassy bank, not bare soil:
+    // otherwise every slope would be striped with dark soil dashes.
+    if (!base && total <= 2 && !rockyMats.has(m)) {
+      const tb = this.topBg[i], dk = k === 0 ? 0.74 : 0.62;
+      outG[o] = k === 0 ? LIP[Math.floor(hash2(x, i, 5) * LIP.length)] : 0;
+      outF[o] = tb;
+      outB[o] = pack((tb & 255) * dk, ((tb >>> 8) & 255) * dk, ((tb >>> 16) & 255) * dk);
+      return;
+    }
     // Grass lip: vegetated tops hang a little over the edge.
     if (k === 0 && !base && !rockyMats.has(m)) {
       outG[o] = LIP[Math.floor(hash2(x, i, 5) * LIP.length)];

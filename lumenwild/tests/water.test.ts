@@ -147,3 +147,18 @@ describe('ripples', () => {
     expect(back).toBeGreaterThan(0.05);
   });
 });
+
+describe('obstacles (objects)', () => {
+  it('solid cells block flow and hold no water', () => {
+    const w = 30, h = 20, elev = new Float32Array(w * h).fill(1), solid = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) solid[y * w + 15] = 1; // a wall of rocks
+    const s = new WaterSim(w, h, elev, undefined, { edgeDrain: false, evaporation: 0 }, solid);
+    s.addWater(6, 10, 5, 60);
+    for (let k = 0; k < 1500; k++) s.step(1 / 60);
+    let right = 0, inWall = 0;
+    for (let y = 0; y < h; y++) { for (let x = 16; x < w; x++) right += s.depth[y * w + x]; inWall += s.depth[y * w + 15]; }
+    expect(right).toBe(0);
+    expect(inWall).toBe(0);
+    expect(Math.abs(s.totalWater() - 60) / 60).toBeLessThan(1e-4);
+  });
+});

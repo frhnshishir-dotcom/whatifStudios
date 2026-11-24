@@ -56,7 +56,7 @@ export function assignSurface(world: World, seed: number, x0 = 0, y0 = 0, x1 = w
       const tall = fbm(x / 6, y / 6, 2, s + 51), bloom = fbm(x / 9, y / 9, 2, s + 53), fern = fbm(x / 5, y / 5, 2, s + 57);
       let mat: number = Mat.Grass, cover: number = Cover.ShortGrass;
       if (slope > 1.35) { mat = Mat.Cliff; cover = Cover.None; }
-      else if (rocky > 0.62 && e > 11) { mat = Mat.Stone; cover = r > 0.62 ? Cover.MossPatch : Cover.None; }
+      else if (rocky > 0.7 && e > 14) { mat = Mat.Stone; cover = r > 0.62 ? Cover.MossPatch : Cover.None; }
       else if (forest > 0.56) {
         mat = Mat.ForestFloor;
         cover = fern > 0.6 ? Cover.Fern : r > 0.55 ? Cover.Litter : r > 0.4 ? Cover.MossPatch : Cover.None;

@@ -6,6 +6,8 @@ import { App } from './ui/App';
 import { loadFonts, createEngine } from './boot';
 import { setEngine, getEngine } from './ui/engineRef';
 import { useUI } from './ui/store';
+import { renderMinimap } from './engine/render/minimap';
+import type { Engine } from './engine/Engine';
 
 async function start() {
   const root = createRoot(document.getElementById('root')!);
@@ -16,7 +18,10 @@ async function start() {
   setEngine(engine);
   useUI.getState().setWorldMeta(engine.world.name, seed);
   // Test/debug hook (read-only use in browser tests).
-  (window as unknown as { __lumenwild: unknown }).__lumenwild = { getEngine, useUI };
+  (window as unknown as { __lumenwild: unknown }).__lumenwild = {
+    getEngine, useUI,
+    minimap: (e: Engine, out: Uint32Array) => renderMinimap(e.world, e.shader, e.water ? e.water.view : null, e.objects, out),
+  };
   root.render(<App />);
 }
 

@@ -29,6 +29,8 @@ export class World {
   readonly moisture: Uint8Array;
   /** Magic 0..255 (glowing areas). */
   readonly magic: Uint8Array;
+  /** 1 = blocked by an object (rocks, buildings): water flows around it. Shared with the water worker. */
+  readonly solid: Uint8Array;
   readonly chunksX: number;
   readonly chunksY: number;
   /** 1 = terrain cache must be rebuilt for this chunk. */
@@ -47,6 +49,7 @@ export class World {
     this.coverVar = new Uint8Array(this.n);
     this.moisture = new Uint8Array(this.n);
     this.magic = new Uint8Array(this.n);
+    this.solid = new Uint8Array(alloc(this.n));
     this.chunksX = Math.ceil(w / CHUNK);
     this.chunksY = Math.ceil(h / CHUNK);
     this.terrainDirty = new Uint8Array(this.chunksX * this.chunksY).fill(1);

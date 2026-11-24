@@ -30,9 +30,9 @@ export class WaterSystem {
       opts.init?.(null, this.view);
       this.worker = new Worker(new URL('./water.worker.ts', import.meta.url), { type: 'module' });
       this.worker.onmessage = (e) => { if (e.data.type === 'stats') { this.stats = e.data.stats; this.onStats?.(this.stats); } };
-      this.worker.postMessage({ type: 'init', w: world.w, h: world.h, elev: world.elev.buffer, buffers, params: opts.params ?? {} });
+      this.worker.postMessage({ type: 'init', w: world.w, h: world.h, elev: world.elev.buffer, solid: world.solid.buffer, buffers, params: opts.params ?? {} });
     } else {
-      this.sim = new WaterSim(world.w, world.h, world.elev, buffers, opts.params);
+      this.sim = new WaterSim(world.w, world.h, world.elev, buffers, opts.params, world.solid);
       this.view = this.sim;
       opts.init?.(this.sim, this.view);
     }

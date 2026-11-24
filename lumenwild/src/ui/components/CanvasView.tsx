@@ -30,7 +30,8 @@ export function CanvasView() {
     ro.observe(canvas);
     const r = canvas.getBoundingClientRect();
     engine.resize(r.width, r.height, window.devicePixelRatio || 1);
-    engine.cam.centerOn(engine.world.w * 0.5, engine.world.h * 0.55, engine.world.w, engine.world.h);
+    const [hx, hy] = engine.home ?? [engine.world.w * 0.5, engine.world.h * 0.55];
+    engine.focus(hx, hy);
     engine.start();
     return () => { ro.disconnect(); engine.stop(); };
   }, []);
