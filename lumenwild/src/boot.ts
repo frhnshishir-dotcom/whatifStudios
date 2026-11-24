@@ -41,11 +41,11 @@ export const RIVER_RATE = 5;
 /**
  * scene: 'world' (generated vale), 'terrain' (bare heightmap, M1 test) or 'watertest' (deterministic water test).
  */
-export function createEngine(seed: number, scene = 'world', opts: { worker?: boolean } = {}): Engine & { gen?: GenInfo } {
+export function createEngine(seed: number, scene = 'world', opts: { worker?: boolean } = {}): Engine {
   const share = canShare() && opts.worker !== false;
   if (scene === 'world') {
     const { world, objects, info } = generateVale(seed, share);
-    const engine: Engine & { gen?: GenInfo } = new Engine(world);
+    const engine = new Engine(world);
     engine.setObjects(objects);
     engine.gen = info;
     // Open on the bridge (river, cottage and a waterfall nearby).

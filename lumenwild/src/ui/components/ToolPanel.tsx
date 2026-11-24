@@ -15,7 +15,7 @@ const COVERS: Array<[number, string]> = [
 ];
 
 const HINTS: Record<string, string> = {
-  select: 'Click an object to select it, drag to move it. Delete removes it, Esc deselects.',
+  select: 'Click an object to select it, drag to move it. Delete removes it, Esc deselects. Click water to make ripples.',
   ripple: 'Click or drag on water to make ripples.',
   eraser: 'Removes objects, plants, sources and drains under the brush.',
   terrain: 'Paint the ground material.',

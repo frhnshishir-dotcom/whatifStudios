@@ -195,6 +195,16 @@ export class WaterSim extends WaterView {
     });
   }
 
+  /** Replace the whole water state (load / new world): new depths (or none), no sources or drains, ledger reset. */
+  reset(depth: Float32Array | null): void {
+    for (const a of [this.depth, this.fL, this.fR, this.fU, this.fD, this.velX, this.velY, this.rippleA, this.rippleB, this.fall, this.source, this.drain]) a.fill(0);
+    this.fallTo.fill(-1);
+    if (depth && depth.length === this.n) this.depth.set(depth);
+    this.added = 0; this.removed = 0;
+    this.rebuildLists();
+    this.activateAll();
+  }
+
   clearWater(): void {
     this.removed += this.totalWater();
     for (const a of [this.depth, this.fL, this.fR, this.fU, this.fD, this.velX, this.velY, this.rippleA, this.rippleB, this.fall]) a.fill(0);

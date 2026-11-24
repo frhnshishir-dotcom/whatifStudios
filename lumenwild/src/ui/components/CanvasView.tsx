@@ -2,12 +2,15 @@ import { useEffect, useRef } from 'react';
 import { getEngine } from '../engineRef';
 import { useUI } from '../store';
 import { connectEditor } from '../editorBridge';
+import { WorldIO, setWorldIO } from '../persistence';
 
 /** Hosts the world canvas: attaches the engine, tracks size changes and wires engine callbacks into the UI store. */
 export function CanvasView() {
   const ref = useRef<HTMLCanvasElement>(null);
   const resolutionScale = useUI((s) => s.settings.resolutionScale);
   const heightScale = useUI((s) => s.settings.heightScale);
+  const lowPerf = useUI((s) => s.settings.lowPerf);
+  useEffect(() => { getEngine()?.setLowPerf(lowPerf); }, [lowPerf]);
 
   useEffect(() => {
     const engine = getEngine();
@@ -33,8 +36,11 @@ export function CanvasView() {
     const [hx, hy] = engine.home ?? [engine.world.w * 0.5, engine.world.h * 0.55];
     engine.focus(hx, hy);
     const unlink = connectEditor(engine);
+    const io = new WorldIO(engine);
+    setWorldIO(io);
+    void io.init();
     engine.start();
-    return () => { ro.disconnect(); unlink(); engine.stop(); };
+    return () => { ro.disconnect(); unlink(); io.dispose(); setWorldIO(null); engine.stop(); };
   }, []);
 
   useEffect(() => {

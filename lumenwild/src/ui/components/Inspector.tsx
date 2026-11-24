@@ -37,6 +37,9 @@ export function Inspector() {
           <span>Relief <em>{settings.heightScale.toFixed(2)}</em></span>
           <input type="range" min={0.2} max={1} step={0.05} value={settings.heightScale} onChange={(e) => setSettings({ heightScale: Number(e.target.value) })} />
         </label>
+        <label className="check" title="30 fps, fewer particles, 75% render resolution">
+          <input type="checkbox" checked={settings.lowPerf} onChange={(e) => setSettings({ lowPerf: e.target.checked, resolutionScale: e.target.checked ? 0.75 : 1 })} data-testid="low-perf" /> Low-performance mode
+        </label>
       </section>
     </aside>
   );

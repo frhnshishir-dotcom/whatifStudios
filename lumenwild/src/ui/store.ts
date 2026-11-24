@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { EngineStats, HoverInfo } from '../engine/Engine';
 import { DEFAULT_OPTIONS, type EditTool, type ToolOptions } from '../engine/edit/Editor';
 import type { WorldObject } from '../engine/objects/defs';
+import type { SlotMeta } from '../persist/storage';
 
 export type ToolId = EditTool;
 export interface HistoryState { canUndo: boolean; canRedo: boolean; undoLabel: string | null; redoLabel: string | null }
@@ -21,6 +22,10 @@ interface UIState {
   selected: WorldObject | null;
   history: HistoryState;
   toast: { text: string; id: number } | null;
+  dialog: 'worlds' | null;
+  slots: SlotMeta[];
+  currentSlot: string | null;
+  storageKind: 'indexeddb' | 'localstorage' | 'memory' | null;
   panelsHidden: boolean;
   paused: boolean;
   speed: number;
@@ -33,6 +38,7 @@ interface UIState {
   setSelected: (o: WorldObject | null) => void;
   setHistory: (h: HistoryState) => void;
   showToast: (text: string) => void;
+  setDialog: (d: UIState['dialog']) => void;
   togglePanels: () => void;
   setPaused: (p: boolean) => void;
   setSpeed: (s: number) => void;
@@ -52,6 +58,10 @@ export const useUI = create<UIState>()((set) => ({
   selected: null,
   history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null },
   toast: null,
+  dialog: null,
+  slots: [],
+  currentSlot: null,
+  storageKind: null,
   panelsHidden: false,
   paused: false,
   speed: 1,
@@ -68,6 +78,7 @@ export const useUI = create<UIState>()((set) => ({
   setSelected: (selected) => set({ selected }),
   setHistory: (history) => set({ history }),
   showToast: (text) => set((st) => ({ toast: { text, id: (st.toast?.id ?? 0) + 1 } })),
+  setDialog: (dialog) => set({ dialog }),
   togglePanels: () => set((s) => ({ panelsHidden: !s.panelsHidden })),
   setPaused: (paused) => set({ paused }),
   setSpeed: (speed) => set({ speed }),

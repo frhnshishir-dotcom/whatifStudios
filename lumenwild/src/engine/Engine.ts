@@ -14,6 +14,8 @@ import { Editor, type EditTool } from './edit/Editor';
 import { EditorOverlay } from './edit/EditorOverlay';
 import { Environment } from './env/Environment';
 import { Atmosphere } from './env/Atmosphere';
+import { generateWorld, prefillWater, type GenInfo } from './gen/world';
+import { buildSave, type SaveData, type LoadedWorld } from '../persist/format';
 
 export interface EngineStats {
   fps: number;
@@ -61,6 +63,11 @@ export class Engine {
   readonly sims: Simulation[] = [];
   /** Where the view opens (and the Home key returns to). */
   home: [number, number] | null = null;
+  /** Generator report for the current world (null after loading a save). */
+  gen: GenInfo | null = null;
+  /** Low-performance mode: 30 fps cap and fewer particles. */
+  lowPerf = false;
+  private lastRender = 0;
   water: WaterSystem | null = null;
   waterLayer: WaterLayer | null = null;
   readonly particles = new Particles(4000);
@@ -160,7 +167,8 @@ export class Engine {
 
   start(): void {
     const loop = (now: number) => {
-      this.frame(now);
+      // Low-performance mode renders every other display frame (about 30 fps).
+      if (!this.lowPerf || now - this.lastRender >= 30) { this.lastRender = now; this.frame(now); }
       this.raf = requestAnimationFrame(loop);
     };
     this.last = performance.now();
@@ -171,6 +179,78 @@ export class Engine {
     cancelAnimationFrame(this.raf);
     this.cleanup.forEach((f) => f());
     this.cleanup = [];
+  }
+
+  setLowPerf(on: boolean): void {
+    this.lowPerf = on;
+    this.atmosphere.density = on ? 0.45 : 1;
+  }
+
+  // ------------------------------------------------------------------ worlds: save, load, regenerate
+  /** Everything needed to restore this world exactly. */
+  snapshot(): SaveData {
+    const w = this.world;
+    return buildSave({
+      name: w.name, seed: w.seed, w: w.w, h: w.h,
+      elev: w.elev, mat: w.mat, cover: w.cover, coverVar: w.coverVar, moisture: w.moisture, magic: w.magic,
+      depth: this.water ? this.water.view.depth : new Float32Array(w.n),
+      objects: this.objects.toJSON(), sources: this.editor.sources, drains: this.editor.drains,
+      env: this.env.state(), camera: { x: this.cam.x, y: this.cam.y, zoom: this.cam.zoomIndex }, home: this.home,
+    });
+  }
+
+  /** Replace the world in place with a validated save. Returns problems (objects that could not be placed). */
+  applyWorld(L: LoadedWorld): string[] {
+    const w = this.world;
+    if (L.w !== w.w || L.h !== w.h) return [`World size ${L.w} x ${L.h} does not match ${w.w} x ${w.h}.`];
+    if (this.editor.active) this.editor.end();
+    w.elev.set(L.elev); w.mat.set(L.mat); w.cover.set(L.cover); w.coverVar.set(L.coverVar); w.moisture.set(L.moisture); w.magic.set(L.magic);
+    w.name = L.name; w.seed = L.seed;
+    const onChange = this.objects.onChange;
+    this.objects.onChange = null;
+    w.solid.fill(0);
+    const problems = this.objects.load(L.objects);
+    this.objects.onChange = onChange;
+    w.markAllDirty();
+    this.water?.reset(L.depth);
+    this.editor.bind(w, this.objects, this.water);
+    for (const [i, r] of L.sources) this.editor.setSourceDirect('source', i % w.w, Math.floor(i / w.w), r);
+    for (const [i, r] of L.drains) this.editor.setSourceDirect('drain', i % w.w, Math.floor(i / w.w), r);
+    this.env.set(L.env); this.env.settle();
+    this.cam.zoomIndex = L.camera.zoom; this.cam.x = L.camera.x; this.cam.y = L.camera.y;
+    this.cam.clampTo(w.w, w.h);
+    this.home = L.home;
+    this.gen = null;
+    this.particles.n = 0;
+    this.renderer?.blitter.invalidate();
+    if (this.renderer) { const r = this.renderer.canvas.getBoundingClientRect(); this.resize(r.width, r.height, window.devicePixelRatio || 1); }
+    return problems;
+  }
+
+  /** Generate a new world from a seed in place (same size), with flowing water. */
+  regenerate(seed: number, riverRate = 5): GenInfo {
+    const w = this.world;
+    if (this.editor.active) this.editor.end();
+    const onChange = this.objects.onChange;
+    this.objects.onChange = null;
+    w.seed = seed;
+    w.name = `Vale ${seed}`;
+    const info = generateWorld(w, this.objects, seed);
+    this.objects.onChange = onChange;
+    const depth = new Float32Array(w.n);
+    prefillWater(w, depth, info);
+    this.water?.reset(depth);
+    this.editor.bind(w, this.objects, this.water);
+    this.editor.setSourceDirect('source', info.source[0], info.source[1], riverRate);
+    this.water?.warmup(600);
+    this.gen = info;
+    const br = info.features.find((f) => f.kind === 'bridge');
+    this.home = br ? [br.x, br.y + 6] : null;
+    this.particles.n = 0;
+    this.renderer?.blitter.invalidate();
+    const [hx, hy] = this.home ?? [w.w / 2, w.h / 2];
+    this.focus(hx, hy);
+    return info;
   }
 
   /** Connect the water simulation: rendering layer + stepping (main-thread mode) or worker control. */

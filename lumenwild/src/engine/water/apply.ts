@@ -10,6 +10,7 @@ export function applyWaterCmd(sim: WaterSim, c: WaterCmd, dt: number): void {
     case 'terrain': sim.terrainChanged(c.x0, c.y0, c.x1, c.y1); break;
     case 'warmup': for (let k = 0; k < c.steps; k++) sim.step(dt); break;
     case 'clear': sim.clearWater(); break;
+    case 'reset': sim.reset(c.depth); break;
     case 'params': Object.assign(sim.params, c.params); break;
   }
 }

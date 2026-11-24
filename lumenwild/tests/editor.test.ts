@@ -215,6 +215,19 @@ describe('editor: objects, selection and deletion', () => {
 });
 
 describe('editor: water tools', () => {
+  it('clicking open water with the select tool makes ripples (and selects nothing)', () => {
+    const { ed, water, at } = setup(0);
+    water.addWater(30, 30, 6, 6 * 6 * Math.PI * 0.8);
+    for (let k = 0; k < 60; k++) water.step(1 / 60);
+    ed.begin('select', at(30, 30)); ed.end();
+    expect(ed.selectedId).toBe(0);
+    for (let k = 0; k < 10; k++) water.step(1 / 60);
+    let energy = 0;
+    for (let i = 0; i < 64 * 64; i++) energy += Math.abs(water.view.ripple[i]);
+    expect(energy).toBeGreaterThan(0.5);
+    expect(ed.history.size).toBe(0);
+  });
+
   it('source and drain toggle on click and are undoable', () => {
     const { ed, water, at } = setup();
     ed.options.rate = 4;

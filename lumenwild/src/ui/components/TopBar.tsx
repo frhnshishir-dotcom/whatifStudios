@@ -1,6 +1,7 @@
 import { Icon } from './Icon';
 import { useUI } from '../store';
 import { getEngine } from '../engineRef';
+import { getWorldIO } from '../persistence';
 
 export function TopBar() {
   const history = useUI((s) => s.history);
@@ -13,11 +14,13 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="brand"><span className="brand-mark"><Icon name="logo" size={18} /></span><span className="brand-name">Lumenwild</span></div>
-      <div className="world-title" title="World name">{worldName}</div>
+      <button className="world-title" title="Worlds: save, load, new, import, export" onClick={() => useUI.getState().setDialog('worlds')} data-testid="open-worlds">{worldName}</button>
       <div className={`save-state ${saveState}`} data-testid="save-state">{saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving…' : 'Unsaved changes'}</div>
       <div className="spacer" />
       <button className="icon-btn" onClick={onUndo} disabled={!history.canUndo} title={`Undo${history.undoLabel ? `: ${history.undoLabel}` : ''} (Ctrl+Z)`} aria-label="Undo" data-testid="undo"><Icon name="undo" /></button>
       <button className="icon-btn" onClick={onRedo} disabled={!history.canRedo} title={`Redo${history.redoLabel ? `: ${history.redoLabel}` : ''} (Ctrl+Y)`} aria-label="Redo" data-testid="redo"><Icon name="redo" /></button>
+      <button className="icon-btn" onClick={() => { void getWorldIO()?.quickSave(); }} title="Save (Ctrl+S)" aria-label="Save" data-testid="quick-save"><Icon name="save" /></button>
+      <button className="icon-btn" onClick={() => useUI.getState().setDialog('worlds')} title="Worlds: save slots, new world, import / export" aria-label="Worlds"><Icon name="folder" /></button>
       <button className="icon-btn" onClick={togglePanels} title="Hide panels (H)" aria-label="Hide panels"><Icon name="expand" /></button>
     </header>
   );

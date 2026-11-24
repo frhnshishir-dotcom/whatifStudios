@@ -8,6 +8,8 @@ import { useUI } from './store';
 import { getEngine } from './engineRef';
 import { editorShortcut } from './editorBridge';
 import { TOOL_KEYS } from './components/Toolbar';
+import { WorldDialog } from './components/WorldDialog';
+import { getWorldIO } from './persistence';
 
 function Toast() {
   const toast = useUI((s) => s.toast);
@@ -29,7 +31,9 @@ export function App() {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       const t = ev.target as HTMLElement;
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); void getWorldIO()?.quickSave(); return; }
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return;
+      if (useUI.getState().dialog) return;
       const engine = getEngine();
       if (engine && editorShortcut(ev, engine)) { ev.preventDefault(); return; }
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -52,6 +56,7 @@ export function App() {
       <main className="stage"><CanvasView /><Toast /></main>
       {!panelsHidden && <Inspector />}
       {!panelsHidden && <BottomBar />}
+      <WorldDialog />
       {panelsHidden && <button className="show-panels" onClick={togglePanels} title="Show panels (H)">Show panels</button>}
     </div>
   );

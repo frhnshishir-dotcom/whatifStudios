@@ -27,6 +27,8 @@ Needs Node 20.19+ or 22.12+.
 | Home | Return to the opening view (the bridge) |
 | Space (tap) | Pause / resume simulation |
 | Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z) | Undo, redo (also the top-bar buttons) |
+| Ctrl+S | Save (to the current slot, or a new one) |
+| Click the world name (top bar) | Worlds dialog: save slots, new world from a seed, export / import JSON |
 | Delete / Backspace, Esc | Delete the selected object, deselect |
 | [ and ] | Brush size |
 | H, F | Hide / show all panels, fullscreen |
@@ -37,7 +39,7 @@ Tool hotkeys: V select, R ripple, E eraser, 1 terrain brush, 2 raise, 3 lower, 4
 ### Editor tools
 | Tool | What it does |
 |---|---|
-| Select | Click an object to select it (inspector: type, size, moss, glow, wheel side, deck height...), drag to move it |
+| Select | Click open water to make ripples. Click an object to select it (inspector: type, size, moss, glow, wheel side, deck height...), drag to move it |
 | Ripple | Click or drag on water |
 | Eraser | Removes objects, plants, springs and drains under the brush |
 | Terrain brush | Paints ground material (grass, meadow, forest floor, moss, dirt, stone path, sand, mud, stone, glowing moss) |
@@ -128,6 +130,40 @@ e2e/                   Playwright browser tests (run against `vite preview`)
 - Weather presets: clear, breezy, rain, storm, fog; or set rain, fog, wind and wind direction directly.
   Changes fade in over a few seconds.
 
+### Saving and loading
+- **Slots:** worlds are saved in the browser with IndexedDB (falling back to localStorage, then memory), each with a
+  name, seed, date, size and a small top-down thumbnail. Ctrl+S saves to the current slot (or a new one); the Worlds
+  dialog also saves to a new slot, loads, deletes, renames, and keeps an **autosave** slot written every 90 s while
+  there are unsaved changes. Loading over unsaved changes and deleting ask for a second click.
+- **What is saved:** the full edited state, not just the seed: elevation, materials, plants, moisture, glow, water
+  depths, every object with its properties, springs and drains, time of day and weather, camera and home view.
+  The seed is kept, so the original world can always be regenerated (New world).
+- **JSON export / import:** Export downloads `<name>-seed<N>.lumenwild.json` (about 1.3 MB). Import validates
+  before touching anything: format and version, world size, every grid's length, finite elevations within range,
+  known materials and cover, water depths (invalid ones reset with a warning), object shapes (unknown kinds and
+  out-of-bounds objects are skipped, unknown variants replaced, with warnings), springs/drains, weather values
+  (clamped). A file that fails shows every error and leaves the current world untouched.
+- **New world:** any seed (or the dice for a random one) regenerates the vale in place, with flowing water.
+- Format details: `src/persist/format.ts` (version 1; grids as base64 typed arrays).
+
+### Performance
+CPU-first: no WebGL, one `putImageData` per frame, typed arrays everywhere, no per-frame allocation in the hot
+paths, the water simulation in a Web Worker on shared memory, only active 16 x 16 water chunks simulated, terrain
+shading cached per chunk, and unchanged cells skipped by the blitter. Measured in headless Chromium with a software
+rasteriser on 4 CPU cores (frame work = compose + blit + put; the water steps in parallel in the worker):
+
+| Scenario | Grid | fps | compose | blit | put | water step |
+|---|---|---|---|---|---|---|
+| Default view, day | 126 x 60 | 60 | 1.6 ms | 0.25 ms | 0.6 ms | 1.1 ms |
+| Night, storm and fog | 126 x 60 | 60 | 2.5 ms | 0.6 ms | 0.5 ms | 1.0 ms |
+| Zoomed out (5 px cells), day | 225 x 103 | 60 | 4.2 ms | 0.5 ms | 0.6 ms | 1.0 ms |
+| Zoomed out, night storm (2,000 particles) | 225 x 103 | 60 | 6.5 ms | 0.7 ms | 0.4 ms | 1.0 ms |
+| Low-performance mode, same | 225 x 103 | 30 | 6.4 ms | 0.9 ms | 0.6 ms | 1.2 ms |
+
+**Low-performance mode** (View panel) caps rendering at 30 fps, lowers the render resolution to 75 % and spawns
+fewer weather particles, for weak laptops. Without cross-origin isolation (or with `?worker=0`) the water runs on
+the main thread with the same code.
+
 ### World generation (`?seed=N`, default 7)
 Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random`), in `gen/world.ts`:
 1. **River:** a Catmull-Rom spline meanders from the northern highlands to the southern edge. A chamfer pass gives
@@ -161,7 +197,7 @@ Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random
 | 3. Generation, vegetation, rocks, bridges, structures | done (see below) |
 | 4. Sandbox tools, selection, undo/redo | done (see below) |
 | 5. Weather, animation, lighting, day/night | done (see below) |
-| 6. Save/load, optimisation, tests, polish | next |
+| 6. Save/load, optimisation, tests, polish | done (see below) |
 
 ### Milestone 1: verified
 - 13 unit tests (rng, noise, colour, clock, glyph registry and procedural glyph coverage, projection/occlusion/picking,
@@ -239,3 +275,47 @@ Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random
   clear daylight), blit 0.2-0.6 ms (rain and swaying grass redraw more cells).
 - Known limitations: rain does not add water volume to the simulation (it is visual plus ripples); fog is a screen-space
   veil, not a volumetric effect; leaves only float on water deeper than 5 cm.
+
+### Milestone 6: verified
+- 7 new unit tests: base64 for every length; **a generated world with edits (raised terrain, a rock, a spring,
+  weather, a new name) survives snapshot -> JSON -> validation -> load into a fresh engine exactly** (elevation,
+  materials, plants, solid mask, objects, springs, water depths, weather, seed) and keeps simulating; invalid files
+  (not JSON, not a world, newer version, bad size, truncated grid, NaN elevation, missing objects) are rejected with
+  reasons, while bad objects, springs and weather values become warnings; regenerating a seed is deterministic;
+  IndexedDB slots save, list (autosave first, then newest), overwrite, load and delete; memory fallback.
+  Plus a select-tool test: clicking open water ripples and selects nothing.
+- 5 new browser tests: Ctrl+S saves, an edit marks the world unsaved, loading the slot (two-click confirm) restores
+  it, and the slot survives a page reload; rename, save as new slot, delete with confirmation; export downloads a valid
+  world file, importing it restores the world after generating another one, and a bad file is explained without
+  changing the world; a new world from seed 42 has its landmarks and flowing water; low-performance mode runs at
+  about 30 fps with 75 % resolution.
+- **Totals: 72 unit tests and 28 browser tests, all passing**; `npm run build` is clean; the dev server works with
+  the worker. Inspected the Worlds dialog with two slots and thumbnails.
+
+## Acceptance criteria
+
+| # | Criterion | Where it is shown |
+|---|---|---|
+| 1 | A beautiful ASCII landscape at launch | Generated vale with river, falls, forest, cottage, mill, glade (M3 screenshots, e2e `m3-world`) |
+| 2 | Real text characters | Every cell is a glyph from `render/glyphs.ts` drawn via `fillText`-baked masks (or procedural block/line glyphs) |
+| 3 | Water flows through channels | Virtual-pipes simulation; unit test "water flows through the generated river and over all three falls" |
+| 4 | Waterfalls cascade | Animated fall faces with splashes and mist; e2e "the large waterfall pours" |
+| 5 | Clicking a pond makes expanding ripples | Select or Ripple tool on water; e2e "clicking a pond with the ripple tool" |
+| 6 | Ripples interfere | Linear wave equation; unit test "linear interference of two sources" |
+| 7 | Water flows around obstacles | Solid mask from rocks and buildings; unit test "flow around an obstacle" |
+| 8 | Raise and lower terrain | Raise/Lower tools; unit and e2e tests with undo/redo |
+| 9 | Build waterways | Channel and Waterfall tools, springs and drains; unit tests carry water end to end |
+| 10 | Place trees, flowers, rocks, structures | Tree, Grass & flowers, Rock, Mushroom, Bridge, Cottage, Mill tools; e2e placement tests |
+| 11 | Continuous animation | Water, falls, wind sway, leaves, fireflies, glow, mill wheel, day-night, weather |
+| 12 | Pan and zoom | Middle/right/Space drag, wheel at cursor, arrows, Home; e2e `m1-render-camera` |
+| 13 | Save and restore | IndexedDB slots, autosave, JSON export/import with validation; e2e `m6-persistence` |
+| 14 | No backend | Static Vite build; everything runs in the browser |
+| 15 | Reasonable performance on integrated graphics | CPU renderer, 60 fps measured up to 225 x 103 characters, low-performance mode |
+
+## Known limitations
+- The world size is fixed at 256 x 256 cells; imports of other sizes are refused with a clear message.
+- Rain does not add water volume (it is visual, with ripples and splashes); fog is a screen-space veil.
+- Moving a building does not re-level the ground under it; water volume is not part of undo (springs and drains are).
+- Splash particles are visual only; very thin sheet flow (under about 1 cm) is not drawn.
+- Measurements above come from headless Chromium with a software rasteriser; real laptops will differ (the renderer
+  uses the CPU and `putImageData`, so integrated graphics are not a bottleneck).

@@ -50,6 +50,8 @@ export class WaterSystem {
   terrainChanged(x0: number, y0: number, x1: number, y1: number) { this.send({ op: 'terrain', x0, y0, x1, y1 }); }
   warmup(steps: number) { this.send({ op: 'warmup', steps }); }
   clear() { this.send({ op: 'clear' }); }
+  /** Replace all water (and remove every source and drain). */
+  reset(depth: Float32Array | null) { this.send({ op: 'reset', depth: depth ? depth.slice() : null }); }
 
   setRunning(running: boolean, speed: number): void {
     this.worker?.postMessage({ type: 'run', running, speed });

@@ -144,6 +144,7 @@ export class Editor {
         const o = this.objects.at(i);
         this.select(o ? o.id : 0);
         if (o) s.move = { id: o.id, ox: o.x, oy: o.y, offX: x - o.x, offY: y - o.y, moved: false };
+        else this.ripple(x, y); // clicking open water with the default tool makes ripples
         break;
       }
       case 'ripple': this.ripple(x, y); break;
