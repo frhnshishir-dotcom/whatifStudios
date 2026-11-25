@@ -37,6 +37,8 @@ export interface Blueprint {
   /** Samples per side and map units per sample. */
   N: number; unit: number;
   elev: Float32Array; region: Int8Array; water: Uint8Array; slope: Float32Array;
+  /** Elevation after shaping and lakes, before river carving (the fine terrain's macro surface). */
+  elevPre: Float32Array;
   rivers: RiverProfile[]; lakeLevels: Record<string, number>; roads: RoutedRoad[]; corridors: Corridor[];
   landing: Record<string, MapPt[]>; settlements: SettlementCheck[];
   regionStats: Record<string, { p10: number; p50: number; p90: number; share: number }>;
@@ -114,13 +116,47 @@ function blur(N: number, f: Float32Array, R: number): Float32Array {
   return a;
 }
 
+/** Noise salt for everything derived from the world seed (shared by the blueprint and the fine terrain). */
+export const blueprintSalt = (data: WorldData) => seedOf('blueprint', data.world.seed) % 100000;
+
+/**
+ * Region membership at a map point: soft weights per region (normalised, written to `w`) and the dominant region.
+ * Warped nearest-anchor distances, blended over about 100 map units. Used at 200 m (blueprint) and 1 m (terrain).
+ */
+export function regionField(data: WorldData) {
+  const salt = blueprintSalt(data), regions = data.regions, dr = new Float64Array(regions.length);
+  return (x: number, y: number, w: Float64Array): number => {
+    const wx = x + (fbm(x * 0.005, y * 0.005, 3, salt + 2) - 0.5) * 90 + (fbm(x * 0.02, y * 0.02, 2, salt + 4) - 0.5) * 24;
+    const wy = y + (fbm(x * 0.005, y * 0.005, 3, salt + 3) - 0.5) * 90 + (fbm(x * 0.02, y * 0.02, 2, salt + 5) - 0.5) * 24;
+    let best = 0, dmin = Infinity;
+    for (let ri = 0; ri < regions.length; ri++) {
+      let d = Infinity;
+      for (const a of regions[ri].anchors) d = Math.min(d, Math.hypot(wx - a[0], wy - a[1]));
+      dr[ri] = d;
+      if (d < dmin) { dmin = d; best = ri; }
+    }
+    let ws = 0;
+    for (let ri = 0; ri < regions.length; ri++) { const dd = dr[ri] - dmin; w[ri] = dd > 170 ? 0 : Math.exp(-dd / 40); ws += w[ri]; }
+    for (let ri = 0; ri < regions.length; ri++) w[ri] /= ws;
+    return best;
+  };
+}
+
+/** A lake's shoreline radius (map units) in a direction: the same ragged outline at every resolution. */
+export function lakeRadius(data: WorldData, l: { radius: number }, angle: number): number {
+  return l.radius * (0.85 + 0.3 * fbm(Math.cos(angle) * 1.5 + 3, Math.sin(angle) * 1.5 + 3, 3, blueprintSalt(data) + l.radius));
+}
+
+/** Marsh pools: the same pattern at every resolution (map units). */
+export function marshPool(data: WorldData, x: number, y: number): number { return fbm(x * 0.03, y * 0.03, 3, blueprintSalt(data) + 30); }
+
 export function buildBlueprint(data: WorldData): Blueprint {
   const ms: Record<string, number> = {};
   let t0 = performance.now();
   const lap = (k: string) => { const t = performance.now(); ms[k] = Math.round(t - t0); t0 = t; };
   const coords = new WorldCoords(data.coordinates);
   const N = coords.blueprintN, U = data.coordinates.blueprintSampleUnits, mpu = coords.metresPerUnit;
-  const salt = seedOf('blueprint', data.world.seed) % 100000;
+  const salt = blueprintSalt(data);
   const mx = (i: number) => (i + 0.5) * U;
 
   // 1. Coastline: smoothed, ragged outline; land by scanline fill.
@@ -153,26 +189,13 @@ export function buildBlueprint(data: WorldData): Blueprint {
   const region = new Int8Array(N * N).fill(-1);
   const elev = new Float32Array(N * N);
   const plane = (r: Region, x: number, y: number) => r.base.elevation + r.base.gradient[0] * (x - r.base.at[0]) + r.base.gradient[1] * (y - r.base.at[1]);
-  const dr = new Float64Array(regions.length);
+  const field = regionField(data), wts = new Float64Array(regions.length);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const k = j * N + i, x = mx(i), y = mx(j);
-    const wx = x + (fbm(x * 0.005, y * 0.005, 3, salt + 2) - 0.5) * 90 + (fbm(x * 0.02, y * 0.02, 2, salt + 4) - 0.5) * 24;
-    const wy = y + (fbm(x * 0.005, y * 0.005, 3, salt + 3) - 0.5) * 90 + (fbm(x * 0.02, y * 0.02, 2, salt + 5) - 0.5) * 24;
-    let best = 0, dmin = Infinity;
-    regions.forEach((r, ri) => {
-      let d = Infinity;
-      for (const a of r.anchors) d = Math.min(d, Math.hypot(wx - a[0], wy - a[1]));
-      dr[ri] = d;
-      if (d < dmin) { dmin = d; best = ri; }
-    });
-    let ws = 0, e = 0;
-    regions.forEach((r, ri) => {
-      const dd = dr[ri] - dmin;
-      if (dd > 170) return;
-      const w = Math.exp(-dd / 40);
-      ws += w; e += w * plane(r, x, y);
-    });
-    elev[k] = e / ws;
+    const best = field(x, y, wts);
+    let e = 0;
+    for (let ri = 0; ri < regions.length; ri++) if (wts[ri] > 0) e += wts[ri] * plane(regions[ri], x, y);
+    elev[k] = e;
     if (land[k]) region[k] = best;
   }
   lap('regions');
@@ -217,7 +240,7 @@ export function buildBlueprint(data: WorldData): Blueprint {
   const marshIdx = regions.findIndex((r) => r.id === 'whispering-marshes');
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const k = j * N + i;
-    if (region[k] === marshIdx && elev[k] < 16 && fbm(mx(i) * 0.03, mx(j) * 0.03, 3, salt + 30) > 0.56) { water[k] = W_MARSH; elev[k] = Math.min(elev[k], 3); }
+    if (region[k] === marshIdx && elev[k] < 16 && marshPool(data, mx(i), mx(j)) > 0.56) { water[k] = W_MARSH; elev[k] = Math.min(elev[k], 3); }
   }
   lap('shaping');
 
@@ -239,7 +262,7 @@ export function buildBlueprint(data: WorldData): Blueprint {
     for (let j = Math.max(0, Math.floor((l.at[1] - R) / U)); j <= Math.min(N - 1, Math.ceil((l.at[1] + R) / U)); j++) {
       for (let i = Math.max(0, Math.floor((l.at[0] - R) / U)); i <= Math.min(N - 1, Math.ceil((l.at[0] + R) / U)); i++) {
         const x = mx(i), y = mx(j), k = j * N + i, g = Math.atan2(y - l.at[1], x - l.at[0]);
-        const re = l.radius * (0.85 + 0.3 * fbm(Math.cos(g) * 1.5 + 3, Math.sin(g) * 1.5 + 3, 3, salt + l.radius));
+        const re = lakeRadius(data, l, g);
         const d = Math.hypot(x - l.at[0], y - l.at[1]);
         if (d <= re) { elev[k] = Math.min(elev[k], level - 2 - 14 * (1 - (d / re) ** 2)); water[k] = W_LAKE; }
         else if (d <= re + 3 && elev[k] < level + 1) elev[k] = level + 1;
@@ -247,6 +270,9 @@ export function buildBlueprint(data: WorldData): Blueprint {
     }
   }
   lap('lakes');
+
+  // The fine terrain starts from the shaped ground before river carving (it carves rivers at their true width).
+  const elevPre = elev.slice();
 
   // 6. Rivers: the surface never rises downstream; authored falls step it down; channels and valleys are carved.
   const rivers: RiverProfile[] = [];
@@ -505,7 +531,7 @@ export function buildBlueprint(data: WorldData): Blueprint {
     regionStats[r.id] = { p10: q(0.1), p50: q(0.5), p90: q(0.9), share: Math.round((v.length / landN) * 1000) / 10 };
   });
 
-  const bp: Blueprint = { data, coords, N, unit: U, elev, region, water, slope, rivers, lakeLevels, roads, corridors, landing, settlements, regionStats, checks: [], ms };
+  const bp: Blueprint = { data, coords, N, unit: U, elev, elevPre, region, water, slope, rivers, lakeLevels, roads, corridors, landing, settlements, regionStats, checks: [], ms };
   bp.checks = runChecks(bp);
   lap('checks');
   return bp;
