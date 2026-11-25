@@ -82,17 +82,19 @@ full detail together.
 
 | What | Measured |
 |---|---|
-| Region generation, 256 x 256 m, by biome (Node, average / slowest of 9) | Elderwood 48 / 62 ms · Golden Plains 60 / 67 · Dragon Peaks 80 / 134 · Heartlands 83 / 131 · Hollow Lands 87 / 98 · Whispering Marshes 134 / 176 |
-| Region generation in the browser worker (slowest) | 82 ms |
-| Window move (3 regions in; terrain, shading cache, objects, water, camera), browser with worker | slowest 27 ms (main thread) |
+| Region generation, 256 x 256 m, by biome core (Node, average / slowest of 9) | Elderwood 74 / 81 ms · Golden Plains 79 / 85 · Heartlands 95 / 124 · Dragon Peaks 110 / 164 · Hollow Lands 110 / 121 · Whispering Marshes 173 / 200 |
+| Region generation at borders (patch transitions; average / slowest of 9) | Heartlands–Plains 124 / 158 ms · Elderwood–Heartlands 161 / 235 · Peaks–Heartlands 169 / 216 · Heartlands–Marshes 201 / 221 |
+| Region generation in the browser worker (slowest) | 130-153 ms |
+| Window move (3 regions in; terrain, shading cache, objects, water, camera), browser with worker | slowest 23-25 ms (main thread) |
 | Window move in Node without a worker (generation on the same thread) | slowest 46-57 ms over a 6 km journey (28 moves) |
 | Boot into continent mode (blueprint, 9 regions, engine), browser | 1.5-2.4 s |
 | Frame in the browser at 16 locations (6 biomes, 10 borders) | 60 fps; compose 1.0-1.5 ms; present 0.05-0.2 ms |
 | Frame while travelling at the 300 m/s test speed | 59 fps; compose 8.8 ms (new strips are shaded within a 4 ms budget per frame) |
 
-Budget targets from the streaming design: generation under 300 ms per region (met with margin), a move under 50 ms on
-the main thread (met in the browser). A dragon at 30 m/s needs three regions every 8.5 s; generation takes about
-0.4 s for three.
+Budget targets from the streaming design: generation under 300 ms per region (met), a move under 50 ms on the main
+thread (met in the browser). A dragon at 30 m/s needs three regions every 8.5 s; generation takes about 0.6 s for
+three. The natural biome transitions (section 6) added 20-70 ms per region. To keep moves quick, the worker now takes
+one region at a time from a queue, and a region a move is waiting for jumps the queue.
 
 ## 5. Water persistence and flow between regions
 
@@ -154,13 +156,54 @@ Tests: `tests/world-biomes.test.ts` (8) compares every pair of regions by ground
 0-4 scale) and by ground colour, and checks each region's features. `e2e/m14-biomes.spec.ts` loads each region in
 the browser and checks that the rendered colours differ (closest pair: marsh and Hollow Lands, 17).
 
-**Transitions:** all 10 adjacent pairs were captured at their borders. Each border mixes the two biomes over 500 m or
-more (tested: Elderwood–Heartlands). Relief, snow, terraces, pools and tree types fade with the region weights, so no
-border is a line.
+**Transitions** (natural patches since 2026-11-25; comparisons in `transitions-close.jpg` and
+`transitions-distant.jpg`, before on the left and after on the right, for Elderwood/Heartlands,
+Heartlands/Golden Plains, Dragon Peaks/Heartlands and Heartlands/Whispering Marshes).
 
-What the transitions do **not** have yet: each cell picks its biome by weighted chance, so the mix looks speckled rather
-than in natural patches. There are no per-biome weather, sounds or wildlife, no seasonal snowline, and the Hollow Lands
-glow only near the two fissures.
+Each border mixes the two biomes over 500 m or more. Before, every cell picked its biome by an independent random draw,
+so borders looked speckled. Now (`src/world/ecotone.ts`, used once per cell at generation, never per frame):
+
+- **Patches.** The share of each biome at a spot comes from the blueprint, and a smooth, domain-warped noise picks
+  within those shares. Neighbouring cells agree, so the border breaks into irregular patches tens of metres across.
+  A biome's patches thin out as its share falls.
+- **Ecology.** Shares are tilted by elevation, slope (of the smooth ground over 8 m) and wetness (near rivers, lakes,
+  the marsh, the coast and valley floors):
+  - forest spreads along damp ground
+  - marsh spreads into wet flats
+  - plains spread onto dry flats
+  - peaks and the Hollow Lands spread up steep ground
+
+  Where a biome's blueprint weight is below 8 %, it takes no part, so cores stay pure and distant regions send no
+  islands.
+- **Ground colour.** Each cell leans toward the neighbouring biome's ground colour, by that biome's share. At a patch
+  edge it leans further, half-way over a few metres, so patches have soft rims. The renderer applies this only in
+  continent mode, and only while the cell keeps its generated material, so edits and the Valley are unaffected.
+- **Vegetation.** Ground cover comes in clumps of a few metres instead of single cells. Tree density is set mostly by
+  the patch (forest patches are denser), plus a share-weighted blend. Groves and clearings of about 140 m and a coarser
+  species patch let stands of one biome's trees reach into the next.
+
+Measured in 768 x 768 m windows (`tests/world-transitions.test.ts`, 9 tests). "Before" is the previous commit
+measured the same way on Elderwood–Heartlands; "after" covers all four borders:
+
+| Measure | Before | After |
+|---|---|---|
+| Land cells that differ from all four neighbours | 6.6 % | 0.001 % |
+| Alternating (checkerboard) 2 x 2 blocks | 11.8 % | 0.001 % |
+| Cells in specks or islands under 25 m² | 41 % | 0.03-0.07 % |
+| Mean run between biome changes along a row | 2 m | 47-65 m |
+| Ground-colour jump where the biome changes (palette mid tones) | 44.7, at 1.1 million edges | 4.8, at 42,000 edges |
+
+Also tested:
+- Determinism: a fresh generator gives identical biomes, ground, cover, blend and trees.
+- Patches meet across region edges like any other line.
+- The second biome's share changes by at most 22 points between neighbouring 64 m bands.
+- Peaks patches are 1.35 times as common on steep ground as on flat ground.
+- Forest patches hold 1.5 times the trees per area of the meadow beside them, and each biome's trees appear on the
+  other's ground (363 pines and willows on Heartlands ground, 363 blossoms on Elderwood ground).
+
+Still missing: per-biome weather, sounds and wildlife; a seasonal snowline. The Hollow Lands glow only near the two
+fissures. Where three regions are close (Peaks, Heartlands and Hollow Lands near 560,296), patches of the third appear
+in proportion to its share.
 
 ## 7. Current limitations of continent mode
 
@@ -192,7 +235,9 @@ glow only near the two fissures.
   names the new materials when the cursor is over them.
 - **The shared engine** (renderer, shading, objects, water, editor) serves both modes. Continent mode adds the
   streaming hook, shifting of the shading cache, objects and water, and a 768 m world.
-- Tests: **157 unit** (145 before, plus 8 biome, 3 water-sleep and 1 water-through-move) and **60 browser** (59
+- **Biome blending in the renderer** is continent-only: the shader reads `World.blend`, which the Valley never
+  allocates, so the Valley's shading code path and its golden images are unchanged.
+- Tests: **167 unit** (145 before, plus 8 biome, 3 water-sleep, 2 streaming and 9 transition) and **60 browser** (59
   before, plus the biome test); all pass.
 
 ## Next: Phase 3 readiness
@@ -202,4 +247,4 @@ Ready: the terrain, biomes, water, streaming and routes that villages, bridges a
 Needed from you before Phase 3:
 - Inspector → Benchmark on the laptop, plus the continent's frame rate there (top bar → Continent; also try
   `?scene=continent&at=740,790` for the marsh and `&at=495,520` for the Lumen).
-- Whether the speckled biome mixing at borders is acceptable, or should become natural patches.
+- A look at the new border comparisons (`transitions-close.jpg`, `transitions-distant.jpg`).

@@ -108,4 +108,20 @@ describe('region streaming', { timeout: 120_000 }, () => {
     expect(flow1 / flow0).toBeGreaterThan(0.7);
     expect(flow1 / flow0).toBeLessThan(1.4);
   });
+
+  it('the worker gets one region at a time, and a region a move is waiting for jumps the queue', () => {
+    const posted: Array<[number, number]> = [];
+    const fake = { onmessage: null as ((e: MessageEvent) => void) | null, postMessage(m: { rx: number; ry: number }) { posted.push([m.rx, m.ry]); }, terminate() {} };
+    const cache = new RegionCache(ct, { worker: fake as unknown as Worker });
+    for (let k = 0; k < 5; k++) cache.request(100 + k, 100);
+    cache.request(103, 100, true); // already queued: moves to the front
+    cache.request(200, 200, true); // new and urgent: in front of that
+    expect(posted).toEqual([[100, 100]]);
+    expect(cache.queued).toBe(5);
+    const reply = (rx: number, ry: number) => fake.onmessage!({ data: { region: ct.generateRegion(rx, ry) } } as MessageEvent);
+    reply(100, 100);
+    reply(200, 200);
+    expect(posted).toEqual([[100, 100], [200, 200], [103, 100]]);
+    expect(cache.has(100, 100) && cache.has(200, 200)).toBe(true);
+  });
 });

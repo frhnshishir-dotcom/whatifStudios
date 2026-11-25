@@ -122,6 +122,7 @@ export class TerrainShader {
   heightScale = 0.75;
   private c: RGB = [0, 0, 0];
   private c2: RGB = [0, 0, 0];
+  private c3: RGB = [0, 0, 0];
 
   constructor(world: World) {
     this.world = world;
@@ -190,6 +191,10 @@ export class TerrainShader {
 
         // Land colour, blended with differing neighbours (jittered weights -> organic borders).
         L.bg.sampleInto(c, lt);
+        // Continent biome borders: a cell leans toward the neighbouring biome's ground colour (only while it keeps
+        // the material it was generated with); neighbours below are read the same way. The Valley has no blend data.
+        const blend = w.blend;
+        if (blend) this.lean(blend[i], m, lt, c);
         let r = c[0], g = c[1], b = c[2], wsum = 1;
         let other = -1, otherCount = 0;
         for (let k = 0; k < 8; k++) {
@@ -201,6 +206,7 @@ export class TerrainShader {
           const crisp = m === Mat.Path || mj === Mat.Path ? 0.6 : rockyMats.has(m) || rockyMats.has(mj) ? 0 : 1;
           const wt = NB[k][2] * (0.5 + hash2(x * 3 + NB[k][0], y * 3 + NB[k][1], 5)) * crisp;
           (MAT_LOOK[mj] ?? L).bg.sampleInto(c2, lt);
+          if (blend) this.lean(blend[j], mj, lt, c2);
           r += c2[0] * wt; g += c2[1] * wt; b += c2[2] * wt; wsum += wt;
           otherCount++;
           if (hash2(x, y, 40 + k) < 1 / otherCount) other = j;
@@ -254,6 +260,16 @@ export class TerrainShader {
         this.topFg[i] = pack(r + (tr - r) * kk, g + (tg - g) * kk, b + (tb - b) * kk);
       }
     }
+  }
+
+  /** Mix colour `c` (material m at light lt) toward the blend's material, if the blend belongs to material m. */
+  private lean(bl: number, m: number, lt: number, c: RGB): void {
+    if (!(bl & 255) || bl >>> 16 !== m) return;
+    const L2 = MAT_LOOK[(bl >>> 8) & 255];
+    if (!L2) return;
+    const c3 = this.c3, a = (bl & 255) / 255;
+    L2.bg.sampleInto(c3, lt);
+    c[0] += (c3[0] - c[0]) * a; c[1] += (c3[1] - c[1]) * a; c[2] += (c3[2] - c[2]) * a;
   }
 
   /**

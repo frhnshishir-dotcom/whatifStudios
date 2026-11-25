@@ -45,6 +45,11 @@ export class World {
   readonly moisture: Uint8Array;
   /** Magic 0..255 (glowing areas). */
   readonly magic: Uint8Array;
+  /**
+   * Optional ground-colour blend per cell (continent mode only; null in the Valley): own material << 16 | material
+   * whose colour the cell leans toward << 8 | amount (0..255). Applied only while the cell keeps its own material.
+   */
+  blend: Uint32Array | null = null;
   /** 1 = blocked by an object (rocks, buildings): water flows around it. Shared with the water worker. */
   readonly solid: Uint8Array;
   readonly chunksX: number;

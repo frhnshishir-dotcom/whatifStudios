@@ -120,7 +120,7 @@ export class ContinentSession {
     const strip = this.stripRegions(mx, my);
     const ready = strip.every(([rx, ry]) => this.cache.has(rx, ry));
     const nearEdge = fx < 48 || fy < 48 || fx >= this.win.W - 48 || fy >= this.win.W - 48;
-    if (!ready && !nearEdge) { for (const [rx, ry] of strip) this.cache.request(rx, ry); return; }
+    if (!ready && !nearEdge) { for (const [rx, ry] of strip) this.cache.request(rx, ry, true); return; }
     if (!ready) this.stats.stalls++;
     this.moveWindow(engine, mx, my);
   }

@@ -4,6 +4,7 @@ import { fbm, ridged } from '../engine/core/noise';
 import { hash2 } from '../engine/core/rng';
 import { smoothstep } from '../engine/core/math';
 import { Mat, Cover } from '../engine/world/materials';
+import { Uniformizer, biomeShares, pickBiome, pickBiomeEdge, UNBLENDED, packBlend, SHARE_FLOOR } from './ecotone';
 
 type WorldLake = WorldData['lakes'][number];
 
@@ -15,6 +16,9 @@ type WorldLake = WorldData['lakes'][number];
  *  micro  1-40 m roughness
  *  water  rivers carved at their true width with banks scaled to how deep they cut; lakes at the blueprint level;
  *         marsh pools; the sea below 0 m
+ *  biomes natural patches at borders (see ecotone.ts): shares from the blueprint tilted by elevation, slope and
+ *         wetness; patches from smooth warped noise; clumped ground cover; ground colour leaning toward the
+ *         neighbouring biome by its share; tree density blended across borders so groves cross them
  */
 
 export const WK_NONE = 0, WK_SEA = 1, WK_LAKE = 2, WK_RIVER = 3, WK_MARSH = 4;
@@ -27,8 +31,10 @@ export interface RegionData {
   elev: Float32Array; mat: Uint8Array; cover: Uint8Array; coverVar: Uint8Array; moisture: Uint8Array;
   /** Water surface (m) per cell, NaN where dry; and what kind of water. */
   waterLevel: Float32Array; waterKind: Uint8Array;
-  /** Dominant region index per cell (255 = sea). */
+  /** Region index of the cell's biome patch (255 = sea). */
   biome: Uint8Array;
+  /** Ground-colour blend toward a neighbouring biome (see ecotone.packBlend); 0 = none. */
+  blend: Uint32Array;
   objects: RegionObject[];
   ms: number;
 }
@@ -62,6 +68,9 @@ export class ContinentTerrain {
   private paths: Array<{ cls: string; pts: Float64Array }> = [];
   private salt: number;
   private marsh: number;
+  /** fbm ranks: 2 and 3 octaves. */
+  private u2: Uniformizer;
+  private u3: Uniformizer;
   private peaks: number;
   private hollow: number;
   /** Hollow Lands fissures in metres (ember cracks follow them). */
@@ -76,6 +85,8 @@ export class ContinentTerrain {
     this.styles = bp.data.regions.map((r) => STYLE[r.id] ?? STYLE.heartlands);
     this.salt = blueprintSalt(bp.data);
     this.marsh = bp.data.regions.findIndex((r) => r.id === 'whispering-marshes');
+    this.u2 = new Uniformizer(2, 7001);
+    this.u3 = new Uniformizer(3, 7002);
     this.peaks = bp.data.regions.findIndex((r) => r.id === 'dragon-peaks');
     this.hollow = bp.data.regions.findIndex((r) => r.id === 'hollow-lands');
     this.fissures = bp.data.elevation.fissures.map((f) => ({ pts: f.line.flatMap((q) => [q[0] * this.mpu, q[1] * this.mpu]), w: f.width * this.mpu }));
@@ -222,24 +233,23 @@ export class ContinentTerrain {
       return (a[k] * (1 - tx) + a[k + stride] * tx) * (1 - ty) + (a[kn] * (1 - tx) + a[kn + stride] * tx) * ty;
     };
 
+    /** Smooth ground (macro + meso) at the coarse nodes: what ecology reads for elevation and slope. */
+    const cSmooth = new Float32Array(CN * CN);
+    for (let k = 0; k < CN * CN; k++) cSmooth[k] = cMacro[k] + cMeso[k];
+
     // Fine elevation and water over the region plus a one-cell margin.
-    const E = new Float32Array(M * M), level = new Float32Array(M * M).fill(NaN), kind = new Uint8Array(M * M), biome = new Uint8Array(M * M);
+    const E = new Float32Array(M * M), level = new Float32Array(M * M).fill(NaN), kind = new Uint8Array(M * M);
+    /** Wetness 0..1 (pure: near rivers, lakes, the marsh, the coast and valley floors). */
+    const wet = new Float32Array(M * M);
     const wr = new Float64Array(R), levels = new Map<number, number>();
     for (let j = 0; j < M; j++) for (let i = 0; i < M; i++) {
       const xm = ox - 1 + i + 0.5, ym = oy - 1 + j + 0.5, k = j * M + i, ux = xm / mpu, uy = ym / mpu;
       const macro = bil(cMacro, xm, ym);
-      let micro = 0, wsum = 0, best = 0, bw = -1;
+      let micro = 0;
       for (let r = 0; r < R; r++) {
         wr[r] = bil(cW, xm, ym, R, r);
-        if (wr[r] <= 0.001) continue;
-        micro += wr[r] * this.styles[r].micro;
-        // Ecotones: the dominant biome is picked with probability ~ weight^3, so borders mix over hundreds of metres.
-        const v = wr[r] * wr[r] * wr[r];
-        wsum += v;
-        if (wr[r] > bw) { bw = wr[r]; best = r; }
+        if (wr[r] > 0.001) micro += wr[r] * this.styles[r].micro;
       }
-      let pick = hash2(ox + i, oy + j, salt + 5) * wsum, chosen = best;
-      for (let r = 0; r < R && wsum > 0; r++) { const v = wr[r] ** 3; if (wr[r] > 0.001 && (pick -= v) <= 0) { chosen = r; break; } }
       const smooth = macro + bil(cMeso, xm, ym);
       let base = smooth + micro * (fbm(xm / 35, ym / 35, 3, salt + 110) - 0.5) * 2 + (hash2(ox + i, oy + j, salt + 6) - 0.5) * 0.3;
       // Dragon Peaks and Hollow Lands: rock steps (flat shelves, steep risers) on the high ground, in patches.
@@ -253,8 +263,11 @@ export class ContinentTerrain {
       if (macro < 0 || base < 0) { lv = 0; kd = e < 0 ? WK_SEA : WK_NONE; if (kd === WK_NONE) lv = NaN; }
       // Rivers (each carves from the uncarved ground; the lowest result wins). Only segments listed on the nearest node.
       const near = cSegs[Math.round((ym - cy0) / COARSE) * CN + Math.round((xm - cx0) / COARSE)];
+      let wv = this.marsh >= 0 ? wr[this.marsh] * 0.9 : 0;
+      wv = Math.max(wv, 0.35 * smoothstep(0, -25, smooth - macro), 0.5 * (1 - smoothstep(2, 12, macro)));
       if (near) for (const si of near) {
         const d = segDist(segs[si], xm, ym);
+        if (d.d < d.h + 80) wv = Math.max(wv, 1 - smoothstep(d.h, d.h + 80, d.d));
         const entrench = Math.max(0, base - d.s), vw = Math.min(2500, Math.max(d.h * 6 + 60, entrench * 8));
         if (d.d >= vw) continue;
         if (d.d < d.h) {
@@ -271,6 +284,7 @@ export class ContinentTerrain {
         const L = this.bp.lakeLevels[l.id], dx = xm - l.at[0] * mpu, dy = ym - l.at[1] * mpu, d = Math.hypot(dx, dy);
         if (d > l.radius * 1.15 * mpu + 300) continue;
         const re = lakeRadius(this.bp.data, l, Math.atan2(dy, dx)) * mpu;
+        if (d < re + 150) wv = Math.max(wv, 1 - smoothstep(re, re + 150, d));
         if (d < re) { e = Math.min(e, L - 2 - 14 * (1 - (d / re) ** 2)); lv = L; kd = WK_LAKE; }
         else if (d < re + 300 && kd !== WK_RIVER) e = Math.max(e, Math.min(L + 0.6 + (d - re) * 0.015, base));
       }
@@ -294,13 +308,13 @@ export class ContinentTerrain {
           e = Math.max(e, top + 0.4);
         }
       }
-      E[k] = e; level[k] = lv; kind[k] = kd; biome[k] = kd === WK_SEA ? 255 : chosen;
+      E[k] = e; level[k] = lv; kind[k] = kd; wet[k] = wv;
     }
 
     // Materials, cover, moisture, paths, trees and rocks for the region proper.
     const out: RegionData = {
       rx, ry, size: S, ox, oy, elev: new Float32Array(S * S), mat: new Uint8Array(S * S), cover: new Uint8Array(S * S), coverVar: new Uint8Array(S * S),
-      moisture: new Uint8Array(S * S), waterLevel: new Float32Array(S * S), waterKind: new Uint8Array(S * S), biome: new Uint8Array(S * S), objects: [], ms: 0,
+      moisture: new Uint8Array(S * S), waterLevel: new Float32Array(S * S), waterKind: new Uint8Array(S * S), biome: new Uint8Array(S * S), blend: new Uint32Array(S * S), objects: [], ms: 0,
     };
     const ids = this.bp.data.regions.map((r) => r.id);
     const path = this.rasterPaths(ox, oy, S);
@@ -312,60 +326,106 @@ export class ContinentTerrain {
       if (ii + st >= 0 && ii + st < S) wd[k] = Math.min(wd[k], wd[k + st] + 1);
       if (jj + st >= 0 && jj + st < S) wd[k] = Math.min(wd[k], wd[k + st * S] + 1);
     }
+    const baseMoist: Record<string, number> = { 'whispering-marshes': 200, elderwood: 150, heartlands: 110, 'golden-plains': 70, 'dragon-peaks': 90, 'hollow-lands': 40 };
+    /** Biome shares per cell (ecology-tilted; used again for trees and rocks). */
+    const P = new Float32Array(S * S * R), pr = new Float64Array(R), wcell = new Float64Array(R);
     for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
       const k = j * S + i, km = (j + 1) * M + i + 1, e = E[km];
       const sl = Math.hypot(E[km + 1] - E[km - 1], E[km + M] - E[km - M]) / 2;
-      const kd = kind[km], b = biome[km], gx = ox + i, gy = oy + j, h = hash2(gx, gy, salt + 7), n = fbm(gx / 90, gy / 90, 3, salt + 8);
-      out.elev[k] = e; out.waterLevel[k] = level[km]; out.waterKind[k] = kd; out.biome[k] = b;
+      const kd = kind[km], gx = ox + i, gy = oy + j, xm = gx + 0.5, ym = gy + 0.5, n = fbm(gx / 90, gy / 90, 3, salt + 8);
+      out.elev[k] = e; out.waterLevel[k] = level[km]; out.waterKind[k] = kd;
       out.coverVar[k] = Math.floor(hash2(gx, gy, salt + 9) * 256);
+      // Biome patch: shares (blueprint weights tilted by ecology), then a smooth warped noise picks within them.
+      // Ecology reads the smooth ground (elevation and slope over 8 m), not the 1 m roughness, so it varies smoothly.
+      let several = 0;
+      for (let r = 0; r < R; r++) { wcell[r] = bil(cW, xm, ym, R, r); if (wcell[r] > SHARE_FLOOR) several++; }
+      if (several > 1) {
+        const zs = (x: number, y: number) => bil(cSmooth, x, y);
+        const slE = Math.hypot(zs(xm + 4, ym) - zs(xm - 4, ym), zs(xm, ym + 4) - zs(xm, ym - 4)) / 8;
+        biomeShares(ids, wcell, zs(xm, ym), slE, wet[km], pr);
+      } else biomeShares(ids, wcell, e, sl, wet[km], pr);
+      let present = 0, top = 0;
+      for (let r = 0; r < R; r++) { P[k * R + r] = pr[r]; if (pr[r] > 0) present++; if (pr[r] > pr[top]) top = r; }
+      // (In a core only one biome is present: no patch noise needed.)
+      let b = top, edge = Infinity;
+      if (kd === WK_SEA) b = 255;
+      else if (present > 1) [b, edge] = pickBiomeEdge(pr, this.patchU(xm, ym));
+      out.biome[k] = b;
       const id = ids[b] ?? 'sea';
-      const baseMoist: Record<string, number> = { 'whispering-marshes': 200, elderwood: 150, heartlands: 110, 'golden-plains': 70, 'dragon-peaks': 90, 'hollow-lands': 40, sea: 255 };
-      out.moisture[k] = Math.min(255, Math.round((baseMoist[id] ?? 100) * 0.6 + 255 * Math.max(0, 1 - wd[k] / 30) * 0.5));
+      let moist = 0;
+      for (let r = 0; r < R; r++) moist += pr[r] * (baseMoist[ids[r]] ?? 100);
+      out.moisture[k] = kd === WK_SEA ? 255 : Math.min(255, Math.round(moist * 0.6 + 255 * Math.max(0, 1 - wd[k] / 30) * 0.5));
+      // Clumped cover (a few metres), not single random cells.
+      const cl = this.u2.at(fbm(gx / 5, gy / 5, 2, salt + 180));
       let mat: number = Mat.Grass, cover: number = Cover.ShortGrass;
       // North-facing slopes (ground rising to the south) hold snow lower.
       const north = Math.max(0, Math.min(1, (E[km + M] - E[km - M]) / 2 / 0.4));
       if (kd !== WK_NONE) { mat = kd === WK_MARSH ? Mat.Bog : kd === WK_SEA ? Mat.Sand : e < (level[km] - 2.5) ? Mat.Stone : Mat.Sand; cover = Cover.None; }
       else if (e > 1030 + n * 120 - north * 90 && sl < 1.1) { mat = Mat.Snow; cover = Cover.None; }
       else if (sl > 0.9) { mat = Mat.Cliff; cover = Cover.None; }
-      else if (sl > 0.55) { mat = id === 'dragon-peaks' || id === 'hollow-lands' ? (h < 0.5 ? Mat.Scree : Mat.Stone) : Mat.Stone; cover = Cover.None; }
+      else if (sl > 0.55) { mat = id === 'dragon-peaks' || id === 'hollow-lands' ? (this.u2.at(fbm(gx / 4, gy / 4, 2, salt + 181)) < 0.5 ? Mat.Scree : Mat.Stone) : Mat.Stone; cover = Cover.None; }
       else if (wd[k] <= 2 && e < 3) { mat = Mat.Sand; cover = Cover.None; }
-      else switch (id) {
-        case 'heartlands': mat = n > 0.58 ? Mat.Meadow : Mat.Grass; cover = h < 0.07 ? Cover.Flowers : h < 0.16 ? Cover.Clover : n > 0.6 ? Cover.TallGrass : Cover.ShortGrass; break;
-        case 'golden-plains': {
-          // Dry golden grassland, wind-combed; meadow hollows and wildflower drifts.
-          const fl = fbm(gx / 140, gy / 140, 2, salt + 140);
-          mat = n > 0.64 ? Mat.Meadow : Mat.DryGrass;
-          cover = fl > 0.66 && h < 0.4 ? Cover.Flowers : h < 0.55 ? Cover.GoldenGrass : n > 0.5 ? Cover.TallGrass : Cover.ShortGrass;
-          break;
-        }
-        case 'elderwood': mat = n > 0.55 ? Mat.Moss : Mat.ForestFloor; cover = h < 0.25 ? Cover.Fern : h < 0.5 ? Cover.Litter : h < 0.62 ? Cover.MossPatch : Cover.None; break;
-        case 'whispering-marshes':
-          // Bog at the water's edge, reed beds around it, wet moss and tussocks between.
-          if (wd[k] <= 2) { mat = Mat.Bog; cover = h < 0.75 ? Cover.Reeds : Cover.None; }
-          else if (wd[k] <= 6) { mat = n > 0.45 ? Mat.Bog : Mat.Mud; cover = h < 0.55 ? Cover.Reeds : Cover.TallGrass; }
-          else { mat = n > 0.66 ? Mat.Moss : n < 0.32 ? Mat.Mud : Mat.Bog; cover = h < 0.35 ? Cover.Reeds : h < 0.8 ? Cover.TallGrass : Cover.MossPatch; }
-          break;
-        case 'hollow-lands': {
-          // Ash and bare rock, thorn scrub, and ember cracks that glow along the fissures.
-          const n2 = fbm(gx / 50, gy / 50, 2, salt + 150);
-          mat = n > 0.5 ? Mat.Ash : n2 > 0.62 ? Mat.Stone : sl > 0.35 ? Mat.Scree : Mat.Dirt;
-          cover = h < 0.05 ? Cover.Thorns : Cover.None;
-          if (this.emberCrack(gx + 0.5, gy + 0.5)) { mat = Mat.Ash; cover = Cover.Embers; }
-          break;
-        }
-        case 'dragon-peaks':
-          // Scree below the snow, alpine meadow below the scree, pine forest in the valleys.
-          if (e > 870 + n * 100) { mat = n > 0.55 ? Mat.Stone : Mat.Scree; cover = h < 0.06 ? Cover.MossPatch : Cover.None; }
-          else if (e > 720 + n * 80) { mat = n > 0.5 ? Mat.Meadow : Mat.Grass; cover = h < 0.12 ? Cover.Flowers : h < 0.3 ? Cover.MossPatch : Cover.ShortGrass; }
-          else { mat = n > 0.6 ? Mat.Moss : Mat.ForestFloor; cover = h < 0.3 ? Cover.Litter : h < 0.38 ? Cover.Fern : Cover.None; }
-          break;
-      }
+      else [mat, cover] = this.ground(id, e, sl, n, wd[k], gx, gy, cl);
       if (path[k] && kd === WK_NONE) { mat = Mat.Path; cover = Cover.None; }
       out.mat[k] = mat; out.cover[k] = cover;
+      // Ground colour leans toward the strongest other biome here, by how much of the ground is theirs, and toward
+      // half-way at a patch edge (feathered over a few metres), so patches have soft rims.
+      if (kd === WK_NONE && b !== 255 && !UNBLENDED.has(mat) && pr[b] < 0.97) {
+        let b2 = -1;
+        for (let r = 0; r < R; r++) if (r !== b && (b2 < 0 || pr[r] > pr[b2])) b2 = r;
+        const amt = Math.max(Math.min(0.6, (1 - pr[b]) * 0.9), 0.5 * (1 - smoothstep(0, 0.12, edge)));
+        if (b2 >= 0 && pr[b2] > 0.02) {
+          const m2 = this.ground(ids[b2], e, sl, n, wd[k], gx, gy, cl)[0];
+          if (m2 !== mat && !UNBLENDED.has(m2)) out.blend[k] = packBlend(mat, m2, amt);
+        }
+      }
     }
-    this.placeObjects(out, path, wd, E, M);
+    this.placeObjects(out, path, wd, E, M, P);
     out.ms = performance.now() - t0;
     return out;
+  }
+
+  /** Patch noise at a point: smooth, domain-warped, ranked to 0..1 (patches of tens of metres with ragged edges). */
+  private patchU(x: number, y: number): number {
+    const s = this.salt, wx = (fbm(x / 110, y / 110, 2, s + 170) - 0.5) * 90, wy = (fbm(x / 110, y / 110, 2, s + 171) - 0.5) * 90;
+    return this.u3.at(fbm((x + wx) / 48, (y + wy) / 48, 3, s + 172));
+  }
+
+  /**
+   * Ground material and cover a biome gives a spot of land (gentle ground; snow, cliffs and steep rock are decided
+   * before). `n`: 90 m noise; `wd`: metres to water (capped at 30); `cl`: clump rank 0..1.
+   */
+  private ground(id: string, e: number, sl: number, n: number, wd: number, gx: number, gy: number, cl: number): [number, number] {
+    const salt = this.salt;
+    switch (id) {
+      case 'heartlands':
+        return [n > 0.58 ? Mat.Meadow : Mat.Grass, cl < 0.07 ? Cover.Flowers : cl < 0.16 ? Cover.Clover : n > 0.6 ? Cover.TallGrass : Cover.ShortGrass];
+      case 'golden-plains': {
+        // Dry golden grassland, wind-combed; meadow hollows and wildflower drifts.
+        const fl = fbm(gx / 140, gy / 140, 2, salt + 140);
+        return [n > 0.64 ? Mat.Meadow : Mat.DryGrass, fl > 0.66 && cl < 0.4 ? Cover.Flowers : cl < 0.55 ? Cover.GoldenGrass : n > 0.5 ? Cover.TallGrass : Cover.ShortGrass];
+      }
+      case 'elderwood':
+        return [n > 0.55 ? Mat.Moss : Mat.ForestFloor, cl < 0.25 ? Cover.Fern : cl < 0.5 ? Cover.Litter : cl < 0.62 ? Cover.MossPatch : Cover.None];
+      case 'whispering-marshes':
+        // Bog at the water's edge, reed beds around it, wet moss and tussocks between.
+        if (wd <= 2) return [Mat.Bog, cl < 0.75 ? Cover.Reeds : Cover.None];
+        if (wd <= 6) return [n > 0.45 ? Mat.Bog : Mat.Mud, cl < 0.55 ? Cover.Reeds : Cover.TallGrass];
+        return [n > 0.66 ? Mat.Moss : n < 0.32 ? Mat.Mud : Mat.Bog, cl < 0.35 ? Cover.Reeds : cl < 0.8 ? Cover.TallGrass : Cover.MossPatch];
+      case 'hollow-lands': {
+        // Ash and bare rock, thorn scrub, and ember cracks that glow along the fissures.
+        if (this.emberCrack(gx + 0.5, gy + 0.5)) return [Mat.Ash, Cover.Embers];
+        const n2 = fbm(gx / 50, gy / 50, 2, salt + 150);
+        return [n > 0.5 ? Mat.Ash : n2 > 0.62 ? Mat.Stone : sl > 0.35 ? Mat.Scree : Mat.Dirt, cl < 0.05 ? Cover.Thorns : Cover.None];
+      }
+      case 'dragon-peaks':
+        // Scree below the snow, alpine meadow below the scree, pine forest in the valleys.
+        if (e > 870 + n * 100) return [n > 0.55 ? Mat.Stone : Mat.Scree, cl < 0.06 ? Cover.MossPatch : Cover.None];
+        if (e > 720 + n * 80) return [n > 0.5 ? Mat.Meadow : Mat.Grass, cl < 0.12 ? Cover.Flowers : cl < 0.3 ? Cover.MossPatch : Cover.ShortGrass];
+        return [n > 0.6 ? Mat.Moss : Mat.ForestFloor, cl < 0.3 ? Cover.Litter : cl < 0.38 ? Cover.Fern : Cover.None];
+      default:
+        return [Mat.Grass, Cover.ShortGrass];
+    }
   }
 
   /**
@@ -408,16 +468,32 @@ export class ContinentTerrain {
     return m;
   }
 
-  /** Trees and rocks on jittered grids (density by biome, forest patches and slope); none on water, paths or village sites. */
-  private placeObjects(out: RegionData, path: Uint8Array, wd: Float32Array, E: Float32Array, M: number): void {
-    const S = out.size, salt = this.salt, ids = this.bp.data.regions.map((r) => r.id);
+  /**
+   * Trees and rocks on jittered grids; none on water, paths or village sites. Density is the share-weighted blend of
+   * every biome present (so forests thin out across a border and groves cross it), modulated by groves and clearings;
+   * the species come from a coarser patch of the same shares, so stands of one biome's trees reach into the next.
+   */
+  private placeObjects(out: RegionData, path: Uint8Array, wd: Float32Array, E: Float32Array, M: number, P: Float32Array): void {
+    const S = out.size, salt = this.salt, ids = this.bp.data.regions.map((r) => r.id), R = ids.length;
     const villages = this.bp.data.settlements.map((s) => ({ x: s.at[0] * this.mpu, y: s.at[1] * this.mpu, r: s.footprintRadius * this.mpu + 40 }));
     const nearVillage = (x: number, y: number) => villages.some((v) => Math.hypot(x - v.x, y - v.y) < v.r);
-    const DENS: Record<string, [number, string[]]> = {
-      elderwood: [0.55, ['oak', 'oak', 'pine', 'birch', 'willow']], heartlands: [0.07, ['oak', 'birch', 'blossom']],
-      'golden-plains': [0.012, ['oak', 'oak', 'birch']], 'whispering-marshes': [0.12, ['willow', 'willow', 'willow', 'dead', 'birch']],
-      'hollow-lands': [0.05, ['dead', 'dead', 'dead', 'pine']], 'dragon-peaks': [0.32, ['pine', 'pine', 'pine', 'birch']],
+    const SPECIES: Record<string, string[]> = {
+      elderwood: ['oak', 'oak', 'pine', 'birch', 'willow'], heartlands: ['oak', 'birch', 'blossom'], 'golden-plains': ['oak', 'oak', 'birch'],
+      'whispering-marshes': ['willow', 'willow', 'willow', 'dead', 'birch'], 'hollow-lands': ['dead', 'dead', 'dead', 'pine'], 'dragon-peaks': ['pine', 'pine', 'pine', 'birch'],
     };
+    /** Tree density (chance per 5 m grid cell) of a biome at a spot. */
+    const DENS_AT = (id: string, e: number, forest: number, copse: number): number => {
+      switch (id) {
+        case 'elderwood': return 0.55 * forest;
+        case 'heartlands': return 0.07 * forest * copse;
+        case 'golden-plains': return 0.012; // lone trees, evenly rare
+        case 'whispering-marshes': return 0.12 * forest;
+        case 'hollow-lands': return 0.05 * forest;
+        case 'dragon-peaks': return 0.32 * forest * smoothstep(800, 660, e); // tree line below the meadows
+        default: return 0.05 * forest;
+      }
+    };
+    const ROCKS: Record<string, number> = { 'dragon-peaks': 0.14, 'hollow-lands': 0.12, 'golden-plains': 0.035 };
     const G = 5;
     const ok = (i: number, j: number) => {
       const k = j * S + i, km = (j + 1) * M + i + 1;
@@ -425,21 +501,29 @@ export class ContinentTerrain {
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const q = (j + dy) * S + i + dx; if (q >= 0 && q < S * S && path[q]) return false; }
       return Math.hypot(E[km + 1] - E[km - 1], E[km + M] - E[km - M]) / 2 < 0.6;
     };
+    const shares = new Float64Array(R);
     for (let gj = 0; gj < S / G; gj++) for (let gi = 0; gi < S / G; gi++) {
       const gx = out.ox + gi * G, gy = out.oy + gj * G;
       const i = gi * G + Math.floor(hash2(gx, gy, salt + 20) * G), j = gj * G + Math.floor(hash2(gx, gy, salt + 21) * G);
       if (!ok(i, j)) continue;
-      const k = j * S + i, id = ids[out.biome[k]];
-      if (!id || nearVillage(out.ox + i, out.oy + j)) continue;
-      const [d0, kinds] = DENS[id] ?? [0.05, ['oak']];
+      const k = j * S + i, x = out.ox + i, y = out.oy + j;
+      if (out.biome[k] === 255 || nearVillage(x, y)) continue;
+      for (let r = 0; r < R; r++) shares[r] = P[k * R + r];
       const e = out.elev[k];
-      let d = d0 * Math.min(1.6, Math.max(0, (fbm((out.ox + i) / 600, (out.oy + j) / 600, 3, salt + 22) - 0.3) * 2.6));
-      if (id === 'dragon-peaks') d *= smoothstep(800, 660, e); // tree line below the alpine meadows
-      if (id === 'heartlands') d *= 1 + 6 * smoothstep(0.62, 0.75, fbm((out.ox + i) / 250, (out.oy + j) / 250, 3, salt + 23)); // copses
-      if (id === 'golden-plains') d = d0; // lone trees, evenly rare
+      const forest = Math.min(1.6, Math.max(0, (fbm(x / 600, y / 600, 3, salt + 22) - 0.3) * 2.6));
+      const copse = 1 + 6 * smoothstep(0.62, 0.75, fbm(x / 250, y / 250, 3, salt + 23));
+      let d = 0;
+      for (let r = 0; r < R; r++) if (shares[r] >= 0.005) d += shares[r] * DENS_AT(ids[r], e, forest, copse);
+      // The patch's own biome sets most of the density (forest patches are denser than the meadow beside them);
+      // the blend lets stands carry across. Groves and clearings (about 140 m) do not stop at a border.
+      const own = ids[out.biome[k]];
+      d = 0.6 * DENS_AT(own, e, forest, copse) + 0.4 * d;
+      d *= 0.55 + 0.9 * this.u2.at(fbm(x / 140, y / 140, 2, salt + 190));
       if (hash2(gx, gy, salt + 24) < d) {
+        const sp = ids[pickBiome(shares, this.u2.at(fbm(x / 170, y / 170, 2, salt + 191)))];
+        const kinds = SPECIES[sp] ?? ['oak'];
         out.objects.push({ kind: 'tree', x: i, y: j, variant: kinds[Math.floor(hash2(gx, gy, salt + 25) * kinds.length)] });
-        if (id === 'elderwood' && hash2(gx, gy, salt + 26) < 0.04 && ok(i + 2, j + 1)) out.objects.push({ kind: 'mushroom', x: i + 2, y: j + 1, variant: hash2(gx, gy, salt + 27) < 0.3 ? 'glow' : 'brown' });
+        if (sp === 'elderwood' && hash2(gx, gy, salt + 26) < 0.04 && ok(i + 2, j + 1)) out.objects.push({ kind: 'mushroom', x: i + 2, y: j + 1, variant: hash2(gx, gy, salt + 27) < 0.3 ? 'glow' : 'brown' });
       }
     }
     const RG = 11;
@@ -448,7 +532,9 @@ export class ContinentTerrain {
       const i = gi * RG + 1 + Math.floor(hash2(gx, gy, salt + 30) * (RG - 2)), j = gj * RG + 1 + Math.floor(hash2(gx, gy, salt + 31) * (RG - 2));
       if (!ok(i, j)) continue;
       const k = j * S + i, id = ids[out.biome[k]];
-      const d = id === 'dragon-peaks' ? 0.14 : id === 'hollow-lands' ? 0.12 : id === 'golden-plains' ? 0.035 : 0.012;
+      if (!id) continue;
+      let d = 0;
+      for (let r = 0; r < R; r++) d += P[k * R + r] * (ROCKS[ids[r]] ?? 0.012);
       if (hash2(gx, gy, salt + 32) >= d || nearVillage(out.ox + i, out.oy + j)) continue;
       const v = hash2(gx, gy, salt + 33);
       // Plains: weathered outcrops standing out of the grass; Hollow Lands: jagged formations and big rocks.

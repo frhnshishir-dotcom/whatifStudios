@@ -1,5 +1,22 @@
 # Lumenwild changelog
 
+## World Phase 2c: natural biome transitions (2026-11-25)
+- Borders between biomes are irregular ecological patches instead of per-cell random speckle (`src/world/ecotone.ts`,
+  `src/world/terrain.ts`):
+  - Shares come from the blueprint, tilted by elevation, slope and wetness, and are picked by a smooth, domain-warped
+    noise.
+  - Ground cover comes in clumps.
+  - Tree density follows the patch and blends across borders, with groves and species patches that cross them.
+  - Ground colour leans toward the neighbouring biome by its share and is feathered at patch edges, stored per cell as
+    `RegionData.blend` / `World.blend` (continent only).
+  - Everything is deterministic and computed at generation, never per frame.
+- Renderer: `TerrainShader` applies the blend to a cell and to the neighbours it smooths with, only when
+  `World.blend` exists. The Valley has none, so its output is unchanged (golden images match).
+- Streaming: the region cache queues worker requests one at a time, and regions a move is waiting for jump the queue.
+  The slowest window move in the travel test is 23-25 ms.
+- Comparisons: `docs/world/transitions-close.jpg`, `docs/world/transitions-distant.jpg`. Tests:
+  `tests/world-transitions.test.ts` (9) and a queue test; 167 unit and 60 browser tests pass.
+
 ## World Phase 2b: authentic biomes, water that persists through moves, technical report (2026-11-25)
 - Biomes on the 1 m terrain (`src/world/terrain.ts`): Dragon Peaks snowline (lower on north faces), scree, alpine
   meadow, tree line and rock steps; Hollow Lands ash, scree, thorns, dead trees, rock formations, terraced mesas and

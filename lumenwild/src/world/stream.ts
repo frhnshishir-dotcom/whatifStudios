@@ -10,11 +10,14 @@ const key = (rx: number, ry: number) => `${rx},${ry}`;
 /**
  * Generated regions, least recently used first out. Generation runs in a worker when one is given (results arrive
  * asynchronously) or on the calling thread. Regions are pure functions of position, so a region can always be
- * regenerated identically after eviction.
+ * regenerated identically after eviction. Worker requests wait in a queue here and go to the worker one at a time,
+ * so a region the view needs now (urgent) is generated before the rest of the prefetch ring.
  */
 export class RegionCache {
   private map = new Map<string, RegionData>();
   private inflight = new Set<string>();
+  private queue: Array<[number, number]> = [];
+  private posted = 0;
   readonly capacity: number;
   stats = { generated: 0, received: 0, evicted: 0, maxMs: 0, totalMs: 0 };
   private worker: Worker | null;
@@ -26,8 +29,10 @@ export class RegionCache {
     if (this.worker) this.worker.onmessage = (e: MessageEvent<{ region: RegionData }>) => {
       const r = e.data.region;
       this.inflight.delete(key(r.rx, r.ry));
+      this.posted--;
       this.put(r);
       this.stats.received++;
+      this.pump();
       this.onReady?.(r);
     };
   }
@@ -51,13 +56,36 @@ export class RegionCache {
     return r;
   }
 
-  /** Ask for a region in the background (worker), or generate it now when there is no worker. */
-  request(rx: number, ry: number): void {
+  /**
+   * Ask for a region in the background (worker), or generate it now when there is no worker. `urgent` puts it at the
+   * front of the queue (a move is waiting for it).
+   */
+  request(rx: number, ry: number, urgent = false): void {
     const k = key(rx, ry);
-    if (this.map.has(k) || this.inflight.has(k)) return;
+    if (this.map.has(k)) return;
     if (!this.worker) { this.ensure(rx, ry); return; }
+    if (this.inflight.has(k)) {
+      if (!urgent) return;
+      const q = this.queue.findIndex(([x, y]) => x === rx && y === ry);
+      if (q > 0) this.queue.unshift(...this.queue.splice(q, 1));
+      return;
+    }
     this.inflight.add(k);
-    this.worker.postMessage({ rx, ry });
+    if (urgent) this.queue.unshift([rx, ry]); else this.queue.push([rx, ry]);
+    this.pump();
+  }
+
+  /** Regions waiting for the worker (not yet sent). */
+  get queued(): number { return this.queue.length; }
+
+  /** Keep one request at the worker; the rest wait here, so priorities can still change. */
+  private pump(): void {
+    while (this.worker && this.posted < 1 && this.queue.length) {
+      const [rx, ry] = this.queue.shift()!;
+      if (this.map.has(key(rx, ry))) { this.inflight.delete(key(rx, ry)); continue; }
+      this.posted++;
+      this.worker.postMessage({ rx, ry });
+    }
   }
 
   private note(r: RegionData): void { this.stats.generated++; this.stats.totalMs += r.ms; this.stats.maxMs = Math.max(this.stats.maxMs, r.ms); }
@@ -97,6 +125,7 @@ export class WorldWindow {
     this.S = regionCells;
     this.W = regionCells * WINDOW_REGIONS;
     this.world = new World(this.W, this.W, alloc);
+    this.world.blend = new Uint32Array(this.W * this.W);
     this.waterLevel = new Float32Array(this.W * this.W).fill(NaN);
     this.waterKind = new Uint8Array(this.W * this.W);
     this.biome = new Uint8Array(this.W * this.W);
@@ -128,7 +157,7 @@ export class WorldWindow {
    */
   shift(dx: number, dy: number, get: (rx: number, ry: number) => RegionData): [number, number] {
     const S = this.S, W = this.W, sx = dx * S, sy = dy * S, w = this.world;
-    for (const a of [w.elev, w.mat, w.cover, w.coverVar, w.moisture, w.magic, this.waterLevel, this.waterKind, this.biome]) shiftGrid(a, W, W, sx, sy);
+    for (const a of [w.elev, w.mat, w.cover, w.coverVar, w.moisture, w.magic, this.waterLevel, this.waterKind, this.biome, w.blend!]) shiftGrid(a, W, W, sx, sy);
     this.origin = [this.origin[0] + dx, this.origin[1] + dy];
     const live = new Set<string>();
     for (let gy = 0; gy < WINDOW_REGIONS; gy++) for (let gx = 0; gx < WINDOW_REGIONS; gx++) {
@@ -161,6 +190,7 @@ export class WorldWindow {
       w.magic.fill(0, o, o + S);
       this.waterKind.set(r.waterKind.subarray(s, s + S), o);
       this.biome.set(r.biome.subarray(s, s + S), o);
+      w.blend!.set(r.blend.subarray(s, s + S), o);
     }
     this.regionObjects.set(key(r.rx, r.ry), r.objects);
   }

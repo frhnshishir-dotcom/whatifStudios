@@ -10,5 +10,5 @@ let terrain: ContinentTerrain | null = null;
 self.onmessage = (e: MessageEvent<{ rx: number; ry: number }>) => {
   terrain ??= new ContinentTerrain(buildBlueprint(WORLD));
   const r = terrain.generateRegion(e.data.rx, e.data.ry);
-  (self as unknown as Worker).postMessage({ region: r }, [r.elev.buffer, r.mat.buffer, r.cover.buffer, r.coverVar.buffer, r.moisture.buffer, r.waterLevel.buffer, r.waterKind.buffer, r.biome.buffer]);
+  (self as unknown as Worker).postMessage({ region: r }, [r.elev.buffer, r.mat.buffer, r.cover.buffer, r.coverVar.buffer, r.moisture.buffer, r.waterLevel.buffer, r.waterKind.buffer, r.biome.buffer, r.blend.buffer]);
 };
