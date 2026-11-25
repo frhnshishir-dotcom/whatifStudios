@@ -20,7 +20,7 @@ interface MatLook { bg: Gradient; veg: boolean }
 const look = (stops: [string, string, string], veg: boolean): MatLook => ({ bg: new Gradient([[0, stops[0]], [0.55, stops[1]], [1, stops[2]]]), veg });
 
 /** Ground colours by material: dark (shadow) -> mid -> lit. */
-const MAT_LOOK: Record<number, MatLook> = {
+export const MAT_LOOK: Record<number, MatLook> = {
   [Mat.Grass]: look(['#0f2412', '#2a5427', '#4f8a3a'], true),
   [Mat.Meadow]: look(['#1b2e15', '#4a6e2e', '#86a548'], true),
   [Mat.Dirt]: look(['#24180e', '#4f3a24', '#78573a'], false),
@@ -33,6 +33,10 @@ const MAT_LOOK: Record<number, MatLook> = {
   [Mat.ForestFloor]: look(['#0b170d', '#1d3420', '#34522c'], true),
   [Mat.Glade]: look(['#0d1a14', '#1d3f30', '#2f5f47'], true),
   [Mat.Snow]: look(['#6f7c88', '#c4ced6', '#f1f5f8'], false),
+  [Mat.DryGrass]: look(['#2c2410', '#806a2a', '#d0b052'], true),
+  [Mat.Ash]: look(['#120e12', '#36292e', '#5c4a50'], false),
+  [Mat.Bog]: look(['#16150c', '#403b22', '#6e6538'], true),
+  [Mat.Scree]: look(['#202224', '#555a5c', '#8c9294'], false),
 };
 
 /** A glyph family: three density tiers, the share of bare cells, clump size, glyph colours and contrast. */
@@ -65,6 +69,10 @@ const MAT_FAMILY: Record<number, Family> = {
   [Mat.ForestFloor]: fam("‚,.", "’‛ʹ", '❦⁏„', 0.46, 2.8, '#7f9a56', '#c6a35a', 0.36),
   [Mat.Glade]: fam('⋅˚', '✧·', '✦⋰', 0.5, 2.6, '#86f0d2', '#d8fff2', 0.62),
   [Mat.Snow]: fam('⋅·', '˚∴', '⁖', 0.78, 2.6, '#ffffff', '#ffffff', 0.16),
+  [Mat.DryGrass]: fam("‚.,'", "ʹ'’‛", 'ʺ"ʷ', 0.62, 3.0, '#e2c66c', '#fff0a4', 0.3),
+  [Mat.Ash]: fam('⋅·.', '∴⁖⁘', '⁙✶', 0.55, 2.2, '#a08e94', '#cdbcc2', 0.3),
+  [Mat.Bog]: fam('⋅·', '∼∽', '≈≃', 0.45, 2.4, '#7e8e5a', '#aebc7c', 0.34),
+  [Mat.Scree]: fam('⋅·⁚', '∴⁖◦', '⁘▪◦', 0.28, 1.8, '#b2b6b2', '#e4e7e2', 0.36),
 };
 
 /** Ground cover families. */
@@ -77,6 +85,9 @@ const COVER_FAMILY: Record<number, Family> = {
   [Cover.MossPatch]: fam('⋅·', '∴∵⁖', '∷⁘⁙', 0.3, 2.2, '#8acc66', '#c4f09a', 0.42),
   [Cover.Litter]: fam("‚,.", '’‛„', '❦⁏', 0.35, 2.4, '#c4863f', '#e8b468', 0.5),
   [Cover.Clover]: fam("‚'", '♧∴', '☘', 0.3, 2.2, '#78d26a', '#b8f29a', 0.55),
+  [Cover.GoldenGrass]: fam("ʹ'‚", '"ʺ|¦', 'ψʬʷ⁞', 0.26, 2.6, '#e6c25e', '#fff2a6', 0.5),
+  [Cover.Embers]: fam('⋅·', '∴⁖', '✶⁂', 0.6, 2.0, '#ff4a2a', '#ffb070', 0.95),
+  [Cover.Thorns]: fam("ʹ‚", '⌇≀', 'ʬΨ', 0.38, 2.4, '#7c3a4a', '#b45c6c', 0.6),
 };
 const FLOWER_COLORS: RGB[] = ['#ff9cc0', '#ffd95c', '#f6f4e8', '#bc96ff', '#ff8c66', '#90d4ff'].map(hex);
 
@@ -90,7 +101,7 @@ const SNOW_FACE: FaceLook = { glyphs: gs('█▓█▒'), fg: hex('#e4ebf0'), bg
 const LIP = gs('▀▀▀▀▘▝');
 const DRIP = gs("‚ʹ'¦");
 
-const rockyMats = new Set<number>([Mat.Stone, Mat.Cliff, Mat.Path, Mat.Snow]);
+const rockyMats = new Set<number>([Mat.Stone, Mat.Cliff, Mat.Path, Mat.Snow, Mat.Scree]);
 
 /** Light direction (from upper left, a little towards the viewer). */
 const LX = -0.55, LY = 0.3, LZ = 0.78;

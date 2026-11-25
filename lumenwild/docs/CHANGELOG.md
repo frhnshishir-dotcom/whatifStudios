@@ -1,5 +1,20 @@
 # Lumenwild changelog
 
+## World Phase 2b: authentic biomes, water that persists through moves, technical report (2026-11-25)
+- Biomes on the 1 m terrain (`src/world/terrain.ts`): Dragon Peaks snowline (lower on north faces), scree, alpine
+  meadow, tree line and rock steps; Hollow Lands ash, scree, thorns, dead trees, rock formations, terraced mesas and
+  glowing ember cracks along the fissures; Whispering Marshes pools and meandering channels at flat levels with rims
+  that hold them, bog, reed beds, willows and snags; Golden Plains dry golden grass, wildflower drifts, lone trees and
+  outcrops. New materials (dry grass, ash, bog, scree), covers (golden grass, embers, thorns) and a dead-tree sprite.
+- Water (`WaterSim`, continent mode only): settled chunks sleep, near-still water gets drag, and `shift` carries depth,
+  flow, ripples and sleep state through window moves (before, velocities and ripples restarted). Fixed: strip objects
+  were added before the water shifted, which cleared water in the wrong cells. The Valley simulation is bit-identical.
+- `?at=x,y` opens continent mode at a map point.
+- Report: `docs/world/PHASE2_TECHNICAL_REPORT.md`; screenshots `docs/world/biomes-before.jpg`, `biomes-after.jpg`,
+  `biome-borders.jpg`.
+- Tests: `tests/world-biomes.test.ts` (8), `tests/water-sleep.test.ts` (3), water through a move (1),
+  `e2e/m14-biomes.spec.ts`; 157 unit and 60 browser tests pass.
+
 ## World Phase 2: continent terrain, streaming and navigation (2026-11-25)
 - Decisions applied: six villages and no cities (validator rejects cities), renamed watchtowers, 100 m per map unit
   (provisional), 1 m cells as `World.ts` defines; rivers routed alongside villages; scale, travel times, memory and the

@@ -20,7 +20,9 @@ async function start() {
     useUI.getState().setSettings({ heightScale: 0.35 });
   }
   const seed = Number(q.get('seed') || 7);
-  const engine = createEngine(seed, q.get('scene') || 'world', { worker: q.get('worker') !== '0' });
+  // ?at=x,y (map units) opens the continent somewhere other than Lumenfall Village.
+  const at = q.get('at')?.split(',').map(Number);
+  const engine = createEngine(seed, q.get('scene') || 'world', { worker: q.get('worker') !== '0', at: at && at.length === 2 && at.every(Number.isFinite) ? [at[0], at[1]] : undefined });
   // ?manual=1: no animation loop; tests drive frames with engine.frame(t) (golden images, benchmarks).
   if (q.get('manual') === '1') engine.manual = true;
   setEngine(engine);

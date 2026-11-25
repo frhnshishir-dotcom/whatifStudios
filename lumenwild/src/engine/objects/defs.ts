@@ -84,6 +84,27 @@ function roundTree(o: WorldObject, species: string): SpriteCell[] {
   return cells;
 }
 
+/** A dead tree of the Hollow Lands: a dark forked trunk and bare branches, a few with a corrupted red glint. */
+function deadTree(o: WorldObject): SpriteCell[] {
+  const size = o.props.size ?? 2, seed = o.props.seed ?? o.id;
+  const bark = C('#3e3034'), branch = C('#6e5a62'), glint = C('#d0485a');
+  const cells: SpriteCell[] = [];
+  const h = 2 + size;
+  for (let u = 0; u < h; u++) cells.push({ dx: 0, dy: 0, up: u, g: size > 2 ? g('┃') : g('│'), fg: P(bark), bg: 0, anim: 0 });
+  for (let u = 1; u < h + 1; u++) {
+    for (const side of [-1, 1]) {
+      if (hash2(seed, u, side + 5) < 0.45) continue;
+      const reach = 1 + Math.floor(hash2(seed, u, side + 9) * (size > 2 ? 2 : 1.4));
+      for (let k = 1; k <= reach; k++) {
+        const tip = k === reach;
+        cells.push({ dx: side * k, dy: 0, up: u + k - 1, g: tip ? (hash2(seed, u, k) < 0.5 ? g('ψ') : g('ʬ')) : side < 0 ? g('╲') : g('╱'), fg: P(tip && hash2(seed, u * 7, k) < 0.25 ? glint : branch), bg: 0, anim: 0 });
+      }
+    }
+  }
+  cells.push({ dx: 0, dy: 0, up: h, g: g('Ψ'), fg: P(branch), bg: 0, anim: 0 });
+  return cells;
+}
+
 function pineTree(o: WorldObject): SpriteCell[] {
   const size = o.props.size ?? 2, seed = o.props.seed ?? o.id;
   const tiers = 2 + size * 2;
@@ -366,11 +387,11 @@ const rect = (w: number, h: number): Array<[number, number]> => {
 
 export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
   tree: {
-    label: 'Tree', variants: ['oak', 'pine', 'birch', 'willow', 'blossom', 'christmas'],
+    label: 'Tree', variants: ['oak', 'pine', 'birch', 'willow', 'blossom', 'christmas', 'dead'],
     props: [{ key: 'size', label: 'Size', min: 1, max: 3, step: 1 }, { key: 'seed', label: 'Shape seed', min: 0, max: 999, step: 1 }],
     defaults: { size: 2, seed: 1 }, solid: false,
     footprint: (o) => (o.variant === 'christmas' ? XMAS_FOOTPRINT : [[0, 0]]),
-    sprite: (o) => (o.variant === 'christmas' ? christmasTree(o) : o.variant === 'pine' ? pineTree(o) : roundTree(o, o.variant in TREE_LOOK ? o.variant : 'oak')),
+    sprite: (o) => (o.variant === 'christmas' ? christmasTree(o) : o.variant === 'pine' ? pineTree(o) : o.variant === 'dead' ? deadTree(o) : roundTree(o, o.variant in TREE_LOOK ? o.variant : 'oak')),
     light: (o) => (o.variant === 'blossom' ? { r: 5, color: C('#ff9ad8'), intensity: 0.45, up: 3 }
       : o.variant === 'christmas' ? { r: 13, color: C('#ffd08a'), intensity: 1.2, up: 14 } : null),
   },

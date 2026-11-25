@@ -62,7 +62,7 @@ export function createContinentEngine(opts: { worker?: boolean; at?: MapPt } = {
   win.world.name = WORLD.world.name;
   win.world.seed = WORLD.world.seed;
   const engine = new Engine(win.world);
-  const water = new WaterSystem(win.world, { useWorker: share, params: { edgeDrain: false }, init: (_sim, view) => { view.depth.set(win.waterDepth()); } });
+  const water = new WaterSystem(win.world, { useWorker: share, params: { edgeDrain: false, sleep: true }, init: (_sim, view) => { view.depth.set(win.waterDepth()); } });
   engine.attachWater(water);
   session.attach(engine);
   engine.home = session.windowCellOf(start);
@@ -75,7 +75,7 @@ export function createContinentEngine(opts: { worker?: boolean; at?: MapPt } = {
  * scene: 'world' (generated vale), 'terrain' (bare heightmap, M1 test), 'watertest' (deterministic water test) or
  * 'continent' (the streamed continent).
  */
-export function createEngine(seed: number, scene = 'world', opts: { worker?: boolean } = {}): Engine {
+export function createEngine(seed: number, scene = 'world', opts: { worker?: boolean; at?: MapPt } = {}): Engine {
   if (scene === 'continent') return createContinentEngine(opts).engine;
   const share = canShare() && opts.worker !== false;
   if (scene === 'world') {

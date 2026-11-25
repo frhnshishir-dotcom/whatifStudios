@@ -53,6 +53,6 @@ function loop(): void {
 
 function post(w: boolean): void {
   if (!sim) return;
-  const s: WaterStats = { stepMs, steps: sim.steps, total: sim.totalWater(), active: sim.activeChunks, added: sim.added, removed: sim.removed, warming: w };
+  const s: WaterStats = { stepMs, steps: sim.steps, total: sim.totalWater(), active: sim.activeChunks, sleeping: sim.sleepingChunks, added: sim.added, removed: sim.removed, warming: w };
   (self as unknown as Worker).postMessage({ type: 'stats', stats: s });
 }

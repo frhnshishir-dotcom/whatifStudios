@@ -11,6 +11,7 @@ export function applyWaterCmd(sim: WaterSim, c: WaterCmd, dt: number): void {
     case 'warmup': for (let k = 0; k < c.steps; k++) sim.step(dt); break;
     case 'clear': sim.clearWater(); break;
     case 'reset': sim.reset(c.depth); break;
+    case 'shift': sim.shift(c.sx, c.sy, c.fresh); break;
     case 'params': Object.assign(sim.params, c.params); break;
     case 'ports': sim.setPorts(c.sources, c.drains); break;
   }

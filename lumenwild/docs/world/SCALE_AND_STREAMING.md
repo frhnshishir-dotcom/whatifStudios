@@ -137,11 +137,16 @@ Tests added: `tests/world-terrain.test.ts` (9), `tests/world-stream.test.ts` (3)
   not save (valley saves are untouched). Per-region edit diffs are the next persistence step.
 - **Villages, bridges and landmarks at 1 m**: village sites are kept clear and paths are drawn as ground, but no
   buildings or bridge structures exist yet (Phase 3). Paths ford rivers where the blueprint has a bridge.
-- **Water state across moves**: water depth moves with the window; velocities and ripples restart.
+- **Water state across moves**: since the biome increment, depth, flow, ripples and the sleep state move with the
+  window (`WaterSim.shift`); only the new strip starts fresh.
 - **Datum**: heights are stored relative to the datum chosen at start; a very long climb (for example from the
   marshes to the summits) works but is not re-based.
-- **Main-thread water** on hosts without cross-origin isolation costs about 5 ms per step near large rivers; large
-  lakes filling the window would cost more (not yet optimised: settled water is still simulated).
+- **Main-thread water** on hosts without cross-origin isolation costs about 5 ms per step near large rivers. Settled
+  water now sleeps (continent mode only), so still lakes and marsh pools cost little once settled; see
+  `PHASE2_TECHNICAL_REPORT.md` section 5.
 - **Dragons and wildlife** are not in continent mode yet (Phase 4); the valley keeps its dragon.
 - **Hardware**: nothing here is validated on the laptop. Run Inspector → Benchmark there, and open the continent
   (top bar → Continent) to see its frame rate.
+
+The full status before Phase 3 (dimensions, village distances, memory, performance, water, biomes, limits, Valley
+compatibility) is in `PHASE2_TECHNICAL_REPORT.md`.

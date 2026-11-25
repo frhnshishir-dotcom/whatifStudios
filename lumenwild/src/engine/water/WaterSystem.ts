@@ -54,6 +54,8 @@ export class WaterSystem {
   clear() { this.send({ op: 'clear' }); }
   /** Replace all water (and remove every source and drain). */
   reset(depth: Float32Array | null) { this.send({ op: 'reset', depth: depth ? depth.slice() : null }); }
+  /** Streaming: the world moved by (sx, sy) cells; water and flow move with it, the new strip comes from `fresh`. */
+  shift(sx: number, sy: number, fresh: Float32Array) { this.send({ op: 'shift', sx, sy, fresh }); }
 
   setRunning(running: boolean, speed: number): void {
     this.worker?.postMessage({ type: 'run', running, speed });
@@ -69,7 +71,7 @@ export class WaterSystem {
     if (this.statT > 0.25) {
       this.statT = 0;
       const s = this.sim;
-      this.stats = { ...this.stats, steps: s.steps, total: s.totalWater(), active: s.activeChunks, added: s.added, removed: s.removed };
+      this.stats = { ...this.stats, steps: s.steps, total: s.totalWater(), active: s.activeChunks, sleeping: s.sleepingChunks, added: s.added, removed: s.removed };
       this.onStats?.(this.stats);
     }
   }

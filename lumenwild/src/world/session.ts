@@ -1,5 +1,4 @@
 import type { Engine } from '../engine/Engine';
-import { shiftGrid } from '../engine/world/World';
 import type { Blueprint } from './blueprint';
 import type { ContinentTerrain } from './terrain';
 import { RegionCache, WorldWindow, WINDOW_REGIONS, riverPorts } from './stream';
@@ -137,28 +136,25 @@ export class ContinentSession {
 
   /** Move the window by one region along one axis and carry everything with it. */
   moveWindow(engine: Engine, dx: number, dy: number): void {
-    const t0 = performance.now(), W = this.win.W, S = this.win.S;
+    const t0 = performance.now();
     const water = engine.water;
     water?.setRunning(false, engine.clock.speed);
-    const depth = water ? water.view.depth.slice() : null;
     const [sx, sy] = this.win.shift(dx, dy, (rx, ry) => this.cache.ensure(rx, ry));
     engine.shader.shift(sx, sy);
     engine.objects.shift(sx, sy);
+    if (water) {
+      // Water, flow, ripples and settled (sleeping) pools move with the terrain; the uncovered strip starts with its
+      // rivers, lakes and pools filled. Then the river inflows and outflows are placed at the new window edge.
+      // (Before the strip's objects are added: their obstacles must displace water in the shifted grid.)
+      water.shift(sx, sy, this.win.waterDepth());
+      this.applyPorts(engine);
+    }
     const gx0 = dx > 0 ? WINDOW_REGIONS - 1 : 0, gy0 = dy > 0 ? WINDOW_REGIONS - 1 : 0;
     for (let k = 0; k < WINDOW_REGIONS; k++) {
       const gx = dx ? gx0 : k, gy = dx ? k : gy0;
       for (const o of this.win.objectsOf(gx, gy)) engine.objects.add({ kind: o.kind, x: o.x, y: o.y, variant: o.variant, props: {} });
     }
-    if (water && depth) {
-      shiftGrid(depth, W, W, sx, sy);
-      // The uncovered strip starts with its rivers, lakes and pools filled.
-      const fresh = this.win.waterDepth();
-      const x0 = dx > 0 ? W - S : 0, x1 = dx < 0 ? S : W, y0 = dy > 0 ? W - S : 0, y1 = dy < 0 ? S : W;
-      for (let y = dx ? 0 : y0; y < (dx ? W : y1); y++) for (let x = dx ? x0 : 0; x < (dx ? x1 : W); x++) depth[y * W + x] = fresh[y * W + x];
-      water.reset(depth);
-      this.applyPorts(engine);
-      water.setRunning(!engine.clock.paused, engine.clock.speed);
-    }
+    water?.setRunning(!engine.clock.paused, engine.clock.speed);
     engine.cam.x -= sx; engine.cam.y -= sy;
     engine.particles.n = 0;
     engine.editor.history.clear();

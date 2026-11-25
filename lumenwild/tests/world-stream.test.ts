@@ -78,4 +78,34 @@ describe('region streaming', { timeout: 120_000 }, () => {
     expect(n2).toBeGreaterThan(5_000);
     expect(v2 / n2).toBeGreaterThan(0.5); // metres of water per river cell on average
   });
+
+  it('water, flow and settled pools move with the window: nothing restarts except the new strip', () => {
+    const { engine, session } = createContinentEngine({ worker: false, at: [493, 515] });
+    engine.cam.setViewport(1440, 900);
+    engine.focus(...engine.home!);
+    const sim = (engine.water as unknown as { sim: { depth: Float32Array; velX: Float32Array; velY: Float32Array; fR: Float32Array; calm: Uint16Array; chunksX: number; sleepingChunks: number; totalWater(): number } }).sim;
+    const W = session.win.W, S = session.win.S, kind = session.win.waterKind;
+    let f = 0;
+    for (let k = 0; k < 600; k++) engine.frame(f++ * 1000 / 60);
+    const flow = () => { let v = 0, n = 0; for (let i = 0; i < W * W; i++) if (kind[i] === WK_RIVER && sim.depth[i] > 0.05) { v += Math.hypot(sim.velX[i], sim.velY[i]); n++; } return v / n; };
+    const d0 = sim.depth.slice(), vx0 = sim.velX.slice(), f0 = sim.fR.slice(), calm0 = sim.calm.slice(), flow0 = flow(), asleep0 = sim.sleepingChunks;
+    session.moveWindow(engine, 0, 1);
+    // Rows that stayed in the window: depth, velocity and flux are carried exactly (no restart).
+    let same = 0, diff = 0;
+    for (let y = 0; y < W - S; y++) for (let x = 0; x < W; x++) {
+      const a = y * W + x, b = (y + S) * W + x;
+      if (engine.world.solid[a]) continue; // water inside rocks is displaced when the obstacles are rebuilt
+      if (sim.depth[a] === d0[b] && sim.velX[a] === vx0[b] && sim.fR[a] === f0[b]) same++; else diff++;
+    }
+    expect(diff, `${diff} cells changed`).toBe(0);
+    // Settled chunks stay asleep where they were (away from the old and new edges).
+    const CX = sim.chunksX, cs = S / 16;
+    for (let j = 1; j < CX - cs - 1; j++) for (let i = 1; i < CX - 1; i++) expect(sim.calm[j * CX + i], `chunk ${i},${j}`).toBe(calm0[(j + cs) * CX + i]);
+    // The river keeps flowing through the move.
+    for (let k = 0; k < 120; k++) engine.frame(f++ * 1000 / 60);
+    const flow1 = flow();
+    console.log(`water through a move: ${same} cells carried exactly; river speed ${flow0.toFixed(2)} -> ${flow1.toFixed(2)} m/s two seconds later; sleeping chunks ${asleep0} before`);
+    expect(flow1 / flow0).toBeGreaterThan(0.7);
+    expect(flow1 / flow0).toBeLessThan(1.4);
+  });
 });

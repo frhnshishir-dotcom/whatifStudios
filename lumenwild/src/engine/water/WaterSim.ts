@@ -1,4 +1,4 @@
-import { CHUNK, type Alloc, heapAlloc } from '../world/World';
+import { CHUNK, type Alloc, heapAlloc, shiftGrid } from '../world/World';
 import { mulberry32 } from '../core/rng';
 
 /**
@@ -12,6 +12,11 @@ import { mulberry32 } from '../core/rng';
  * reflect, waves interfere linearly and fade with `rippleDamping`.
  *
  * Only active chunks (16 x 16 cells holding water or sources, dilated by one chunk) are processed.
+ *
+ * Optional sleeping (`sleep`, off by default; the continent turns it on): a chunk whose water has stood still for
+ * `CALM_STEPS` steps (depth, flux and ripples below small thresholds) goes to sleep with zero flux and is no longer
+ * processed unless a neighbouring chunk is awake. Cells next to a chunk that is not processed this step see it as a
+ * wall, so every transfer stays exactly conservative. Edits, sources, drains and inflowing water wake chunks.
  */
 export interface WaterParams {
   gravity: number;
@@ -25,6 +30,8 @@ export interface WaterParams {
   rippleDamping: number;
   rippleMinDepth: number;
   fallRipple: number;
+  /** Let settled chunks sleep (see above). */
+  sleep: boolean;
 }
 
 export const DEFAULT_WATER: WaterParams = {
@@ -39,7 +46,17 @@ export const DEFAULT_WATER: WaterParams = {
   rippleDamping: 0.982,
   rippleMinDepth: 0.03,
   fallRipple: 0.05,
+  sleep: false,
 };
+
+/** Steps of standing water before a chunk sleeps, and the thresholds for "standing": depth change (m per step: a 1 cm swell changes faster; a film at the shore that refills as it dries does not), outflow per cell (m^3/s; slow circulation in a settled pool is a few litres per second, a river carries far more) and ripple height (m). */
+const CALM_STEPS = 60, CALM_DEPTH = 1e-4, CALM_FLUX = 0.02, CALM_RIPPLE = 2e-3;
+/**
+ * Sleeping mode also adds drag to slow water (reeds, still pools): in a chunk whose strongest outflow last step was
+ * under STILL_FLUX m^3/s per cell, fluxes keep STILL_DAMP of their momentum per step instead of `fluxDamping`, so a
+ * pool settles in a few seconds instead of sloshing for a minute. Rivers carry far more and are not affected.
+ */
+const STILL_FLUX = 0.15, STILL_DAMP = 0.9;
 
 /** Names and element sizes of every shared array (so a worker and the renderer can wrap the same memory). */
 export const WATER_ARRAYS = {
@@ -99,12 +116,20 @@ export class WaterSim extends WaterView {
   readonly chunkWater: Float32Array;
   readonly chunkSources: Int32Array;
   readonly active: Uint8Array;
+  /** Steps each chunk has been calm (sleeping mode only). */
+  readonly calm: Uint16Array;
+  private chunkDrains: Int32Array;
+  private calmFlux: Float32Array;
+  private chunkFlux: Float32Array;
+  private calmRipple: Float32Array;
   readonly params: WaterParams;
   /** Totals for conservation accounting (m^3): added by sources/brushes, removed by drains/edges/evaporation. */
   added = 0;
   removed = 0;
   steps = 0;
   activeChunks = 0;
+  /** Chunks holding water that are asleep (sleeping mode only). */
+  sleepingChunks = 0;
   private sourceList: number[] = [];
   private drainList: number[] = [];
   private rand = mulberry32(12345);
@@ -123,6 +148,11 @@ export class WaterSim extends WaterView {
     this.chunkWater = new Float32Array(this.chunksX * this.chunksY);
     this.chunkSources = new Int32Array(this.chunksX * this.chunksY);
     this.active = new Uint8Array(this.chunksX * this.chunksY);
+    this.calm = new Uint16Array(this.chunksX * this.chunksY);
+    this.chunkDrains = new Int32Array(this.chunksX * this.chunksY);
+    this.calmFlux = new Float32Array(this.chunksX * this.chunksY);
+    this.chunkFlux = new Float32Array(this.chunksX * this.chunksY).fill(1);
+    this.calmRipple = new Float32Array(this.chunksX * this.chunksY);
     this.fallTo.fill(-1);
     this.rebuildLists();
     this.activateAll();
@@ -137,6 +167,8 @@ export class WaterSim extends WaterView {
 
   activateAll(): void {
     this.chunkWater.fill(1);
+    this.calm?.fill(0);
+    this.chunkFlux?.fill(1);
   }
 
   private chunkOf(i: number): number {
@@ -148,9 +180,10 @@ export class WaterSim extends WaterView {
     this.sourceList = [];
     this.drainList = [];
     this.chunkSources.fill(0);
+    this.chunkDrains?.fill(0);
     for (let i = 0; i < this.n; i++) {
       if (this.source[i] > 0) { this.sourceList.push(i); this.chunkSources[this.chunkOf(i)]++; }
-      if (this.drain[i] > 0) this.drainList.push(i);
+      if (this.drain[i] > 0) { this.drainList.push(i); if (this.chunkDrains) this.chunkDrains[this.chunkOf(i)]++; }
     }
   }
 
@@ -167,6 +200,7 @@ export class WaterSim extends WaterView {
       this.depth[i] = after;
       if (after > before) this.added += after - before; else this.removed += before - after;
       this.chunkWater[this.chunkOf(i)] += 1;
+      this.calm[this.chunkOf(i)] = 0;
     }
   }
 
@@ -199,6 +233,7 @@ export class WaterSim extends WaterView {
       cur[i] += v;
       prev[i] += v;
       this.chunkWater[this.chunkOf(i)] += 1;
+      this.calm[this.chunkOf(i)] = 0;
     });
   }
 
@@ -210,6 +245,41 @@ export class WaterSim extends WaterView {
     this.added = 0; this.removed = 0;
     this.rebuildLists();
     this.activateAll();
+  }
+
+  /**
+   * Streaming: the world under the simulation moved by (sx, sy) cells (multiples of CHUNK). Water, flow, ripples and
+   * the sleep state move with it, so rivers keep flowing and settled pools stay asleep; the uncovered strip takes
+   * its water from `fresh` (a full-size depth grid) with no flow, and is awake. Sources and drains are cleared (the
+   * caller places the new ones). Water carried out of the grid and water brought in are booked in the ledger.
+   */
+  shift(sx: number, sy: number, fresh: Float32Array): void {
+    const { w, h, n } = this;
+    let out = 0, inn = 0;
+    for (let i = 0; i < n; i++) out += this.depth[i];
+    for (const a of [this.depth, this.fL, this.fR, this.fU, this.fD, this.velX, this.velY, this.rippleA, this.rippleB]) shiftGrid(a, w, h, sx, sy);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if ((sx > 0 && x >= w - sx) || (sx < 0 && x < -sx) || (sy > 0 && y >= h - sy) || (sy < 0 && y < -sy)) {
+        this.depth[i] = fresh[i];
+        this.fL[i] = this.fR[i] = this.fU[i] = this.fD[i] = this.velX[i] = this.velY[i] = this.rippleA[i] = this.rippleB[i] = 0;
+      }
+      inn += this.depth[i];
+    }
+    this.fall.fill(0); this.fallTo.fill(-1);
+    // Chunk state: shift the calm counters; the new strip and the chunks next to it start awake.
+    const CX = this.chunksX, CY = this.chunksY, cx = Math.round(sx / CHUNK), cy = Math.round(sy / CHUNK), old = this.calm.slice();
+    for (let j = 0; j < CY; j++) for (let i = 0; i < CX; i++) {
+      const oi = i + cx, oj = j + cy, inside = oi >= 1 && oj >= 1 && oi < CX - 1 && oj < CY - 1;
+      this.calm[j * CX + i] = inside ? old[oj * CX + oi] : 0;
+    }
+    this.chunkWater.fill(0);
+    for (let i = 0; i < n; i++) this.chunkWater[this.chunkOf(i)] += this.depth[i];
+    this.chunkFlux.fill(1);
+    // The ledger: what left with the old strip and what arrived with the new one.
+    if (inn > out) this.added += inn - out; else this.removed += out - inn;
+    this.source.fill(0); this.drain.fill(0);
+    this.rebuildLists();
   }
 
   clearWater(): void {
@@ -225,7 +295,7 @@ export class WaterSim extends WaterView {
       if (this.solid[i] && this.depth[i] > 0) { this.removed += this.depth[i]; this.depth[i] = 0; this.fL[i] = this.fR[i] = this.fU[i] = this.fD[i] = 0; }
     }
     for (let cy = Math.max(0, (y0 / CHUNK) | 0); cy <= Math.min(this.chunksY - 1, (y1 / CHUNK) | 0); cy++)
-      for (let cx = Math.max(0, (x0 / CHUNK) | 0); cx <= Math.min(this.chunksX - 1, (x1 / CHUNK) | 0); cx++) this.chunkWater[cy * this.chunksX + cx] += 1;
+      for (let cx = Math.max(0, (x0 / CHUNK) | 0); cx <= Math.min(this.chunksX - 1, (x1 / CHUNK) | 0); cx++) { this.chunkWater[cy * this.chunksX + cx] += 1; this.calm[cy * this.chunksX + cx] = 0; }
   }
 
   private inBounds(x: number, y: number): boolean { return x >= 0 && y >= 0 && x < this.w && y < this.h; }
@@ -243,12 +313,14 @@ export class WaterSim extends WaterView {
   step(dt: number): void {
     const { w, h, elev, depth, fL, fR, fU, fD, solid, params: p } = this;
     // Active chunks: water or sources last step, dilated by one chunk (water moves < 1 cell per step).
-    const CX = this.chunksX, CY = this.chunksY, act = this.active;
+    const CX = this.chunksX, CY = this.chunksY, act = this.active, sleep = p.sleep, calm = this.calm;
     act.fill(0);
-    let nAct = 0;
+    let nAct = 0, nSleep = 0;
     for (let cy = 0; cy < CY; cy++) for (let cx = 0; cx < CX; cx++) {
       const c = cy * CX + cx;
-      if (this.chunkWater[c] > 1e-7 || this.chunkSources[c] > 0) {
+      const wet = this.chunkWater[c] > 1e-7 || this.chunkSources[c] > 0;
+      if (sleep && wet && calm[c] >= CALM_STEPS && !this.chunkSources[c] && !this.chunkDrains[c]) { nSleep++; continue; }
+      if (wet) {
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
           const ax = cx + dx, ay = cy + dy;
           if (ax >= 0 && ay >= 0 && ax < CX && ay < CY) act[ay * CX + ax] = 1;
@@ -257,18 +329,22 @@ export class WaterSim extends WaterView {
     }
     for (let c = 0; c < act.length; c++) nAct += act[c];
     this.activeChunks = nAct;
+    this.sleepingChunks = nSleep;
 
     // Sources and drains.
     for (const i of this.sourceList) { const a = this.source[i] * dt; depth[i] += a; this.added += a; }
     for (const i of this.drainList) { const a = Math.min(depth[i], this.drain[i] * dt); depth[i] -= a; this.removed += a; }
 
-    const k = dt * p.pipe * p.gravity, damp = p.fluxDamping, edge = p.edgeDrain, fallDrop = p.fallDrop;
+    const k = dt * p.pipe * p.gravity, damp0 = p.fluxDamping, edge = p.edgeDrain, fallDrop = p.fallDrop;
     const EDGE_DROP = 3;
     // 1) Fluxes.
     for (let c = 0; c < act.length; c++) {
       if (!act[c]) continue;
       const x0 = (c % CX) * CHUNK, y0 = ((c / CX) | 0) * CHUNK;
       const x1 = Math.min(w, x0 + CHUNK), y1 = Math.min(h, y0 + CHUNK);
+      // Sleeping mode: a neighbouring chunk that is not processed this step is a wall.
+      const wl = sleep && x0 > 0 && !act[c - 1], wrr = sleep && x1 < w && !act[c + 1], wu = sleep && y0 > 0 && !act[c - CX], wd = sleep && y1 < h && !act[c + CX];
+      const damp = sleep && this.chunkFlux[c] < STILL_FLUX && !this.chunkSources[c] ? STILL_DAMP : damp0;
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
           const i = y * w + x;
@@ -285,6 +361,7 @@ export class WaterSim extends WaterView {
           if (r < 0 || (x < w - 1 && solid[i + 1])) r = 0;
           if (u < 0 || (y > 0 && solid[i - w])) u = 0;
           if (dn < 0 || (y < h - 1 && solid[i + w])) dn = 0;
+          if (sleep) { if (wl && x === x0) l = 0; if (wrr && x === x1 - 1) r = 0; if (wu && y === y0) u = 0; if (wd && y === y1 - 1) dn = 0; }
           const sum = l + r + u + dn;
           if (sum * dt > d) { const s = d / (sum * dt); l *= s; r *= s; u *= s; dn *= s; }
           fL[i] = l; fR[i] = r; fU[i] = u; fD[i] = dn;
@@ -300,12 +377,12 @@ export class WaterSim extends WaterView {
       }
     }
     // 2) Depths and velocities.
-    this.chunkWater.fill(0);
+    if (!sleep) this.chunkWater.fill(0);
     for (let c = 0; c < act.length; c++) {
       if (!act[c]) continue;
       const x0 = (c % CX) * CHUNK, y0 = ((c / CX) | 0) * CHUNK;
       const x1 = Math.min(w, x0 + CHUNK), y1 = Math.min(h, y0 + CHUNK);
-      let cw = 0;
+      let cw = 0, md = 0, mf = 0;
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
           const i = y * w + x;
@@ -323,6 +400,8 @@ export class WaterSim extends WaterView {
           const d0 = depth[i];
           let d1 = d0 + dt * (inL + inR + inU + inD - out);
           if (d1 < 0) d1 = 0;
+          // Calm is judged on flow alone (films drying out do not keep a chunk awake).
+          if (sleep) { const dd = d1 > d0 ? d1 - d0 : d0 - d1; if (dd > md) md = dd; if (out > mf) mf = out; }
           if (d1 > 0 && d1 < p.filmDepth) { const e = Math.min(d1, p.evaporation * dt); d1 -= e; this.removed += e; }
           depth[i] = d1;
           const dAvg = Math.max(0.05, (d0 + d1) * 0.5);
@@ -332,10 +411,31 @@ export class WaterSim extends WaterView {
         }
       }
       this.chunkWater[c] = cw;
+      if (sleep) { this.calmFlux[c] = md < CALM_DEPTH && mf < CALM_FLUX ? 1 : 0; this.chunkFlux[c] = mf; }
     }
     // 3) Ripples (wave equation) on wet cells; waterfall impacts keep pools rippling.
     this.stepRipples(act);
+    if (sleep) this.updateCalm(act);
     this.steps++;
+  }
+
+  /** Sleeping mode: count calm steps per processed chunk; a chunk calm for CALM_STEPS is asleep (zero flux). */
+  private updateCalm(act: Uint8Array): void {
+    const { w, h } = this, CX = this.chunksX;
+    for (let c = 0; c < act.length; c++) {
+      if (!act[c]) continue;
+      if (!this.calmFlux[c] || this.calmRipple[c] >= CALM_RIPPLE || this.chunkSources[c] || this.chunkDrains[c]) { this.calm[c] = 0; continue; }
+      if (this.calm[c] < 65535) this.calm[c]++;
+      // An asleep chunk holds no flux (also while a neighbour keeps it processed), so a chunk that stops being
+      // processed never leaves momentum behind for its neighbours to read.
+      if (this.calm[c] < CALM_STEPS) continue;
+      const x0 = (c % CX) * CHUNK, y0 = ((c / CX) | 0) * CHUNK, x1 = Math.min(w, x0 + CHUNK), y1 = Math.min(h, y0 + CHUNK);
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+        const i = y * w + x;
+        this.fL[i] = this.fR[i] = this.fU[i] = this.fD[i] = 0;
+        this.velX[i] = this.velY[i] = 0; this.fall[i] = 0; this.rippleA[i] = this.rippleB[i] = 0;
+      }
+    }
   }
 
   private stepRipples(act: Uint8Array): void {
@@ -343,7 +443,7 @@ export class WaterSim extends WaterView {
     const depth = this.depth;
     const par = this.header[0];
     const cur = par ? this.rippleB : this.rippleA, nxt = par ? this.rippleA : this.rippleB;
-    const c2 = p.rippleC2, damp = p.rippleDamping, minD = p.rippleMinDepth, CX = this.chunksX;
+    const c2 = p.rippleC2, damp = p.rippleDamping, minD = p.rippleMinDepth, CX = this.chunksX, track = p.sleep;
     // Waterfall impacts: small deterministic disturbances at landing cells.
     for (let c = 0; c < act.length; c++) {
       if (!act[c]) continue;
@@ -357,10 +457,12 @@ export class WaterSim extends WaterView {
       if (!act[c]) continue;
       const x0 = (c % CX) * CHUNK, y0 = ((c / CX) | 0) * CHUNK;
       const x1 = Math.min(w, x0 + CHUNK), y1 = Math.min(h, y0 + CHUNK);
+      let rm = 0;
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
           const i = y * w + x;
           if (depth[i] < minD) { nxt[i] = 0; continue; }
+          if (track) { const a = cur[i] < 0 ? -cur[i] : cur[i]; if (a > rm) rm = a; }
           const v = cur[i];
           // Dry or out-of-bounds neighbours reflect (mirror the centre value).
           const l = x > 0 && depth[i - 1] >= minD ? cur[i - 1] : v;
@@ -370,6 +472,7 @@ export class WaterSim extends WaterView {
           nxt[i] = (2 * v - nxt[i] + c2 * (l + r + u + d - 4 * v)) * damp;
         }
       }
+      if (track) this.calmRipple[c] = rm;
     }
     this.header[0] = par ? 0 : 1;
   }
