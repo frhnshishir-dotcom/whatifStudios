@@ -1,5 +1,25 @@
 # Lumenwild changelog
 
+## Phase 3b: villages and road bridges at 1 m (2026-11-25)
+- Six villages are built from `world/settlements/settlements.json` (each with its `culture`), using the draft village
+  engine's cultures and programmes:
+  - square and communal feature
+  - lanes toward road exits
+  - buildings within each settlement's range (13-30 counted)
+  - fields, pasture or gardens
+
+  Plans are deterministic (`src/world/villages.ts`). They are drawn into regions with level pads that never cross a
+  region edge.
+- `building` object: a parametric village building in five culture styles (base, storeys, gabled roof, type
+  details), plus small structures and towers.
+- `span` object: road bridges at all six blueprint crossings (16-84 m), across the river from bank to bank, with
+  railings and piers; trees and rocks are kept off them.
+- Persistence: generated object properties (deck heights absolute) are part of the reference; generator version
+  bumped.
+- The biome transition system (baa9516) is unchanged; the Valley is unchanged (golden images match).
+- Docs: `docs/world/PHASE3_VILLAGES_BRIDGES.md`, `villages-close.jpg`, `villages-mid.jpg`. Tests:
+  `tests/world-villages.test.ts` (6), `e2e/m16-villages.spec.ts`; 178 unit and 62 browser tests pass.
+
 ## Phase 3a: persistent continent data (2026-11-25)
 - Baseline kept: the approved biome transition system (commit baa9516) is unchanged.
 - `src/world/edits.ts`: each region's difference from generation. It covers changed cells, removed and added objects,

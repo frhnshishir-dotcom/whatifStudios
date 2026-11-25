@@ -221,8 +221,8 @@ in proportion to its share.
 
 1. **Saving is region diffs.** Moving water is not saved, only ponds on dry ground. Undo history is cleared when the
    window moves.
-2. **No villages at 1 m.** Village sites are kept clear and roads are drawn on the ground, but there are no buildings,
-   bridge structures, watchtowers or landmarks yet (Phase 3). Roads ford rivers at the blueprint's bridge points.
+2. **Villages and bridges are built** (Phase 3b; see `PHASE3_VILLAGES_BRIDGES.md`). Watchtowers, landmarks, ruins
+   and villagers are not built yet.
 3. **No travel gameplay.** The Continent panel's "travel" moves the view along a planned route at a chosen speed, for
    testing. Walking, running with stamina, mounts and discovered-route travel are design items, not code.
 4. **No dragons or wildlife in the continent** (Phase 4). The Valley keeps its dragon. Dragon flight on the continent

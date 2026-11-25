@@ -5,6 +5,8 @@ import { hash2 } from '../engine/core/rng';
 import { smoothstep } from '../engine/core/math';
 import { Mat, Cover } from '../engine/world/materials';
 import { Uniformizer, biomeShares, pickBiome, pickBiomeEdge, UNBLENDED, packBlend, SHARE_FLOOR } from './ecotone';
+import { planVillage, type VillagePlan, type SiteQuery } from './villages';
+import { BUILDING_TYPES } from '../engine/objects/defs';
 
 type WorldLake = WorldData['lakes'][number];
 
@@ -23,7 +25,14 @@ type WorldLake = WorldData['lakes'][number];
 
 export const WK_NONE = 0, WK_SEA = 1, WK_LAKE = 2, WK_RIVER = 3, WK_MARSH = 4;
 
-export interface RegionObject { kind: 'tree' | 'rock' | 'mushroom'; x: number; y: number; variant: string }
+/**
+ * A generated object (region-local cell). `props` holds non-default properties; a `z` there is an absolute height
+ * (m) and becomes relative to the window's datum when the object is placed.
+ */
+export interface RegionObject { kind: 'tree' | 'rock' | 'mushroom' | 'building' | 'span' | 'mill'; x: number; y: number; variant: string; props?: Record<string, number> }
+
+/** A road bridge where a road crosses a river (continent metres; deck height absolute). */
+export interface BridgeSite { road: string; river: string; x: number; y: number; dir: 0 | 1; length: number; z: number; cx: number; cy: number }
 export interface RegionData {
   rx: number; ry: number; size: number;
   /** Continent cell of the region's top-left cell. */
@@ -66,6 +75,10 @@ export class ContinentTerrain {
   private segs: Seg[] = [];
   private bucket = new Map<number, number[]>();
   private paths: Array<{ cls: string; pts: Float64Array }> = [];
+  /** Road bridges (where each road's path crosses a river). */
+  readonly bridges: BridgeSite[] = [];
+  /** Village plans, made on first use (pure: the same in a worker and on the main thread). */
+  private plans = new Map<string, VillagePlan>();
   private salt: number;
   private marsh: number;
   /** fbm ranks: 2 and 3 octaves. */
@@ -130,6 +143,162 @@ export class ContinentTerrain {
       const last = r.pts[r.pts.length - 1];
       out.push(last[0] * this.mpu, last[1] * this.mpu);
       this.paths.push({ cls: r.cls, pts: Float64Array.from(out) });
+      for (const b of r.bridges) { const site = this.bridgeSite(out, b.at[0] * this.mpu, b.at[1] * this.mpu, r.id, b.river); if (site) this.bridges.push(site); }
+    }
+  }
+
+  /** Inside a river channel (continent metres)? */
+  private inRiver(x: number, y: number): { s: number; h: number; dx: number; dy: number } | null {
+    for (const si of this.segsNear(x - 1, y - 1, x + 1, y + 1)) {
+      const sg = this.segs[si], d = segDist(sg, x, y);
+      if (d.d < d.h) { const L = Math.hypot(sg.bx - sg.ax, sg.by - sg.ay) || 1; return { s: d.s, h: d.h, dx: (sg.bx - sg.ax) / L, dy: (sg.by - sg.ay) / L }; }
+    }
+    return null;
+  }
+
+  /**
+   * Where a road's path crosses the river near a blueprint bridge: the wet stretch of the path (sampled every metre)
+   * nearest the blueprint point gives the crossing; the deck runs across the river along the axis nearer its normal,
+   * from bank to bank plus 4 m onto each, above the river surface.
+   */
+  private bridgeSite(pts: number[], bx: number, by: number, road: string, river: string): BridgeSite | null {
+    const runs: Array<Array<[number, number]>> = [];
+    let run: Array<[number, number]> | null = null;
+    for (let k = 0; k + 3 < pts.length; k += 2) {
+      const ax = pts[k], ay = pts[k + 1], cx = pts[k + 2], cy = pts[k + 3];
+      if (Math.min(Math.hypot(ax - bx, ay - by), Math.hypot(cx - bx, cy - by)) > 300) { run = null; continue; }
+      const L = Math.hypot(cx - ax, cy - ay), n = Math.max(1, Math.ceil(L));
+      for (let t = 0; t < n; t++) {
+        const x = ax + ((cx - ax) * t) / n, y = ay + ((cy - ay) * t) / n;
+        if (this.inRiver(x, y)) { if (!run) runs.push((run = [])); run.push([x, y]); } else run = null;
+      }
+    }
+    if (!runs.length) return null;
+    let best = runs[0], bd = Infinity;
+    for (const r of runs) { const m = r[r.length >> 1], d = Math.hypot(m[0] - bx, m[1] - by); if (d < bd) { bd = d; best = r; } }
+    const [cx, cy] = best[best.length >> 1];
+    const here = this.inRiver(cx, cy)!;
+    // Across the river: along x when the river runs more north-south, along y when it runs more east-west.
+    const dir: 0 | 1 = Math.abs(here.dy) >= Math.abs(here.dx) ? 0 : 1;
+    const ux = dir === 0 ? 1 : 0, uy = dir === 0 ? 0 : 1;
+    const reach = (sgn: number) => { let t = 0; while (t < 400 && this.inRiver(cx + ux * sgn * (t + 1), cy + uy * sgn * (t + 1))) t++; return t + 1; };
+    const a = reach(-1), b = reach(1), length = Math.round(a + b + 8);
+    const x = Math.round(dir === 0 ? cx - a - 4 : cx - 1), y = Math.round(dir === 0 ? cy - 1 : cy - a - 4);
+    return { road, river, x, y, dir, length, z: here.s + 1.4 + 0.02 * here.h, cx, cy };
+  }
+
+  /** Ground and water as village planning reads them (smooth ground; rivers, lakes and the sea). */
+  siteQuery(): SiteQuery {
+    const w = new Float64Array(this.bp.data.regions.length), mpu = this.mpu, lakes = this.bp.data.lakes;
+    return {
+      z: (x, y) => {
+        const sd = this.segsNear(x - 1, y - 1, x + 1, y + 1).map((i) => segDist(this.segs[i], x, y));
+        const near = lakes.filter((l) => Math.hypot(l.at[0] * mpu - x, l.at[1] * mpu - y) < (l.radius + 9) * mpu);
+        const n = this.node(x, y, sd, near, w);
+        // River valleys are carved below the smooth ground: follow the bank down near a river.
+        let z = n.macro + n.meso;
+        for (const d of sd) if (d.d < d.h * 6 + 60) z = Math.min(z, d.s + 0.3 + Math.max(0, z - d.s - 0.3) * smoothstep(d.h, d.h * 6 + 60, d.d));
+        return z;
+      },
+      wet: (x, y, margin) => {
+        if (this.macroAt(x, y) < 1) return true;
+        for (const i of this.segsNear(x - margin, y - margin, x + margin, y + margin)) { const d = segDist(this.segs[i], x, y); if (d.d < d.h + margin) return true; }
+        for (const l of lakes) {
+          const dx = x - l.at[0] * mpu, dy = y - l.at[1] * mpu, dd = Math.hypot(dx, dy);
+          if (dd < (l.radius * 1.2 + 1) * mpu + margin && dd < lakeRadius(this.bp.data, l, Math.atan2(dy, dx)) * mpu + margin) return true;
+        }
+        return false;
+      },
+    };
+  }
+
+  /** The village plans whose area meets a rectangle (continent metres). */
+  villagesNear(x0: number, y0: number, x1: number, y1: number): VillagePlan[] {
+    const out: VillagePlan[] = [];
+    for (const s of this.bp.data.settlements) {
+      const r = s.footprintRadius * this.mpu + 40, sx = s.at[0] * this.mpu, sy = s.at[1] * this.mpu;
+      if (sx + r < x0 || sx - r > x1 || sy + r < y0 || sy - r > y1) continue;
+      out.push(this.village(s.id)!);
+    }
+    return out;
+  }
+
+  /** A village's plan (made once). */
+  village(id: string): VillagePlan | null {
+    let p = this.plans.get(id);
+    if (p) return p;
+    const s = this.bp.data.settlements.find((q) => q.id === id);
+    if (!s) return null;
+    const r = s.footprintRadius * this.mpu + 60, sx = s.at[0] * this.mpu, sy = s.at[1] * this.mpu;
+    const roads: Array<Array<[number, number]>> = [];
+    for (const path of this.paths) {
+      const a = path.pts, near: Array<[number, number]> = [];
+      for (let k = 0; k + 1 < a.length; k += 2) if (Math.hypot(a[k] - sx, a[k + 1] - sy) < r) near.push([a[k], a[k + 1]]);
+      if (near.length > 1) roads.push(near);
+    }
+    p = planVillage(s, this.siteQuery(), roads, this.mpu, this.regionCells);
+    this.plans.set(id, p);
+    return p;
+  }
+
+  /**
+   * Draw villages and bridges into a generated region: levelled pads, lanes and the square, fields; building, mill
+   * and bridge objects (each in the region holding its anchor cell).
+   */
+  private buildSettlements(out: RegionData, kind: Uint8Array, M: number): void {
+    const S = out.size, ox = out.ox, oy = out.oy;
+    const land = (i: number, j: number) => kind[(j + 1) * M + i + 1] === WK_NONE;
+    for (const v of this.villagesNear(ox, oy, ox + S, oy + S)) {
+      if (v.bbox[2] < ox || v.bbox[0] > ox + S || v.bbox[3] < oy || v.bbox[1] > oy + S) continue;
+      const laneMat = v.culture === 'frost-lodge' || v.culture === 'elder-grove' ? Mat.Dirt : Mat.Path;
+      // Fields first (lanes and pads draw over their edges).
+      for (const f of v.fields) {
+        for (let y = Math.max(f.y0, oy); y < Math.min(f.y1, oy + S); y++) for (let x = Math.max(f.x0, ox); x < Math.min(f.x1, ox + S); x++) {
+          const i = x - ox, j = y - oy, k = j * S + i;
+          if (!land(i, j) || out.mat[k] === Mat.Path) continue;
+          const row = Math.floor((f.dir === 0 ? y - f.y0 : x - f.x0) / 2) % 2, edge = x === f.x0 || y === f.y0 || x === f.x1 - 1 || y === f.y1 - 1;
+          if (f.kind === 'pasture') { out.mat[k] = Mat.Meadow; out.cover[k] = edge ? Cover.TallGrass : (hash2(x, y, 41) < 0.2 ? Cover.Clover : Cover.ShortGrass); }
+          else if (f.kind === 'gardens') { out.mat[k] = Mat.Meadow; out.cover[k] = edge ? Cover.Fern : row ? Cover.Flowers : Cover.Clover; }
+          else if (edge) { out.mat[k] = Mat.Grass; out.cover[k] = Cover.TallGrass; }
+          else if (row) { out.mat[k] = Mat.Dirt; out.cover[k] = Cover.None; }
+          else { out.mat[k] = v.culture === 'plains-farmstead' ? Mat.DryGrass : Mat.Meadow; out.cover[k] = v.culture === 'plains-farmstead' ? Cover.GoldenGrass : Cover.TallGrass; }
+          out.blend[k] = 0;
+        }
+      }
+      // Square and lanes.
+      const paint = (x: number, y: number) => {
+        const i = x - ox, j = y - oy;
+        if (i < 0 || j < 0 || i >= S || j >= S || !land(i, j)) return;
+        const k = j * S + i;
+        out.mat[k] = laneMat; out.cover[k] = Cover.None; out.blend[k] = 0;
+      };
+      const sq = v.square;
+      for (let y = -sq.r; y <= sq.r; y++) for (let x = -sq.r; x <= sq.r; x++) if (x * x + y * y <= sq.r * sq.r) paint(sq.x + x, sq.y + y);
+      const hw = v.laneWidth >> 1;
+      for (const lane of v.lanes) for (let k = 0; k + 1 < lane.length; k++) {
+        const [ax, ay] = lane[k], [bx, by] = lane[k + 1];
+        for (let t = 0; t <= 6; t++) { const x = Math.round(ax + ((bx - ax) * t) / 6), y = Math.round(ay + ((by - ay) * t) / 6); for (let dy = -hw; dy <= hw; dy++) for (let dx = -hw; dx <= hw; dx++) paint(x + dx, y + dy); }
+      }
+      // Buildings: pads levelled from this region's ground (a pad never crosses a region edge), then the objects.
+      for (const b of v.buildings) {
+        const inside = b.x - 1 >= ox && b.y - 1 >= oy && b.x + b.w < ox + S && b.y + b.d < oy + S;
+        if (b.pad && inside) {
+          let sum = 0, n = 0;
+          for (let y = b.y; y < b.y + b.d; y++) for (let x = b.x; x < b.x + b.w; x++) { sum += out.elev[(y - oy) * S + x - ox]; n++; }
+          const z = sum / n;
+          for (let y = b.y - 1; y <= b.y + b.d; y++) for (let x = b.x - 1; x <= b.x + b.w; x++) {
+            const k = (y - oy) * S + x - ox;
+            out.elev[k] = z; out.mat[k] = Mat.Dirt; out.cover[k] = Cover.None; out.blend[k] = 0;
+          }
+        }
+        if (b.x < ox || b.y < oy || b.x >= ox + S || b.y >= oy + S) continue;
+        if (b.type === 'water-mill') out.objects.push({ kind: 'mill', x: b.x - ox, y: b.y - oy, variant: 'stone', props: { wheelSide: b.wheelSide ?? 1 } });
+        else out.objects.push({ kind: 'building', x: b.x - ox, y: b.y - oy, variant: v.culture, props: { t: BUILDING_TYPES.indexOf(b.type as never), w: b.w, d: b.d, floors: b.floors } });
+      }
+    }
+    for (const br of this.bridges) {
+      if (br.x < ox || br.y < oy || br.x >= ox + S || br.y >= oy + S) continue;
+      out.objects.push({ kind: 'span', x: br.x - ox, y: br.y - oy, variant: 'timber', props: { length: br.length, dir: br.dir, z: br.z } });
     }
   }
 
@@ -381,6 +550,7 @@ export class ContinentTerrain {
       }
     }
     this.placeObjects(out, path, wd, E, M, P);
+    this.buildSettlements(out, kind, M);
     out.ms = performance.now() - t0;
     return out;
   }
@@ -495,10 +665,15 @@ export class ContinentTerrain {
     };
     const ROCKS: Record<string, number> = { 'dragon-peaks': 0.14, 'hollow-lands': 0.12, 'golden-plains': 0.035 };
     const G = 5;
+    const bridges = this.bridges.filter((b) => b.x - 6 < out.ox + S && b.x + (b.dir ? 3 : b.length) + 6 > out.ox && b.y - 6 < out.oy + S && b.y + (b.dir ? b.length : 3) + 6 > out.oy)
+      .map((b) => ({ x0: b.x - 4, y0: b.y - 4, x1: b.x + (b.dir ? 3 : b.length) + 3, y1: b.y + (b.dir ? b.length : 3) + 3 }));
     const ok = (i: number, j: number) => {
       const k = j * S + i, km = (j + 1) * M + i + 1;
       if (i < 1 || j < 1 || i >= S - 1 || j >= S - 1 || out.waterKind[k] !== WK_NONE || wd[k] < 2) return false;
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const q = (j + dy) * S + i + dx; if (q >= 0 && q < S * S && path[q]) return false; }
+      // Keep bridge decks and their approaches clear (rocks and trees can reach a few cells from their anchor).
+      const gx = out.ox + i, gy = out.oy + j;
+      for (const b of bridges) if (gx >= b.x0 && gx <= b.x1 && gy >= b.y0 && gy <= b.y1) return false;
       return Math.hypot(E[km + 1] - E[km - 1], E[km + M] - E[km - M]) / 2 < 0.6;
     };
     const shares = new Float64Array(R);

@@ -9,7 +9,7 @@ import { ContinentEdits, type RegionEditJSON } from './edits';
 export const CONTINENT_FORMAT = 'lumenwild-continent';
 export const CONTINENT_SAVE_VERSION = 1;
 /** Bumped whenever generation changes what a region contains (stored changes are measured against it). */
-export const GENERATOR_VERSION = 'terrain-2c+edits-1';
+export const GENERATOR_VERSION = 'terrain-2c+villages-1+edits-1';
 
 export interface ContinentSave {
   format: typeof CONTINENT_FORMAT;

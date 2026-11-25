@@ -86,7 +86,7 @@ export class ContinentSession {
   /** Add a slot's objects (generated, minus removed, plus added) to the engine. */
   private addObjects(engine: Engine, gx: number, gy: number): void {
     const [rx, ry] = this.regionKey(gx, gy);
-    for (const o of objectsFor(this.win.regionAt(gx, gy).objects, this.edits.get(rx, ry), gx, gy, this.win.S)) engine.objects.add(o);
+    for (const o of objectsFor(this.win.regionAt(gx, gy).objects, this.edits.get(rx, ry), gx, gy, this.win.S, this.win.datum)) engine.objects.add(o);
   }
 
   /** Re-place the player's sources and drains stored for a slot. */

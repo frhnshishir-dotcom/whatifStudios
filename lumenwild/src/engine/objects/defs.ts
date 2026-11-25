@@ -6,7 +6,7 @@ import { hash2 } from '../core/rng';
 // to the anchor cell: (dx, dy) on the ground grid, `up` rows above the ground surface, packed fg/bg (bg 0 =
 // transparent) and an animation code applied at draw time (sway, glow pulse, lit windows, mill wheel...).
 
-export const OBJ_KINDS = ['tree', 'rock', 'mushroom', 'bridge', 'cottage', 'mill', 'stone', 'cave'] as const;
+export const OBJ_KINDS = ['tree', 'rock', 'mushroom', 'bridge', 'cottage', 'mill', 'stone', 'cave', 'building', 'span'] as const;
 export type ObjKind = (typeof OBJ_KINDS)[number];
 
 export interface WorldObject {
@@ -379,6 +379,125 @@ function caveSprite(): SpriteCell[] {
 }
 
 // ------------------------------------------------------------------ registry
+// ------------------------------------------------------------------ village buildings and road bridges (continent)
+/** Building types a `building` object can be (its `t` prop is the index here). */
+export const BUILDING_TYPES = [
+  'home', 'farmhouse', 'barn', 'inn', 'smithy', 'market-hall', 'market-stall', 'well', 'shrine', 'water-mill', 'stable', 'workshop', 'granary',
+  'windmill', 'trading-post', 'longhouse', 'cabin', 'mine-head', 'storehouse', 'smokehouse', 'watch-post', 'stilt-house', 'fishing-hut', 'herbalist',
+  'net-shed', 'lantern-deck', 'tree-house', 'root-house', 'elder-hall', 'woodcarver', 'moonwell', 'fire-pit', 'tavern',
+] as const;
+export type BuildingKind = (typeof BUILDING_TYPES)[number];
+
+/** Village architecture by culture (the `building` variant): roof, wall, trim and accent colours, and the base. */
+const ARCH: Record<string, { roof: RGB; wall: RGB; trim: RGB; accent: RGB; base: 'stone' | 'stilts' | 'roots' }> = {
+  'heartlands-timber': { roof: C('#c9a35a'), wall: C('#e8dcc0'), trim: C('#4a3524'), accent: C('#d9822b'), base: 'stone' },
+  'frost-lodge': { roof: C('#3b4250'), wall: C('#6b4a32'), trim: C('#5d636b'), accent: C('#e6eef2'), base: 'stone' },
+  'plains-farmstead': { roof: C('#b5573a'), wall: C('#efe6d2'), trim: C('#8c3b2e'), accent: C('#e7c35a'), base: 'stone' },
+  'marsh-stilt': { roof: C('#a39a6a'), wall: C('#7b7466'), trim: C('#4e4a3e'), accent: C('#c8e07a'), base: 'stilts' },
+  'elder-grove': { roof: C('#4f6b3a'), wall: C('#5a4433'), trim: C('#3a2d22'), accent: C('#9fc4e8'), base: 'roots' },
+};
+const shade = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
+
+/**
+ * A village building drawn from its size (w x d cells), storeys and type, in its culture's colours: a base (stone
+ * plinth, stilts or roots), walls with windows and a door on the front row, and a gabled roof that covers the
+ * footprint. Small structures (well, stall, fire pit, decks) and towers (windmill, watch post, tree house) have their
+ * own shapes.
+ */
+function buildingSprite(o: WorldObject): SpriteCell[] {
+  const a = ARCH[o.variant] ?? ARCH['heartlands-timber'];
+  const t = BUILDING_TYPES[Math.max(0, Math.min(BUILDING_TYPES.length - 1, Math.round(o.props.t ?? 0)))];
+  const w = Math.max(1, Math.round(o.props.w ?? 5)), d = Math.max(1, Math.round(o.props.d ?? 3)), floors = Math.max(1, Math.round(o.props.floors ?? 1));
+  const cells: SpriteCell[] = [], dy = d - 1, seed = o.x * 7 + o.y * 13;
+  const put = (dx: number, up: number, ch: string, fg: RGB, bg: RGB | null, anim = 0, row = dy) => cells.push({ dx, dy: row, up, g: g(ch), fg: P(fg), bg: bg ? P(bg) : 0, anim });
+  // Small structures.
+  if (t === 'well') { put(0, 0, '◯', STONE, C('#3d3b36')); put(0, 1, '┬', a.trim, null); return cells; }
+  if (t === 'fire-pit') { for (let dx = 0; dx < w; dx++) put(dx, 0, dx === (w >> 1) ? '✶' : '▪', dx === (w >> 1) ? C('#ff9a3a') : STONE, C('#2a2420'), dx === (w >> 1) ? Anim.Glow : 0); return cells; }
+  if (t === 'moonwell') { for (let dx = 0; dx < w; dx++) put(dx, 0, dx === (w >> 1) ? '◉' : '▪', dx === (w >> 1) ? a.accent : STONE, C('#1d2a3a'), dx === (w >> 1) ? Anim.Glow : 0); return cells; }
+  if (t === 'market-stall') { for (let dx = 0; dx < w; dx++) { put(dx, 0, dx % 2 ? '▫' : '│', a.trim, null); put(dx, 1, '▀', dx % 2 ? a.accent : a.wall, shade(a.accent, 0.6)); } return cells; }
+  if (t === 'lantern-deck') {
+    for (let r = 0; r < d; r++) for (let dx = 0; dx < w; dx++) put(dx, 0, '═', C('#9a7a52'), C('#4a3a28'), 0, r);
+    put(0, 1, '✧', a.accent, null, Anim.Glow, 0); put(w - 1, 1, '✧', a.accent, null, Anim.Glow, d - 1);
+    return cells;
+  }
+  // Towers: windmill, watch post, tree house.
+  if (t === 'windmill') {
+    const cx = w >> 1;
+    for (let up = 0; up < 4; up++) put(cx, up, up === 0 ? '▌' : '█', up === 0 ? TIMBER : a.wall, shade(a.wall, 0.8));
+    put(cx, 4, '▲', a.roof, null);
+    for (const [sx, su, ch] of [[-1, 5, '╲'], [1, 5, '╱'], [-1, 3, '╱'], [1, 3, '╲'], [-2, 6, '╲'], [2, 6, '╱'], [-2, 2, '╱'], [2, 2, '╲']] as Array<[number, number, string]>) put(cx + sx, su, ch, C('#e9dcc0'), null);
+    return cells;
+  }
+  if (t === 'watch-post') {
+    for (let up = 0; up < 4; up++) for (let dx = 0; dx < w; dx++) put(dx, up, up < 3 ? (dx === 0 ? '┃' : '┃') : '▀', up < 3 ? TIMBER : a.trim, up < 3 ? null : shade(a.trim, 0.7));
+    for (let dx = -1; dx <= w; dx++) put(dx, 4, dx === -1 ? '╱' : dx === w ? '╲' : '▒', a.roof, null);
+    put(w >> 1, 3, '▫', WINDOW, C('#3a2c18'), Anim.Window);
+    return cells;
+  }
+  if (t === 'tree-house') {
+    const cx = w >> 1;
+    put(cx, 0, '║', C('#5a3e28'), C('#2c1f14')); put(cx, 1, '║', C('#5a3e28'), C('#2c1f14'));
+    for (let dx = 0; dx < w; dx++) { put(dx, 2, dx === cx ? '▫' : '█', dx === cx ? WINDOW : a.wall, dx === cx ? C('#3a2c18') : shade(a.wall, 0.85), dx === cx ? Anim.Window : 0); }
+    for (let dx = -1; dx <= w; dx++) put(dx, 3, dx === -1 ? '╱' : dx === w ? '╲' : '▒', shade(a.roof, 1.2), shade(a.roof, 0.8));
+    return cells;
+  }
+  // Houses and halls: base, walls, roof (on the front row; the rows behind are covered by the roof).
+  let up = 0;
+  for (let dx = 0; dx < w; dx++) {
+    if (a.base === 'stilts') put(dx, 0, dx === 0 || dx === w - 1 || dx === (w >> 1) ? '┃' : ' ', C('#6a5a40'), null);
+    else if (a.base === 'roots') put(dx, 0, dx === 0 || dx === w - 1 ? '╰' : '▀', C('#4a3a26'), C('#2a2016'));
+    else put(dx, 0, '▀', STONE, C('#4a4842'));
+  }
+  up = 1;
+  const door = w >> 1, wide = t === 'barn' || t === 'stable' || t === 'market-hall' || t === 'longhouse';
+  for (let f = 0; f < floors; f++, up++) {
+    for (let dx = 0; dx < w; dx++) {
+      const edge = dx === 0 || dx === w - 1;
+      const isDoor = f === 0 && (dx === door || (wide && dx === door - 1));
+      const isWin = !edge && !isDoor && (dx + f + (seed & 1)) % 2 === 1;
+      const ch = isDoor ? (wide ? (dx === door ? '▐' : '▌') : '▌') : isWin ? '▫' : edge ? '█' : f % 2 ? '▓' : '█';
+      put(dx, up, ch, isWin ? WINDOW : isDoor ? C('#6a4426') : edge ? a.trim : a.wall, isWin ? C('#3a2c18') : isDoor ? TIMBER : shade(a.wall, edge ? 0.7 : 0.88), isWin ? Anim.Window : 0);
+    }
+  }
+  // Signs and details at the door.
+  if (t === 'inn' || t === 'tavern') put(door + 1 < w ? door + 1 : door, 1 + Math.min(1, floors - 1) + (floors > 1 ? 0 : 0), '◆', a.accent, null);
+  if (t === 'smithy') put(w, 1, '✶', C('#ff8a3a'), C('#3a1a10'), Anim.Glow);
+  if (t === 'mine-head') put(door, 1, '▄', C('#1a1714'), C('#0a0908'));
+  if (t === 'shrine') put(door, floors + 1 + 1, '✦', a.accent, null, Anim.Glow);
+  // Roof: eaves one cell wider than the walls, narrowing up to a ridge; deeper buildings get a taller roof.
+  const rows = Math.max(1, Math.min(4, Math.ceil(d / 2) + (w > 6 ? 1 : 0)));
+  const hi = shade(a.roof, 1.25);
+  for (let r = 0; r < rows; r++) {
+    const l = -1 + r, rr = w - r;
+    if (rr < l) break;
+    for (let dx = l; dx <= rr; dx++) {
+      const ch = dx === l ? '╱' : dx === rr ? '╲' : r === rows - 1 ? '▀' : '▒';
+      put(dx, up + r, ch, ch === '▒' || ch === '▀' ? hi : a.roof, ch === '▒' ? shade(a.roof, 0.8) : null);
+    }
+  }
+  if (t === 'home' || t === 'cabin' || t === 'farmhouse' || t === 'inn' || t === 'tavern' || t === 'longhouse') put(Math.max(0, w - 2), up + rows, '▮', STONE, null);
+  return cells;
+}
+
+/**
+ * A road bridge (continent): a 3 m wide deck `length` cells long along x (dir 0) or y (dir 1), at height `z`, with
+ * railings on both sides and piers every 8 m.
+ */
+function spanSprite(o: WorldObject): SpriteCell[] {
+  const L = Math.max(4, Math.round(o.props.length ?? 12)), alongY = (o.props.dir ?? 0) > 0;
+  const cells: SpriteCell[] = [];
+  for (let k = 0; k < L; k++) {
+    const end = k === 0 || k === L - 1, pier = k % 8 === 4;
+    for (let s = 0; s < 3; s++) {
+      const dx = alongY ? s : k, dy = alongY ? k : s, rail = s !== 1;
+      cells.push({ dx, dy, up: 0, g: g(end ? '▓' : alongY ? '║' : '═'), fg: P(end ? STONE : WOOD_HI), bg: P(end ? C('#4a4a44') : WOOD_DARK), anim: 0 });
+      if (rail) cells.push({ dx, dy, up: 1, g: g(alongY ? (k % 3 === 0 ? '┼' : '│') : k % 3 === 0 ? '┬' : '─'), fg: P(WOOD), bg: 0, anim: 0 });
+      if (pier && s !== 1) for (let q = 1; q <= 2; q++) cells.push({ dx, dy, up: -q, g: g('┃'), fg: P(C('#7a7468')), bg: P(C('#3a3832')), anim: 0 });
+    }
+  }
+  return cells;
+}
+
 const rect = (w: number, h: number): Array<[number, number]> => {
   const out: Array<[number, number]> = [];
   for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push([dx, dy]);
@@ -437,5 +556,22 @@ export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
     props: [{ key: 'wheelSide', label: 'Wheel side (-1 left, 1 right)', min: -1, max: 1, step: 2 }], defaults: { wheelSide: 1 }, solid: true,
     footprint: () => rect(4, 3), sprite: millSprite,
     light: () => ({ r: 7, color: C('#ffc46a'), intensity: 0.9, up: 1 }),
+  },
+  building: {
+    label: 'Village building', variants: Object.keys(ARCH),
+    props: [
+      { key: 't', label: 'Type', min: 0, max: BUILDING_TYPES.length - 1, step: 1 }, { key: 'w', label: 'Width', min: 1, max: 12, step: 1 },
+      { key: 'd', label: 'Depth', min: 1, max: 8, step: 1 }, { key: 'floors', label: 'Storeys', min: 1, max: 3, step: 1 },
+    ],
+    defaults: { t: 0, w: 5, d: 3, floors: 1 }, solid: true,
+    footprint: (o) => rect(Math.max(1, Math.round(o.props.w ?? 5)), Math.max(1, Math.round(o.props.d ?? 3))), sprite: buildingSprite,
+    light: (o) => (['well', 'market-stall', 'fire-pit', 'moonwell', 'lantern-deck'].includes(BUILDING_TYPES[Math.round(o.props.t ?? 0)] ?? '') ? null : { r: 7, color: C('#ffc46a'), intensity: 0.9, up: 1 }),
+  },
+  span: {
+    label: 'Road bridge', variants: ['timber'],
+    props: [{ key: 'length', label: 'Length', min: 4, max: 160, step: 1 }, { key: 'dir', label: 'Along y (0/1)', min: 0, max: 1, step: 1 }, { key: 'z', label: 'Deck height', min: -50, max: 2000, step: 0.1 }],
+    defaults: { length: 12, dir: 0, z: 5 }, solid: false,
+    footprint: (o) => { const L = Math.max(4, Math.round(o.props.length ?? 12)), y = (o.props.dir ?? 0) > 0; const out: Array<[number, number]> = []; for (let k = 0; k < L; k++) for (let s = 0; s < 3; s++) out.push(y ? [s, k] : [k, s]); return out; },
+    sprite: spanSprite,
   },
 };

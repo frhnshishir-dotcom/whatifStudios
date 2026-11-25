@@ -1,16 +1,16 @@
 [
-  { "id": "lumenfall", "name": "Lumenfall Village", "kind": "village", "region": "heartlands", "at": [500, 510], "footprintRadius": 2.2,
+  { "id": "lumenfall", "culture": "heartlands-timber", "name": "Lumenfall Village", "kind": "village", "region": "heartlands", "at": [500, 510], "footprintRadius": 2.2,
     "buildings": [24, 30], "population": [60, 100], "roles": ["player arrival", "market day", "smithy", "inn", "quest givers"], "status": "spec",
     "note": "The starting village (no cities in Lumenwild). Riverside, on a terrace above the Lumen." },
-  { "id": "greenhaven", "name": "Greenhaven", "kind": "village", "region": "heartlands", "at": [330, 650], "footprintRadius": 2,
+  { "id": "greenhaven", "culture": "heartlands-timber", "name": "Greenhaven", "kind": "village", "region": "heartlands", "at": [330, 650], "footprintRadius": 2,
     "buildings": [20, 26], "population": [45, 80], "roles": ["farming", "beginner settlement"], "status": "spec" },
-  { "id": "frostwatch", "name": "Frostwatch Village", "kind": "village", "region": "dragon-peaks", "at": [430, 300], "footprintRadius": 1.4,
+  { "id": "frostwatch", "culture": "frost-lodge", "name": "Frostwatch Village", "kind": "village", "region": "dragon-peaks", "at": [430, 300], "footprintRadius": 1.4,
     "buildings": [12, 18], "population": [20, 40], "roles": ["mountain expeditions", "hunting", "mining"], "status": "spec" },
-  { "id": "marshlight", "name": "Marshlight", "kind": "village", "region": "whispering-marshes", "at": [650, 680], "footprintRadius": 1.4,
+  { "id": "marshlight", "culture": "marsh-stilt", "name": "Marshlight", "kind": "village", "region": "whispering-marshes", "at": [650, 680], "footprintRadius": 1.4,
     "buildings": [10, 15], "population": [20, 40], "roles": ["wetland trade", "fishing", "herbalism"], "status": "spec" },
-  { "id": "windmere", "name": "Windmere", "kind": "village", "region": "golden-plains", "at": [175, 735], "footprintRadius": 2,
+  { "id": "windmere", "culture": "plains-farmstead", "name": "Windmere", "kind": "village", "region": "golden-plains", "at": [175, 735], "footprintRadius": 2,
     "buildings": [15, 22], "population": [35, 60], "roles": ["farming", "milling", "trading"], "status": "spec" },
-  { "id": "moonrest", "name": "Moonrest", "kind": "village", "region": "elderwood", "at": [231, 471], "footprintRadius": 1.4,
+  { "id": "moonrest", "culture": "elder-grove", "name": "Moonrest", "kind": "village", "region": "elderwood", "at": [231, 471], "footprintRadius": 1.4,
     "buildings": [10, 16], "population": [20, 40], "roles": ["woodland community"], "status": "spec",
     "note": "On the shore of Moonlit Lake, outside the Elderwood Canopy territory." }
 ]

@@ -66,6 +66,8 @@ export interface Settlement {
   /** Design range of buildings (10-30 for a village). */
   buildings: [number, number];
   population: [number, number]; roles: string[]; status: 'spec' | 'proposed'; note?: string;
+  /** Building culture (the village engine's architecture and programme). */
+  culture?: 'heartlands-timber' | 'frost-lodge' | 'plains-farmstead' | 'marsh-stilt' | 'elder-grove';
 }
 export type Discovery = 'known' | 'rumoured' | 'hidden';
 export interface Landmark {
@@ -164,6 +166,7 @@ export function validateWorld(d: WorldData): Validation {
     if ((s.kind as string) !== 'village') errors.push(`settlement ${s.id}: kind "${s.kind}" not allowed (villages only, no cities)`);
     if (!Array.isArray(s.buildings) || s.buildings[0] < 10 || s.buildings[1] > 30 || s.buildings[0] > s.buildings[1]) errors.push(`settlement ${s.id}: buildings must be a range within 10-30`);
     if (/\bcity\b/i.test(s.name)) errors.push(`settlement ${s.id}: "${s.name}" names a city`);
+    if (s.culture !== undefined && !['heartlands-timber', 'frost-lodge', 'plains-farmstead', 'marsh-stilt', 'elder-grove'].includes(s.culture)) errors.push(`settlement ${s.id}: unknown culture "${s.culture}"`);
   }
   for (const l of d.landmarks) {
     id('landmark', l.id); pt(`landmark ${l.id}`, l.at); inRegion('landmark', l.id, l.region, l.at);

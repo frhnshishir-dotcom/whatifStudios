@@ -52,6 +52,12 @@ const MIN_POND = 0.02;
 export const objectSig = (kind: string, x: number, y: number, variant: string) => `${kind}:${x},${y}:${variant}`;
 
 function defaultsOf(kind: ObjKind): Record<string, number> { return OBJECT_DEFS[kind]?.defaults ?? {}; }
+
+/** A generated object's properties as placed in the window: a `z` (absolute height) becomes relative to the datum. */
+export function windowProps(p: Record<string, number> | undefined, datum: number): Record<string, number> {
+  if (!p) return {};
+  return p.z === undefined ? { ...p } : { ...p, z: p.z - datum };
+}
 function sameProps(a: Record<string, number>, b: Record<string, number>): boolean {
   const ka = Object.keys(a), kb = Object.keys(b);
   return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
@@ -75,18 +81,23 @@ export function diffRegion(v: EditView, gx: number, gy: number, gen: RegionData)
   }
   // Objects: generated ones present unchanged are matched off; the rest of the generated list was removed, the rest
   // of what is there was added (or changed).
-  const pending = new Map<string, number>();
-  for (const o of gen.objects) { const k = objectSig(o.kind, o.x, o.y, o.variant); pending.set(k, (pending.get(k) ?? 0) + 1); }
+  const pending = new Map<string, Array<Record<string, number>>>();
+  for (const o of gen.objects) {
+    const k = objectSig(o.kind, o.x, o.y, o.variant), list = pending.get(k) ?? [];
+    list.push({ ...defaultsOf(o.kind as ObjKind), ...windowProps(o.props, d) });
+    pending.set(k, list);
+  }
   const added: RegionEdit['added'] = [];
   const x0 = gx * S, y0 = gy * S;
   for (const o of v.objects) {
     if (o.x < x0 || o.y < y0 || o.x >= x0 + S || o.y >= y0 + S) continue;
-    const lx = o.x - x0, ly = o.y - y0, k = objectSig(o.kind, lx, ly, o.variant), n = pending.get(k) ?? 0;
-    if (n > 0 && sameProps(o.props, defaultsOf(o.kind))) { pending.set(k, n - 1); continue; }
-    added.push({ kind: o.kind, x: lx, y: ly, variant: o.variant, props: { ...o.props } });
+    const lx = o.x - x0, ly = o.y - y0, k = objectSig(o.kind, lx, ly, o.variant), list = pending.get(k);
+    const at = list ? list.findIndex((p) => sameProps(o.props, p)) : -1;
+    if (list && at >= 0) { list.splice(at, 1); continue; }
+    added.push({ kind: o.kind, x: lx, y: ly, variant: o.variant, props: { ...o.props, ...(o.props.z !== undefined ? { z: o.props.z + d } : {}) } });
   }
   const removed: string[] = [];
-  for (const [k, n] of pending) for (let q = 0; q < n; q++) removed.push(k);
+  for (const [k, list] of pending) for (let q = 0; q < list.length; q++) removed.push(k);
   const local = (m: Map<number, number>) => {
     const out: Array<[number, number]> = [];
     for (const [i, rate] of m) { const x = i % W, y = (i / W) | 0; if (x >= x0 && y >= y0 && x < x0 + S && y < y0 + S) out.push([(y - y0) * S + (x - x0), rate]); }
@@ -109,17 +120,20 @@ export function applyGround(v: Pick<EditView, 'S' | 'W' | 'datum' | 'elev' | 'ma
   }
 }
 
-/** The objects a region should hold: generated ones not removed, plus those added (window coordinates). */
-export function objectsFor(gen: RegionObject[], e: RegionEdit | undefined, gx: number, gy: number, S: number): Array<Omit<WorldObject, 'id'>> {
+/**
+ * The objects a region should hold: generated ones not removed, plus those added (window coordinates). Heights (`z`)
+ * are kept absolute in edits and generation, relative to `datum` in the window.
+ */
+export function objectsFor(gen: RegionObject[], e: RegionEdit | undefined, gx: number, gy: number, S: number, datum: number): Array<Omit<WorldObject, 'id'>> {
   const out: Array<Omit<WorldObject, 'id'>> = [];
   const gone = new Map<string, number>();
   if (e) for (const k of e.removed) gone.set(k, (gone.get(k) ?? 0) + 1);
   for (const o of gen) {
     const k = objectSig(o.kind, o.x, o.y, o.variant), n = gone.get(k) ?? 0;
     if (n > 0) { gone.set(k, n - 1); continue; }
-    out.push({ kind: o.kind, x: gx * S + o.x, y: gy * S + o.y, variant: o.variant, props: {} });
+    out.push({ kind: o.kind, x: gx * S + o.x, y: gy * S + o.y, variant: o.variant, props: windowProps(o.props, datum) });
   }
-  if (e) for (const o of e.added) out.push({ kind: o.kind, x: gx * S + o.x, y: gy * S + o.y, variant: o.variant, props: { ...o.props } });
+  if (e) for (const o of e.added) out.push({ kind: o.kind, x: gx * S + o.x, y: gy * S + o.y, variant: o.variant, props: windowProps(o.props, datum) });
   return out;
 }
 

@@ -59,7 +59,7 @@ export class ObjectLayer implements SceneLayer {
     let drawn = 0;
     for (const o of this.list) {
       const cells = s.sprite(o);
-      const z = o.kind === 'bridge' ? o.props.z ?? w.elevAt(o.x, o.y) : w.elevAt(o.x, o.y);
+      const z = o.kind === 'bridge' || o.kind === 'span' ? o.props.z ?? w.elevAt(o.x, o.y) : w.elevAt(o.x, o.y);
       const sel = o.id === this.selectedId;
       let phase = 0;
       if (o.kind === 'mill') {
