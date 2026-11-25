@@ -171,3 +171,8 @@ select { width: 100%; background: var(--panel); color: var(--text); border: 1px 
 .dragon-controls .btn.on { border-color: var(--accent-dim); color: var(--accent); background: #12261d; }
 .panel.dragon .meters + .muted { margin-top: 8px; }
 .panel.dragon .meters + h4 { margin-top: 12px; }
+
+.bench-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.bench-table th, .bench-table td { text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--line-2); }
+.bench-table th { color: var(--muted); font-weight: 500; }
+.btn:disabled { opacity: 0.6; cursor: default; }

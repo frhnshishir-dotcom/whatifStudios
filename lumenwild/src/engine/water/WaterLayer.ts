@@ -30,6 +30,7 @@ const G = {
 };
 
 export class WaterLayer implements SceneLayer {
+  readonly name = 'water';
   readonly world: World;
   readonly v: WaterView;
   readonly shader: TerrainShader;

@@ -29,6 +29,7 @@ function darken(c: number, k: number): number {
  * amber eyes. In the air it is drawn over everything; on the ground it is depth-tested like an object.
  */
 export class DragonRenderer implements SceneLayer {
+  readonly name = 'dragon';
   readonly dragon: Dragon;
   readonly poses = new DragonPoses();
   visible = true;

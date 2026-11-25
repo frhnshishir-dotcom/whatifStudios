@@ -17,6 +17,7 @@ const OK = 0xff97d43f, BAD = 0xff5a5ae0, ERASE = 0xff6a7ae8; // ABGR: emerald, r
  * take (green when it fits, red when blocked), source and drain markers, and the hovered object outline.
  */
 export class EditorOverlay implements SceneLayer {
+  readonly name = 'overlay';
   readonly editor: Editor;
   tool: EditTool = 'select';
   /** World cell under the pointer (-1 = none). */

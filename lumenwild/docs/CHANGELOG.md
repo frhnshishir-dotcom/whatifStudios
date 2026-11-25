@@ -1,5 +1,29 @@
 # Lumenwild changelog
 
+## Phase 1, steps 1.1-1.3 (2026-11-25)
+**1.1 Presenter interface and golden images.** `render/Presenter.ts` defines how composed cells become pixels; the
+CPU blitter is now `render/Canvas2DPresenter.ts` (no behaviour change). `?manual=1` lets tests drive frames with
+fixed timestamps; `e2e/m8-golden.spec.ts` holds exact golden images of the nine review views (seed 7), identical
+before and after the refactor, plus a run-twice determinism test.
+
+**1.2 WebGL2 presenter** (`render/WebGLPresenter.ts`, `render/createPresenter.ts`): glyph, foreground and background
+arrays uploaded as integer textures, glyph masks as an R8UI atlas, and an integer fragment shader that reproduces the
+CPU blend exactly: it matches the Canvas 2D golden images pixel for pixel on all nine views. Selected with
+View → Renderer or `?presenter=webgl`; switching remounts only the canvas. WebGL2 is probed on a throwaway canvas and
+falls back to Canvas 2D with a message; context loss and restore are handled. Canvas 2D stays the default.
+
+**1.3 Capability probe and benchmark** (`ui/capabilities.ts`, `ui/benchmark.ts`, Inspector → Benchmark): reports the
+browser, cores, memory hints, GPU renderer string and WebGL limits, then runs four scenes (day, night storm,
+zoomed-out storm, panning) on each presenter with per-layer timings (`Composer.profile`, off by default), checks the
+LOW/MEDIUM p95 budgets, restores the view and exports a JSON report.
+
+Measured in this container (headless Chromium, SwiftShader, 4 cores, 1120 x 816 canvas, 40 frames per scene):
+Canvas 2D 60 fps in every scene (main-thread CPU 3.1-5.7 ms per frame); WebGL2 39-50 fps, because SwiftShader runs
+the fragment shader on the CPU, although main-thread CPU falls to 2.0-4.9 ms and presentation from 0.7-1.3 ms to
+0.1 ms. The laptop's real GPU has not been measured: run the benchmark there before changing the default.
+
+Tests: 100 unit, 56 browser (new: 19 golden, 4 presenter, 1 benchmark).
+
 ## Visual upgrade, phases A and B
 **Phase A (audit).** `docs/VISUAL_AUDIT.md` maps the frame pipeline, glyph rasterisation, terrain, water, object,
 particle, light and weather code to exact files and functions, lists the palettes and the problems visible in the

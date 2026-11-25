@@ -9,6 +9,8 @@ export const BASE_DEPTH = 5;
 
 /** Extra scene layers drawn on top of terrain (water, objects, particles, weather, lighting) plug in here. */
 export interface SceneLayer {
+  /** Short name for profiling (benchmark reports). */
+  readonly name?: string;
   /** Called once per frame before the terrain pass (e.g. to refresh caches). */
   prepare?(cam: Camera, t: number): void;
   /**
@@ -52,6 +54,16 @@ export class Composer {
     }
   }
 
+  /** When set, compose() records milliseconds per layer (prepare + after) and for the terrain pass. Off by default. */
+  profile: Map<string, number> | null = null;
+
+  private timed(prof: Map<string, number>, L: SceneLayer, f: () => void): void {
+    const a = performance.now();
+    f();
+    const k = L.name ?? 'layer';
+    prof.set(k, (prof.get(k) ?? 0) + performance.now() - a);
+  }
+
   compose(cam: Camera, t: number): CellBuffer {
     const w = this.world, sh = this.shader, buf = this.buf;
     sh.update();
@@ -59,7 +71,10 @@ export class Composer {
     buf.resize(cols, rows);
     this.ensureRowBg(rows);
     buf.clear(this.rowBg);
-    for (const L of this.layers) L.prepare?.(cam, t);
+    const prof = this.profile;
+    if (prof) { prof.clear(); for (const L of this.layers) this.timed(prof, L, () => L.prepare?.(cam, t)); }
+    else for (const L of this.layers) L.prepare?.(cam, t);
+    const tTerrain = prof ? performance.now() : 0;
     const water = this.layers.find((L) => L.surfaceHeight);
 
     const W = w.w, H = w.h, elev = w.elev;
@@ -111,7 +126,10 @@ export class Composer {
         }
       }
     }
-    for (const L of this.layers) L.after?.(buf, cam, t);
+    if (prof) {
+      prof.set('terrain', performance.now() - tTerrain);
+      for (const L of this.layers) this.timed(prof, L, () => L.after?.(buf, cam, t));
+    } else for (const L of this.layers) L.after?.(buf, cam, t);
     this.stats.cells = cols * rows;
     this.stats.projected = projected;
     return buf;

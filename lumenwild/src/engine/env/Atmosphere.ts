@@ -35,6 +35,7 @@ const SWAY_COVERS = new Set<number>([Cover.TallGrass, Cover.Reeds, Cover.Flowers
  *  - fog: a drifting veil, thicker towards the back of the view and in low ground.
  */
 export class Atmosphere implements SceneLayer {
+  readonly name = 'atmosphere';
   readonly env: Environment;
   readonly world: World;
   readonly particles: Particles;

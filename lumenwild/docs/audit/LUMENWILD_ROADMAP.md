@@ -37,6 +37,8 @@ Measured on the target laptop with the in-app benchmark (step 1.3) unless stated
 
 ## Phase 1: visual foundation (single-player, existing world)
 
+Status: steps 1.1-1.3 done (see `docs/CHANGELOG.md`). Next: your benchmark report from the laptop, then 1.4.
+
 | Step | Change | Files affected | Evidence required |
 |---|---|---|---|
 | 1.1 | Introduce a `Presenter` interface around `Renderer`/`Blitter`; the Canvas 2D implementation stays the default. Add golden-image tests of the nine review views | `render/Renderer.ts`, `render/Blitter.ts`, new `render/Presenter.ts`, `e2e/` | All existing tests pass; golden images match exactly |

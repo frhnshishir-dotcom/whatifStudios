@@ -23,6 +23,7 @@ const HUB = [g('✱'), g('✻')];
  * wind, glow pulses, lit windows at night, the mill wheel turning with the water speed under it.
  */
 export class ObjectLayer implements SceneLayer {
+  readonly name = 'objects';
   readonly world: World;
   readonly store: ObjectStore;
   water: WaterView | null;

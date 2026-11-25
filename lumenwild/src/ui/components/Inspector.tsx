@@ -3,6 +3,7 @@ import { MAT_NAMES, COVER_NAMES } from '../../engine/world/materials';
 import { ToolPanel, SelectionPanel } from './ToolPanel';
 import { EnvPanel } from './EnvPanel';
 import { DragonPanel } from './DragonPanel';
+import { BenchmarkPanel } from './BenchmarkPanel';
 
 const KIND = ['Void', 'Terrain', 'Cliff face', 'Water', 'Waterfall', 'Object', 'Particle', 'Dragon'];
 
@@ -50,6 +51,7 @@ export function Inspector() {
           <input type="checkbox" checked={settings.lowPerf} onChange={(e) => setSettings({ lowPerf: e.target.checked, resolutionScale: e.target.checked ? 0.75 : 1 })} data-testid="low-perf" /> Low-performance mode
         </label>
       </section>
+      <BenchmarkPanel />
     </aside>
   );
 }

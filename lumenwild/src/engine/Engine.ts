@@ -66,6 +66,8 @@ export class Engine {
   composer: Composer;
   /** Turns composed cells into pixels (Canvas 2D by default). Named `renderer` for compatibility with tests. */
   renderer: Presenter | null = null;
+  /** Raw timings of the last frame in ms (not smoothed): benchmarks read these every frame. */
+  readonly lastFrame = { simMs: 0, composeMs: 0, presentMs: 0, cpuMs: 0, steps: 0 };
   /** Why the requested presenter could not be used (null when it was). */
   presenterFallback: string | null = null;
   /** Glyph atlases, shared across presenters (switching presenter does not re-bake them). */
@@ -103,6 +105,8 @@ export class Engine {
   /** World cell under the pointer (-1 = none). */
   hoverIndex = -1;
   onStats: ((s: EngineStats) => void) | null = null;
+  /** Called at the end of every frame with its timestamp (benchmarks; keep it cheap). */
+  onFrame: ((now: number) => void) | null = null;
   onHover: ((h: HoverInfo | null) => void) | null = null;
   onPauseChange: ((paused: boolean) => void) | null = null;
   toolHandler: { down(i: number, ev: PointerEvent): void; move(i: number, ev: PointerEvent): void; up(ev: PointerEvent): void } | null = null;
@@ -125,7 +129,7 @@ export class Engine {
     this.composer = new Composer(world, this.shader);
     this.objects = new ObjectStore(world);
     this.objectLayer = new ObjectLayer(world, this.objects, null);
-    this.particleLayer = { after: (buf, cam, t) => this.particles.draw(buf, cam, t, this.objectLayer.night) };
+    this.particleLayer = { name: 'particles', after: (buf, cam, t) => this.particles.draw(buf, cam, t, this.objectLayer.night) };
     this.editor = new Editor(world, this.objects, null);
     this.overlay = new EditorOverlay(this.editor);
     this.atmosphere = new Atmosphere(this.env, world, this.objects, this.particles);
@@ -376,9 +380,14 @@ export class Engine {
       const t2 = performance.now();
       this.renderer.draw(buf, this.cam);
       this.composeMs = this.composeMs * 0.9 + (t2 - t1) * 0.1;
+      this.lastFrame.composeMs = t2 - t1;
+      this.lastFrame.presentMs = performance.now() - t2;
     }
+    this.lastFrame.simMs = t1 - t0;
+    this.lastFrame.steps = steps;
     this.simMs = this.simMs * 0.9 + (t1 - t0) * 0.1;
     const ft = performance.now() - t0;
+    this.lastFrame.cpuMs = ft;
     this.frameTimes.push(dt * 1000);
     if (this.frameTimes.length > 60) this.frameTimes.shift();
     this.statAcc += dt;
@@ -398,6 +407,7 @@ export class Engine {
       });
     }
     this.updateHover();
+    this.onFrame?.(now);
   }
 
   // ------------------------------------------------------------------ input
