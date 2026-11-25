@@ -7,6 +7,10 @@ import type { ObjectStore } from './ObjectStore';
 import { Anim, type WorldObject } from './defs';
 import { g } from '../render/glyphs';
 import { hash2 } from '../core/rng';
+import { pack } from '../core/color';
+
+// Christmas lights: warm red, gold, blue, green, warm white.
+const BULBS = [pack(255, 84, 76), pack(255, 206, 84), pack(96, 162, 255), pack(110, 240, 140), pack(255, 240, 214)];
 
 // Wheel rim glyphs by ring position (clockwise from top-left) and the paddle glyph; paddles rotate around the rim.
 const RIM = ['╭', '─', '╮', '│', '╯', '─', '╰', '│'].map((c) => g(c));
@@ -78,7 +82,12 @@ export class ObjectLayer implements SceneLayer {
         } else if (base === Anim.Window) {
           fg = scale(fg, 0.75 + this.night * 0.6);
           bg = scale(bg, 1 + this.night * 1.6);
-        } else if (base === Anim.Spark) {
+        } else if (base === Anim.Twinkle) {
+          // Each bulb steps through the colours on its own phase and breathes in brightness.
+          const k = (c.anim >> 4) & 15;
+          const col = BULBS[(k + Math.floor(t * 0.9 + k * 0.618)) % BULBS.length];
+          fg = scale(col, (0.62 + 0.38 * (0.5 + 0.5 * Math.sin(t * 3.1 + k * 1.9))) * (1 + this.night * 0.2));
+                } else if (base === Anim.Spark) {
           if (hash2(o.id, Math.floor(t * 3), 1) < 0.5) continue;
         } else if (base === Anim.Wheel) {
           const k = (c.anim >> 4) - 1, frame = Math.floor(phase * 3);
@@ -95,7 +104,7 @@ export class ObjectLayer implements SceneLayer {
         if (sel) { buf.bg[k] = mixPacked(buf.bg[k], 0xff60c090, 0.35); }
         buf.depth[k] = wy + 0.7;
         buf.kind[k] = 5;
-        buf.light[k] = base === Anim.Glow || base === Anim.Spark ? 230 : base === Anim.Window ? Math.round(255 * this.night) : 0;
+        buf.light[k] = base === Anim.Twinkle ? 255 : base === Anim.Glow || base === Anim.Spark ? 230 : base === Anim.Window ? Math.round(255 * this.night) : 0;
         buf.pick[k] = wy * w.w + wx;
         drawn++;
       }

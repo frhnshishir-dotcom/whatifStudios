@@ -254,8 +254,8 @@ export class Engine {
     this.editor.setSourceDirect('source', info.source[0], info.source[1], riverRate);
     this.water?.warmup(600);
     this.gen = info;
-    const br = info.features.find((f) => f.kind === 'bridge');
-    this.home = br ? [br.x, br.y + 6] : null;
+    const xt = info.features.find((f) => f.kind === 'christmas tree'), br = info.features.find((f) => f.kind === 'bridge');
+    this.home = xt ? [xt.x, xt.y - 6] : br ? [br.x, br.y + 6] : null;
     this.particles.n = 0;
     this.renderer?.blitter.invalidate();
     const [hx, hy] = this.home ?? [w.w / 2, w.h / 2];

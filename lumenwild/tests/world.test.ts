@@ -101,6 +101,30 @@ describe('world generation', () => {
     }
   });
 
+  it.each([7, 1, 42, 99, 2026])('seed %i has a big lit Christmas tree by the cottage and the stream, clear of buildings', (seed) => {
+    const { world, objects, info } = gen(seed);
+    const xt = [...objects.objects.values()].filter((o) => o.kind === 'tree' && o.variant === 'christmas');
+    expect(xt.length).toBe(1);
+    const t = xt[0], cot = [...objects.objects.values()].find((o) => o.kind === 'cottage')!;
+    expect(Math.hypot(t.x - cot.x, t.y - cot.y)).toBeLessThan(30);
+    for (const [x, y] of objects.footprint(t)) expect(info.level[y * world.w + x] === info.level[y * world.w + x]).toBe(false);
+    // The river is close (within 20 cells) and no building or bridge sits in the screen area behind the canopy.
+    let nearWater = false;
+    for (let dy = -20; dy <= 20; dy++) for (let dx = -20; dx <= 20; dx++) { const i = (t.y + dy) * world.w + t.x + dx; if (world.inBounds(t.x + dx, t.y + dy) && info.level[i] === info.level[i]) nearWater = true; }
+    expect(nearWater).toBe(true);
+    for (let y = t.y - 22; y < t.y; y++) for (let x = t.x - 8; x <= t.x + 8; x++) {
+      const o = objects.at(y * world.w + x);
+      expect(o && ['cottage', 'mill', 'bridge'].includes(o.kind)).toBeFalsy();
+    }
+    // Big, lit and decorated.
+    const cells = objects.sprite(t);
+    const rows = new Set(cells.map((c) => c.up)).size, width = Math.max(...cells.map((c) => c.dx)) - Math.min(...cells.map((c) => c.dx)) + 1;
+    expect(rows).toBeGreaterThanOrEqual(25);
+    expect(width).toBeGreaterThanOrEqual(15);
+    expect(cells.filter((c) => (c.anim & 15) === 7).length).toBeGreaterThan(30); // twinkling bulbs
+    expect(OBJECT_DEFS.tree.light!(t)!.r).toBeGreaterThan(8);
+  });
+
   it('is not mirror-symmetric', () => {
     const { world } = gen(7);
     let diff = 0;

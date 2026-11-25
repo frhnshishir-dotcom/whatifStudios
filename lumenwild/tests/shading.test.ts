@@ -8,7 +8,7 @@ import { ObjectStore } from '../src/engine/objects/ObjectStore';
 const lum = (c: number) => 0.2126 * (c & 255) + 0.7152 * ((c >>> 8) & 255) + 0.0722 * ((c >>> 16) & 255);
 const g = (c: number) => (c >>> 8) & 255;
 
-function flat(left: number, right: number, cover = Cover.None): World {
+function flat(left: number, right: number, cover: number = Cover.None): World {
   const w = new World(64, 64);
   for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
     const i = y * 64 + x;

@@ -27,3 +27,14 @@ baseline screenshots (`docs/screenshots/before/`), and records baseline performa
 - Performance (126 x 60 characters): 60 fps, compose 1.3 ms (was 1.4-1.6), blit 0.2 ms. Full-world shading at
   load 33 ms (was 11 ms); an edit re-shades a 16 x 16 chunk in 0.2 ms (was 0.12 ms).
 - Screenshots: `docs/screenshots/after-phase-b/` (same nine views as `before/`).
+
+## Christmas tree
+- New tree type `christmas` (`objects/defs.ts` `christmasTree`): a 15 x 27-cell decorated fir with six tiers,
+  triangle-glyph silhouettes, needles lit from the upper left, gold garlands, baubles, a glowing star, a trunk and
+  presents. About 50 bulbs twinkle through red, gold, blue, green and warm white on their own phases
+  (`Anim.Twinkle` in `objects/ObjectLayer.ts`); bulbs, star and garland are emissive and the tree casts a warm
+  12-cell light pool at night.
+- Every generated world places one beside the cottage and the stream, toward the map centre, with a path from the
+  cottage and a clearing around it, never in front of a building or the bridge. The opening view frames it.
+- Place more with the Tree tool (type: Christmas). Tests: `tests/world.test.ts` (five seeds).
+- Screenshots: `docs/screenshots/christmas-tree-day.png`, `christmas-tree-night.png`.

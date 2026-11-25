@@ -49,8 +49,9 @@ export function createEngine(seed: number, scene = 'world', opts: { worker?: boo
     engine.setObjects(objects);
     engine.gen = info;
     // Open on the bridge (river, cottage and a waterfall nearby).
-    const br = info.features.find((f) => f.kind === 'bridge');
-    if (br) engine.home = [br.x, br.y + 6];
+    const xt = info.features.find((f) => f.kind === 'christmas tree'), br = info.features.find((f) => f.kind === 'bridge');
+    if (xt) engine.home = [xt.x, xt.y - 6];
+    else if (br) engine.home = [br.x, br.y + 6];
     const water = new WaterSystem(world, { useWorker: share, init: (_sim, view) => { prefillWater(world, view.depth, info); } });
     engine.attachWater(water);
     engine.editor.setSourceDirect('source', info.source[0], info.source[1], RIVER_RATE);

@@ -18,7 +18,7 @@ export interface WorldObject {
   props: Record<string, number>;
 }
 
-export const Anim = { None: 0, Sway: 1, Glow: 2, Window: 3, Wheel: 4, Spark: 5, SwayStrand: 6 } as const;
+export const Anim = { None: 0, Sway: 1, Glow: 2, Window: 3, Wheel: 4, Spark: 5, SwayStrand: 6, Twinkle: 7 } as const;
 
 export interface SpriteCell { dx: number; dy: number; up: number; g: number; fg: number; bg: number; anim: number }
 export interface PropSpec { key: string; label: string; min: number; max: number; step: number }
@@ -236,6 +236,74 @@ function millSprite(o: WorldObject): SpriteCell[] {
   return cells;
 }
 
+// ------------------------------------------------------------------ Christmas tree
+// A big decorated fir: six widening tiers with triangle-glyph silhouettes, needles lit from the upper left, gold
+// garlands on alternate tiers, baubles, a glowing star, a trunk and presents. Bulbs carry Anim.Twinkle with a
+// per-bulb phase (bits 4..7) so they cycle colours out of step; the layer draws them emissive.
+const XMAS_TIERS: Array<[number, number, number]> = [[0, 2, 3], [1, 3, 4], [2, 4, 4], [2, 5, 4], [3, 6, 4], [4, 7, 5]];
+const XMAS_ROWS = XMAS_TIERS.reduce((s, t) => s + t[2], 0);
+const XG_DK = C('#123a24'), XG_LIT = C('#3c8a4c'), XN_DK = C('#4c9a5e'), XN_LIT = C('#a6e6a0');
+const BAUBLES = ['#e8403a', '#3e7ee8', '#f0b82a', '#c84ad0', '#f4f0ea'].map(C);
+const PRESENTS: Array<[RGB, RGB]> = [[C('#c8323a'), C('#ffd45a')], [C('#2f62c8'), C('#f4f4f4')], [C('#2f8a4a'), C('#e8403a')], [C('#8a3ac0'), C('#ffd45a')]];
+export const XMAS_FOOTPRINT: Array<[number, number]> = [[-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [3, 0]];
+
+function christmasTree(o: WorldObject): SpriteCell[] {
+  const cells: SpriteCell[] = [];
+  const seed = o.props.seed ?? o.id;
+  const hh = (a: number, b: number, s: number) => hash2(a + seed * 31, b, s);
+  const needles = [g('▲'), g('▲'), g('♠'), g('▴'), g('♣'), g('▲')];
+  const topUp = 3 + XMAS_ROWS - 1;
+  let up = topUp, tier = 0;
+  for (const [top, bot, rows] of XMAS_TIERS) {
+    for (let j = 0; j < rows; j++, up--) {
+      const hw = Math.round(top + ((bot - top) * j) / Math.max(1, rows - 1));
+      const garlandRow = tier % 2 === 1 && j === rows - 2;
+      for (let dx = -hw; dx <= hw; dx++) {
+        const side = dx / (hw + 0.5);
+        const light = Math.max(0, Math.min(1, 0.58 - side * 0.34 - (j / rows) * 0.12 + (hh(dx, up, 4) - 0.5) * 0.1));
+        const bg = mixc(XG_DK, XG_LIT, light);
+        if (hw > 0 && Math.abs(dx) === hw) {
+          // Silhouette: a triangle filled with the needle colour, open to the outside.
+          cells.push({ dx, dy: 0, up, g: g(dx < 0 ? '◢' : '◣'), fg: P(bg, 1.05), bg: 0, anim: 0 });
+          continue;
+        }
+        const r = hh(dx, up, 7);
+        if (garlandRow && r < 0.85) {
+          cells.push({ dx, dy: 0, up, g: g('‿'), fg: P(C('#ffd45a'), 0.85 + r * 0.2), bg: P(bg), anim: Anim.Glow });
+        } else if (r < 0.24 || (j === rows - 1 && Math.abs(dx) === hw - 1 && hw > 1)) {
+          cells.push({ dx, dy: 0, up, g: g('•'), fg: P(C('#fff4d0')), bg: P(bg), anim: Anim.Twinkle + (Math.floor(hh(dx, up, 9) * 16) << 4) });
+        } else if (r < 0.33) {
+          const b = BAUBLES[Math.floor(hh(dx, up, 11) * BAUBLES.length)];
+          cells.push({ dx, dy: 0, up, g: g('●'), fg: P(b), bg: P(bg), anim: 0 });
+        } else {
+          const ng = needles[Math.floor(hh(dx, up, 13) * needles.length)];
+          cells.push({ dx, dy: 0, up, g: ng, fg: P(mixc(XN_DK, XN_LIT, Math.min(1, light + 0.15))), bg: P(bg), anim: 0 });
+        }
+      }
+    }
+    tier++;
+  }
+  // Star with two small rays.
+  cells.push({ dx: 0, dy: 0, up: topUp + 1, g: g('✸'), fg: P(C('#ffe27a')), bg: 0, anim: Anim.Glow });
+  cells.push({ dx: -1, dy: 0, up: topUp + 1, g: g('✧'), fg: P(C('#ffeaa8')), bg: 0, anim: Anim.Glow });
+  cells.push({ dx: 1, dy: 0, up: topUp + 1, g: g('✧'), fg: P(C('#ffeaa8')), bg: 0, anim: Anim.Glow });
+  // Trunk (two rows) and the base row with a red skirt and presents.
+  const BARK = C('#6a4426'), BARK_DK = C('#3a2414');
+  for (const u of [1, 2]) {
+    cells.push({ dx: -1, dy: 0, up: u, g: g('▐'), fg: P(BARK, 0.9), bg: 0, anim: 0 });
+    cells.push({ dx: 0, dy: 0, up: u, g: g('▓'), fg: P(BARK), bg: P(BARK_DK), anim: 0 });
+    cells.push({ dx: 1, dy: 0, up: u, g: g('▌'), fg: P(BARK, 0.8), bg: 0, anim: 0 });
+  }
+  cells.push({ dx: 0, dy: 0, up: 0, g: g('█'), fg: P(BARK, 0.85), bg: P(BARK_DK), anim: 0 });
+  for (const dx of [-1, 1]) cells.push({ dx, dy: 0, up: 0, g: g('▀'), fg: P(C('#a8262c')), bg: 0, anim: 0 });
+  [-3, -2, 2, 3].forEach((dx, k) => {
+    const [box, ribbon] = PRESENTS[(k + Math.floor(seed)) % PRESENTS.length];
+    cells.push({ dx, dy: 0, up: 0, g: g('┼'), fg: P(ribbon), bg: P(box), anim: 0 });
+  });
+  cells.push({ dx: -2, dy: 0, up: 1, g: g('┼'), fg: P(PRESENTS[(seed + 2) % 4][1]), bg: P(PRESENTS[(seed + 2) % 4][0], 0.9), anim: 0 });
+  return cells;
+}
+
 // ------------------------------------------------------------------ registry
 const rect = (w: number, h: number): Array<[number, number]> => {
   const out: Array<[number, number]> = [];
@@ -245,12 +313,13 @@ const rect = (w: number, h: number): Array<[number, number]> => {
 
 export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
   tree: {
-    label: 'Tree', variants: ['oak', 'pine', 'birch', 'willow', 'blossom'],
+    label: 'Tree', variants: ['oak', 'pine', 'birch', 'willow', 'blossom', 'christmas'],
     props: [{ key: 'size', label: 'Size', min: 1, max: 3, step: 1 }, { key: 'seed', label: 'Shape seed', min: 0, max: 999, step: 1 }],
     defaults: { size: 2, seed: 1 }, solid: false,
-    footprint: () => [[0, 0]],
-    sprite: (o) => (o.variant === 'pine' ? pineTree(o) : roundTree(o, o.variant in TREE_LOOK ? o.variant : 'oak')),
-    light: (o) => (o.variant === 'blossom' ? { r: 5, color: C('#ff9ad8'), intensity: 0.45, up: 3 } : null),
+    footprint: (o) => (o.variant === 'christmas' ? XMAS_FOOTPRINT : [[0, 0]]),
+    sprite: (o) => (o.variant === 'christmas' ? christmasTree(o) : o.variant === 'pine' ? pineTree(o) : roundTree(o, o.variant in TREE_LOOK ? o.variant : 'oak')),
+    light: (o) => (o.variant === 'blossom' ? { r: 5, color: C('#ff9ad8'), intensity: 0.45, up: 3 }
+      : o.variant === 'christmas' ? { r: 12, color: C('#ffd08a'), intensity: 1.2, up: 11 } : null),
   },
   rock: {
     label: 'Rock', variants: ['boulder', 'big', 'formation'],

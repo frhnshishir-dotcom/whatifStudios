@@ -1,6 +1,6 @@
 import type { World } from '../world/World';
 import { Mat, Cover } from '../world/materials';
-import { Rng, seedOf } from '../core/rng';
+import { Rng, seedOf, hash2 } from '../core/rng';
 import { fbm, ridged, valueNoise } from '../core/noise';
 import { smoothstep, clamp } from '../core/math';
 import { assignSurface } from './terrain';
@@ -343,6 +343,48 @@ export function generateWorld(world: World, objects: ObjectStore, seed: number):
         features.push({ kind: 'water mill', x: best.x, y: best.y });
         clearRect(best.x - 5, best.y - 4, best.x + 9, best.y + 7);
         carvePath(world, [[best.x + 2, best.y + 3], [cotSide < 0 ? bx1 + 1 : bx0 - 1, byi]], level);
+      }
+    }
+  }
+
+  // ---- A big lit Christmas tree near the cottage and the stream, towards the middle of the map. Chosen by a score
+  // (no RNG draw, so the rest of the world is unchanged): dry level ground, clear of the cottage, about six cells
+  // beyond the river bank.
+  {
+    const near = cottage ? [cottage[0] + 2, cottage[1] + 1] : [Math.round(bx), byi];
+    let best: [number, number, number] | null = null;
+    for (let y = near[1] - 16; y <= near[1] + 18; y++) for (let x = near[0] - 20; x <= near[0] + 20; x++) {
+      if (!world.inBounds(x - 5, y - 3) || !world.inBounds(x + 5, y + 2)) continue;
+      let ok = true, mn = 1e9, mx = -1e9;
+      for (let yy = y - 3; yy <= y + 2 && ok; yy++) for (let xx = x - 5; xx <= x + 5 && ok; xx++) {
+        const i = yy * w + xx;
+        if (level[i] === level[i] || objects.occ[i] || world.mat[i] === Mat.Path) ok = false;
+      }
+      if (!ok) continue;
+      for (let dx = -3; dx <= 3; dx++) { const e = world.elev[y * w + x + dx]; mn = Math.min(mn, e); mx = Math.max(mx, e); }
+      if (mx - mn > 1.6) continue;
+      const i = y * w + x, dC = Math.hypot(x - near[0], y - near[1]);
+      if (cottage && dC < 8) continue;
+      // The canopy rises ~25 rows on screen: keep buildings and the bridge out from behind it, and most of the river.
+      let blocked = false, wet = 0, area = 0;
+      for (let yy = Math.max(0, y - 22); yy < y && !blocked; yy++) for (let xx = x - 8; xx <= x + 8; xx++) {
+        const j = yy * w + xx, o = objects.occ[j];
+        if (o) { const k = objects.objects.get(o)?.kind; if (k === 'cottage' || k === 'mill' || k === 'bridge') { blocked = true; break; } }
+        if (level[j] === level[j]) wet++;
+        area++;
+      }
+      if (blocked || wet > area * 0.12) continue;
+      const score = dC + Math.abs(dist[i] - (cw(nsv[i]) + 6)) * 0.9 + (Math.abs(x - w / 2) + Math.abs(y - h / 2)) * 0.04;
+      if (!best || score < best[2]) best = [x, y, score];
+    }
+    if (best) {
+      const [tx, ty] = best;
+      flatten(tx - 3, ty, 7, 1);
+      for (let dx = -3; dx <= 3; dx++) { const i = ty * w + tx + dx; world.mat[i] = Mat.Grass; world.cover[i] = Cover.ShortGrass; }
+      if (objects.add({ kind: 'tree', x: tx, y: ty, variant: 'christmas', props: { size: 3, seed: Math.floor(hash2(tx, ty, 5) * 999) } }) !== null) {
+        features.push({ kind: 'christmas tree', x: tx, y: ty });
+        clearRect(tx - 9, ty - 9, tx + 9, ty + 5);
+        if (cottage) carvePath(world, [[cottage[0] + 2, cottage[1] + 3], [tx, ty + 1]], level);
       }
     }
   }
