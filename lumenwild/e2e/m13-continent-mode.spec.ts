@@ -15,9 +15,9 @@ test('continent mode: starts at Lumenfall, streams while travelling, and the val
   const s0 = await canvasStats(page);
   expect(s0.colors).toBeGreaterThan(40);
   if (SHOTS) await page.getByTestId('world-canvas').screenshot({ path: `${SHOTS}/continent-start.png` });
-  // Saving is off in continent mode (valley slots stay untouched).
+  // Continent mode saves to its own slots (valley slots stay untouched; see m15).
   await page.getByTestId('quick-save').click();
-  await expect(page.getByText(/does not save yet/)).toBeVisible();
+  await expect(page.getByText(/^Saved “/)).toBeVisible();
 
   // Travel toward Greenhaven at the fast test speed and watch the window move.
   await page.getByTestId('travel-dest').selectOption('greenhaven');

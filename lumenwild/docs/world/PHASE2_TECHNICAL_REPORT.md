@@ -125,11 +125,23 @@ Measured cost of water per simulation step (worker, browser, this container):
 | Marsh border | 6,000-11,000 m³ | 1.4-2.5 ms |
 | Marsh core (16 % open water) | 69,000 m³ | 12 ms at load; settles to about 1 ms after 30 s (Node: 27 → 1 ms) |
 
+Persistent (since the persistence milestone, `src/world/edits.ts`):
+
+- **Changes are kept per region.** When a region leaves the window, its difference from generation is recorded:
+  - changed cells (height, material, cover, moisture, magic)
+  - generated objects removed, and objects added or changed
+  - water standing on ground that is dry when generated (ponds you made)
+  - your sources and drains
+
+  When the region comes back, the difference is put back. Rivers, lakes and pools regenerate (they are not stored).
+- **Continent saves** (`src/world/continentSave.ts`) hold the view position, zoom, weather and time, and every
+  region's changes. They live in their own slots (database `lumenwild-continent`), never among Valley saves.
+  Save, load, autosave, export and import work as in the Valley. A save made with different world files or a different
+  generator loads with a warning.
+- Tests: `tests/world-persist.test.ts` (5) and `e2e/m15-continent-save.spec.ts`.
+
 Not persistent yet:
 
-- **Edits are lost when a region leaves the window.** Water you pour, terrain you dig and objects you place are
-  discarded when their region moves out of the 3 x 3 window. The region comes back as it was generated. Continent mode
-  does not save. The planned fix is per-region edit diffs saved with the game.
 - **No water outside the window.** Rivers beyond the window are not simulated; they re-enter as fresh water.
 - **After a move, the new strip and the chunks beside it are awake again**, so a large marsh costs more for a few
   seconds after each move.
@@ -207,7 +219,8 @@ in proportion to its share.
 
 ## 7. Current limitations of continent mode
 
-1. **No saving.** Edits are lost when their region leaves the window (section 5). Valley saves are untouched.
+1. **Saving is region diffs.** Moving water is not saved, only ponds on dry ground. Undo history is cleared when the
+   window moves.
 2. **No villages at 1 m.** Village sites are kept clear and roads are drawn on the ground, but there are no buildings,
    bridge structures, watchtowers or landmarks yet (Phase 3). Roads ford rivers at the blueprint's bridge points.
 3. **No travel gameplay.** The Continent panel's "travel" moves the view along a planned route at a chosen speed, for

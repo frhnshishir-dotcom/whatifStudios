@@ -13,6 +13,7 @@ import { buildBlueprint } from './world/blueprint';
 import { ContinentTerrain } from './world/terrain';
 import { RegionCache, WorldWindow } from './world/stream';
 import { ContinentSession } from './world/session';
+import type { ContinentEdits } from './world/edits';
 import type { MapPt } from './world/schema';
 
 /** Load the bundled fonts for every glyph the atlas needs (unicode-range subsets load on demand). */
@@ -49,7 +50,7 @@ export const RIVER_RATE = 5;
  * Continent mode: the world blueprint, seamless terrain and a 3 x 3 region window streamed around the view, starting
  * at Lumenfall Village (or `at`, map units). The valley scenes are untouched.
  */
-export function createContinentEngine(opts: { worker?: boolean; at?: MapPt } = {}): { engine: Engine; session: ContinentSession } {
+export function createContinentEngine(opts: { worker?: boolean; at?: MapPt; edits?: ContinentEdits } = {}): { engine: Engine; session: ContinentSession } {
   const share = canShare() && opts.worker !== false;
   const bp = buildBlueprint(WORLD);
   const terrain = new ContinentTerrain(bp);
@@ -58,11 +59,13 @@ export function createContinentEngine(opts: { worker?: boolean; at?: MapPt } = {
   const win = new WorldWindow(WORLD.coordinates.regionCells, share ? sharedAlloc : heapAlloc);
   const start = opts.at ?? WORLD.settlements[0].at;
   const session = new ContinentSession(bp, terrain, cache, win);
+  if (opts.edits) session.edits = opts.edits;
   win.load(session.regionOf(start), (rx, ry) => cache.ensure(rx, ry));
+  session.applyLoadedGround();
   win.world.name = WORLD.world.name;
   win.world.seed = WORLD.world.seed;
   const engine = new Engine(win.world);
-  const water = new WaterSystem(win.world, { useWorker: share, params: { edgeDrain: false, sleep: true }, init: (_sim, view) => { view.depth.set(win.waterDepth()); } });
+  const water = new WaterSystem(win.world, { useWorker: share, params: { edgeDrain: false, sleep: true }, init: (_sim, view) => { view.depth.set(session.initialDepth()); } });
   engine.attachWater(water);
   session.attach(engine);
   engine.home = session.windowCellOf(start);

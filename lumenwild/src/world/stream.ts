@@ -120,6 +120,8 @@ export class WorldWindow {
   readonly biome: Uint8Array;
   /** Objects of each loaded region (region-local coordinates). */
   private regionObjects = new Map<string, RegionObject[]>();
+  /** Generated data of the nine loaded regions. */
+  private loaded = new Map<string, RegionData>();
 
   constructor(regionCells: number, alloc: Alloc = heapAlloc) {
     this.S = regionCells;
@@ -147,6 +149,7 @@ export class WorldWindow {
     for (const r of regions) for (const e of r.elev) if (e < lo) lo = e;
     this.datum = datum ?? Math.floor(Math.max(-50, lo) / 10) * 10 - 10;
     this.regionObjects.clear();
+    this.loaded.clear();
     regions.forEach((r, k) => this.write(k % WINDOW_REGIONS, Math.floor(k / WINDOW_REGIONS), r));
     this.world.markAllDirty();
   }
@@ -170,6 +173,7 @@ export class WorldWindow {
       }
     }
     for (const k of [...this.regionObjects.keys()]) if (!live.has(k)) this.regionObjects.delete(k);
+    for (const k of [...this.loaded.keys()]) if (!live.has(k)) this.loaded.delete(k);
     w.terrainVersion++;
     return [sx, sy];
   }
@@ -193,6 +197,12 @@ export class WorldWindow {
       w.blend!.set(r.blend.subarray(s, s + S), o);
     }
     this.regionObjects.set(key(r.rx, r.ry), r.objects);
+    this.loaded.set(key(r.rx, r.ry), r);
+  }
+
+  /** The generated region in window slot (gx, gy) (what edits are measured against). */
+  regionAt(gx: number, gy: number): RegionData {
+    return this.loaded.get(key(this.origin[0] + gx, this.origin[1] + gy))!;
   }
 
   /** Objects of the regions entering at this strip (window coordinates). */

@@ -11,21 +11,32 @@ export interface SlotMeta {
   size: number;
 }
 
-interface Backend {
+/** What a slot holds: a Valley save (default) or another kind of save with the same metadata fields. */
+export interface SlotData { name: string; seed: number; savedAt: string }
+
+interface Backend<T extends SlotData = SaveData> {
   kind: 'indexeddb' | 'localstorage' | 'memory';
   list(): Promise<SlotMeta[]>;
-  get(id: string): Promise<SaveData | null>;
-  put(meta: SlotMeta, data: SaveData): Promise<void>;
+  get(id: string): Promise<T | null>;
+  put(meta: SlotMeta, data: T): Promise<void>;
   del(id: string): Promise<void>;
 }
 
-const DB = 'lumenwild', VERSION = 1;
+/**
+ * Where slots live. The Valley uses the default (database "lumenwild", keys "lumenwild:"); the continent keeps its
+ * own, so neither lists or loads the other's saves.
+ */
+export interface SlotNamespace { db: string; prefix: string }
+export const VALLEY_SLOTS: SlotNamespace = { db: 'lumenwild', prefix: 'lumenwild:' };
+export const CONTINENT_SLOTS: SlotNamespace = { db: 'lumenwild-continent', prefix: 'lumenwild-continent:' };
+
+const VERSION = 1;
 
 function req<T>(r: IDBRequest<T>): Promise<T> {
   return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 }
 
-async function idbBackend(idb: IDBFactory): Promise<Backend> {
+async function idbBackend<T extends SlotData>(idb: IDBFactory, DB: string): Promise<Backend<T>> {
   const open = idb.open(DB, VERSION);
   open.onupgradeneeded = () => {
     const db = open.result;
@@ -38,7 +49,7 @@ async function idbBackend(idb: IDBFactory): Promise<Backend> {
   return {
     kind: 'indexeddb',
     list: async () => (await req(tx(['meta'], 'readonly').objectStore('meta').getAll())) as SlotMeta[],
-    get: async (id) => ((await req(tx(['data'], 'readonly').objectStore('data').get(id))) as { id: string; data: SaveData } | undefined)?.data ?? null,
+    get: async (id) => ((await req(tx(['data'], 'readonly').objectStore('data').get(id))) as { id: string; data: T } | undefined)?.data ?? null,
     put: async (meta, data) => {
       const t = tx(['meta', 'data'], 'readwrite');
       t.objectStore('meta').put(meta);
@@ -54,19 +65,18 @@ async function idbBackend(idb: IDBFactory): Promise<Backend> {
   };
 }
 
-function lsBackend(ls: Storage): Backend {
-  const P = 'lumenwild:';
+function lsBackend<T extends SlotData>(ls: Storage, P: string): Backend<T> {
   return {
     kind: 'localstorage',
     list: async () => Object.keys(ls).filter((k) => k.startsWith(P + 'meta:')).map((k) => JSON.parse(ls.getItem(k)!) as SlotMeta),
-    get: async (id) => { const s = ls.getItem(P + 'data:' + id); return s ? (JSON.parse(s) as SaveData) : null; },
+    get: async (id) => { const s = ls.getItem(P + 'data:' + id); return s ? (JSON.parse(s) as T) : null; },
     put: async (meta, data) => { ls.setItem(P + 'data:' + meta.id, JSON.stringify(data)); ls.setItem(P + 'meta:' + meta.id, JSON.stringify(meta)); },
     del: async (id) => { ls.removeItem(P + 'data:' + id); ls.removeItem(P + 'meta:' + id); },
   };
 }
 
-function memBackend(): Backend {
-  const m = new Map<string, { meta: SlotMeta; data: SaveData }>();
+function memBackend<T extends SlotData>(): Backend<T> {
+  const m = new Map<string, { meta: SlotMeta; data: T }>();
   return {
     kind: 'memory',
     list: async () => [...m.values()].map((v) => v.meta),
@@ -80,18 +90,18 @@ function memBackend(): Backend {
  * Save slots in the browser (IndexedDB; falls back to localStorage, then memory). Listing reads only the small
  * metadata records; the world data is fetched when a slot is loaded.
  */
-export class SlotStore {
-  private constructor(private b: Backend) {}
-  get kind(): Backend['kind'] { return this.b.kind; }
+export class SlotStore<T extends SlotData = SaveData> {
+  private constructor(private b: Backend<T>) {}
+  get kind(): Backend<T>['kind'] { return this.b.kind; }
 
-  static async open(env: { indexedDB?: IDBFactory; localStorage?: Storage } = globalThis as never): Promise<SlotStore> {
+  static async open<T extends SlotData = SaveData>(env: { indexedDB?: IDBFactory; localStorage?: Storage } = globalThis as never, ns: SlotNamespace = VALLEY_SLOTS): Promise<SlotStore<T>> {
     if (env.indexedDB) {
-      try { return new SlotStore(await idbBackend(env.indexedDB)); } catch { /* fall through */ }
+      try { return new SlotStore<T>(await idbBackend<T>(env.indexedDB, ns.db)); } catch { /* fall through */ }
     }
     try {
-      if (env.localStorage) { env.localStorage.setItem('lumenwild:probe', '1'); env.localStorage.removeItem('lumenwild:probe'); return new SlotStore(lsBackend(env.localStorage)); }
+      if (env.localStorage) { env.localStorage.setItem(ns.prefix + 'probe', '1'); env.localStorage.removeItem(ns.prefix + 'probe'); return new SlotStore<T>(lsBackend<T>(env.localStorage, ns.prefix)); }
     } catch { /* fall through */ }
-    return new SlotStore(memBackend());
+    return new SlotStore<T>(memBackend<T>());
   }
 
   async list(): Promise<SlotMeta[]> {
@@ -101,13 +111,13 @@ export class SlotStore {
   }
 
   /** Save into a slot (`id` null = a new slot). Returns the slot's metadata. */
-  async save(id: string | null, data: SaveData, thumb?: string): Promise<SlotMeta> {
+  async save(id: string | null, data: T, thumb?: string): Promise<SlotMeta> {
     const json = JSON.stringify(data);
     const meta: SlotMeta = { id: id ?? `slot-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`, name: data.name, seed: data.seed, savedAt: data.savedAt, thumb, size: json.length };
     await this.b.put(meta, data);
     return meta;
   }
 
-  load(id: string): Promise<SaveData | null> { return this.b.get(id); }
+  load(id: string): Promise<T | null> { return this.b.get(id); }
   remove(id: string): Promise<void> { return this.b.del(id); }
 }

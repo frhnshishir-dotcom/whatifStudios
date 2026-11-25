@@ -27,6 +27,7 @@ export function WorldDialog() {
   const slots = useUI((s) => s.slots);
   const currentSlot = useUI((s) => s.currentSlot);
   const worldName = useUI((s) => s.worldName);
+  const mode = useUI((s) => s.mode);
   const seed = useUI((s) => s.seed);
   const saveState = useUI((s) => s.saveState);
   const storageKind = useUI((s) => s.storageKind);
@@ -97,7 +98,7 @@ export function WorldDialog() {
         </section>
 
         <section className="modal-sec two">
-          <div>
+          {mode !== 'continent' && <div>
             <h3>New world</h3>
             <div className="row center">
               <input className="text" type="number" min={0} max={999999999} value={newSeed} onChange={(e) => setNewSeed(e.target.value)} aria-label="Seed" data-testid="new-seed" />
@@ -106,7 +107,7 @@ export function WorldDialog() {
             <button className="btn" onClick={() => guard('new', () => { io?.newWorld(Math.max(0, Math.floor(Number(newSeed) || 0))); setDialog(null); })} data-testid="generate">
               {armed === 'new' ? 'Discard changes and generate?' : 'Generate'}
             </button>
-          </div>
+          </div>}
           <div>
             <h3>File</h3>
             <button className="btn" onClick={() => { const r = io?.exportJSON(); if (r) useUI.getState().showToast(`Exported ${r.name} (${fmtSize(r.size)})`); }} data-testid="export-json">
