@@ -113,3 +113,35 @@ Target: 8 GB RAM, integrated graphics (not yet measured on the laptop).
 | Navigation | Every pair of villages has a route; walking Lumenfall–Greenhaven at 1 m stays on walkable grades except at bridges |
 | Performance (this machine) | Region generation and window shift measured; continent mode frame time measured in the browser |
 | Regressions | All 130 unit tests and 58 browser tests still pass; the valley is unchanged |
+
+## 8. Phase 2 results (measured in this container; the laptop is not measured)
+
+Environment: Node 22 for unit tests; headless Chromium with SwiftShader (software GPU), 4 cores, for browser tests.
+
+| What | Measured |
+|---|---|
+| Region generation (256 x 256 m, terrain + materials + trees) | 55 ms average, 135-215 ms slowest (Node); 106 ms slowest in the browser worker |
+| Window move (3 regions in, arrays, shading cache, objects, water, camera) | 17-31 ms on the main thread |
+| Continent mode in the browser (start window) | 58 fps, compose 1.9 ms per frame, water 0.1 ms per step in the worker |
+| Water on the main thread with a 40 m river in the window (Node) | about 4.6 ms per step (the artifact host has no cross-origin isolation, so it runs water there) |
+| Boot (blueprint, nine regions, engine) | about 4 s in Node |
+| Lumen river volume over 10 s of simulation (sources and drains at the window edge) | -3 % |
+| Lumenfall to Greenhaven on foot (route planner, checked at 1 m) | 26.4 km; no 10 m step steeper than 35 %; rivers crossed only at bridges |
+| A 6 km journey through the streaming window | 28 window moves, slowest 31 ms, the view stays on the traveller |
+
+Tests added: `tests/world-terrain.test.ts` (9), `tests/world-stream.test.ts` (3), `tests/world-navigation.test.ts` (3),
+`e2e/m13-continent-mode.spec.ts`. All earlier tests still pass (145 unit, 59 browser in total).
+
+### Not done yet (honest limits of Phase 2)
+- **Saving the continent**: edits to streamed regions are lost when a region leaves the window; continent mode does
+  not save (valley saves are untouched). Per-region edit diffs are the next persistence step.
+- **Villages, bridges and landmarks at 1 m**: village sites are kept clear and paths are drawn as ground, but no
+  buildings or bridge structures exist yet (Phase 3). Paths ford rivers where the blueprint has a bridge.
+- **Water state across moves**: water depth moves with the window; velocities and ripples restart.
+- **Datum**: heights are stored relative to the datum chosen at start; a very long climb (for example from the
+  marshes to the summits) works but is not re-based.
+- **Main-thread water** on hosts without cross-origin isolation costs about 5 ms per step near large rivers; large
+  lakes filling the window would cost more (not yet optimised: settled water is still simulated).
+- **Dragons and wildlife** are not in continent mode yet (Phase 4); the valley keeps its dragon.
+- **Hardware**: nothing here is validated on the laptop. Run Inspector → Benchmark there, and open the continent
+  (top bar → Continent) to see its frame rate.

@@ -121,3 +121,6 @@ A separate browser game (TypeScript, Vite, Canvas 2D 2.5D view). The video-pipel
   architecture is ready (and approved).
 - Work incrementally with measurable acceptance tests. Present architecture and migration plans for approval before any major
   architectural replacement. Docs: `lumenwild/docs/audit/`. Tests: `npm test`, `npm run e2e` (in `lumenwild/`).
+- World: editable data in `lumenwild/world/` (validated by `npm test`); blueprint, terrain, streaming and navigation in
+  `lumenwild/src/world/`; continent mode at `?scene=continent`. No cities: villages only. Scale 100 m per map unit
+  (provisional), 1 m simulation cells. Docs: `lumenwild/docs/world/`.

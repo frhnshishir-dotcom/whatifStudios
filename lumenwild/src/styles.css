@@ -197,3 +197,5 @@ select { width: 100%; background: var(--panel); color: var(--text); border: 1px 
 .checks li.ok b { color: #9fe0a8; }
 .checks li.bad b { color: #f08a7a; }
 @media (max-width: 700px) { .checks { columns: 1; } }
+
+.btn.mode-switch { flex: 0 0 auto; padding: 4px 10px; font-size: 12px; }

@@ -1,4 +1,4 @@
-import { CHUNK, type World } from '../world/World';
+import { CHUNK, type World, shiftGrid } from '../world/World';
 import { Mat, Cover } from '../world/materials';
 import { Gradient, hex, pack, type RGB } from '../core/color';
 import { hash2 } from '../core/rng';
@@ -120,12 +120,23 @@ export class TerrainShader {
     this.shade = new Uint8Array(world.n);
   }
 
-  /** Rebuild dirty chunks; returns how many were rebuilt. */
-  update(): number {
+  /** Move the cached shading with the terrain when a streaming window moves; the caller marks the uncovered strip dirty. */
+  shift(sx: number, sy: number): void {
+    const { w, h } = this.world;
+    for (const a of [this.topGlyph, this.topFg, this.topBg, this.shade]) shiftGrid(a, w, h, sx, sy);
+  }
+
+  /**
+   * Rebuild dirty chunks; returns how many were rebuilt. With a time budget (ms) it stops early and continues next
+   * call (streaming re-shades a newly loaded strip over several frames, far from the view).
+   */
+  update(budgetMs = Infinity): number {
     const w = this.world;
     let n = 0;
+    const t0 = budgetMs < Infinity ? performance.now() : 0;
     for (let c = 0; c < w.terrainDirty.length; c++) {
       if (!w.terrainDirty[c]) continue;
+      if (n > 0 && budgetMs < Infinity && performance.now() - t0 > budgetMs) break;
       w.terrainDirty[c] = 0;
       const cx = c % w.chunksX, cy = Math.floor(c / w.chunksX);
       this.shadeChunk(cx * CHUNK, cy * CHUNK, Math.min(w.w, cx * CHUNK + CHUNK), Math.min(w.h, cy * CHUNK + CHUNK));

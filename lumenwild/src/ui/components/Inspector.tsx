@@ -4,6 +4,7 @@ import { ToolPanel, SelectionPanel } from './ToolPanel';
 import { EnvPanel } from './EnvPanel';
 import { DragonPanel } from './DragonPanel';
 import { BenchmarkPanel } from './BenchmarkPanel';
+import { ContinentPanel } from './ContinentPanel';
 
 const KIND = ['Void', 'Terrain', 'Cliff face', 'Water', 'Waterfall', 'Object', 'Particle', 'Dragon'];
 
@@ -13,6 +14,7 @@ export function Inspector() {
   const setSettings = useUI((s) => s.setSettings);
   return (
     <aside className="inspector" aria-label="Inspector">
+      <ContinentPanel />
       <DragonPanel />
       <SelectionPanel />
       <ToolPanel />

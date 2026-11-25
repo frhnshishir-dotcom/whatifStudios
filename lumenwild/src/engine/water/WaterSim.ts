@@ -176,6 +176,13 @@ export class WaterSim extends WaterView {
     this.rebuildLists();
   }
 
+  /** Set many sources and drains at once (one list rebuild): streaming windows place river inflows and outflows. */
+  setPorts(sources: Array<[number, number, number]>, drains: Array<[number, number, number]>): void {
+    for (const [x, y, r] of sources) if (this.inBounds(x, y)) this.source[y * this.w + x] = Math.max(0, r);
+    for (const [x, y, r] of drains) if (this.inBounds(x, y)) this.drain[y * this.w + x] = Math.max(0, r);
+    this.rebuildLists();
+  }
+
   setDrain(x: number, y: number, rate: number): void {
     if (!this.inBounds(x, y)) return;
     this.drain[y * this.w + x] = Math.max(0, rate);

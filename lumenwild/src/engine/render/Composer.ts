@@ -54,6 +54,9 @@ export class Composer {
     }
   }
 
+  /** Time budget for re-shading dirty terrain per frame (ms); unlimited unless streaming sets it. */
+  shadeBudgetMs = Infinity;
+
   /** When set, compose() records milliseconds per layer (prepare + after) and for the terrain pass. Off by default. */
   profile: Map<string, number> | null = null;
 
@@ -66,7 +69,7 @@ export class Composer {
 
   compose(cam: Camera, t: number): CellBuffer {
     const w = this.world, sh = this.shader, buf = this.buf;
-    sh.update();
+    sh.update(this.shadeBudgetMs);
     const cols = cam.cols + 1, rows = cam.rows + 1;
     buf.resize(cols, rows);
     this.ensureRowBg(rows);

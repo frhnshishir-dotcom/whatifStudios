@@ -1,5 +1,21 @@
 # Lumenwild changelog
 
+## World Phase 2: continent terrain, streaming and navigation (2026-11-25)
+- Decisions applied: six villages and no cities (validator rejects cities), renamed watchtowers, 100 m per map unit
+  (provisional), 1 m cells as `World.ts` defines; rivers routed alongside villages; scale, travel times, memory and the
+  streaming design in `docs/world/SCALE_AND_STREAMING.md`.
+- `src/world/terrain.ts`: seamless 1 m terrain from the blueprint (ranges, valleys, rivers at true width, lakes,
+  marsh pools, sea, gradual biome borders, materials, paths, trees, rocks).
+- `src/world/stream.ts`, `session.ts`, `region.worker.ts`: a 3 x 3 region window that moves with the view (terrain,
+  shading cache, objects, water and camera shift together; new strips shaded over several frames; regions generated in
+  a worker and cached).
+- `src/world/navigation.ts`: routes between any two points (roads cheap, bridges, no lakes or nests); travel along them.
+- Continent mode: top bar → Continent (`?scene=continent`), Continent panel with position and travel. The valley,
+  its water, dragon and saves are unchanged; continent mode does not save yet.
+- Engine additions: `TerrainShader.shift` and time-budgeted shading, `ObjectStore.shift`, `shiftGrid`, batched water
+  ports, an engine streaming hook.
+- Tests: terrain (9), streaming (3), navigation (3), continent browser test; 145 unit and 59 browser tests pass.
+
 ## World map specification: Phase 0 and Phase 1 blueprint (2026-11-25)
 - Phase 0 reuse report: `docs/world/PHASE0_REUSE_REPORT.md` (source-backed; conflicts with the settlement revision listed).
 - Editable world data in `lumenwild/world/` (regions, coastline, ranges, elevation features, lakes, rivers, settlements,

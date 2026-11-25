@@ -1,4 +1,10 @@
-# Phase 1: world map blueprint (for review)
+# Phase 1: world map blueprint (approved; updated for the Phase 2 decisions)
+
+> **Phase 2 decisions applied (2026-11-25):** no cities; six villages (Lumenfall Village, Greenhaven, Frostwatch
+> Village, Marshlight, Windmere, Moonrest) of 10-30 buildings; Riverwatch Tower and Sunspire Watchtower; 100 m per map
+> unit (provisional) and 1 m cells; the Southern Sky Corridor is migration airspace with a no-low-flight radius over
+> villages. Rivers now pass 200-800 m from every village. Tables below that predate these decisions are superseded by
+> `docs/world/SCALE_AND_STREAMING.md` and the world files.
 
 Preview: `docs/world/world-blueprint.png` (designer view) and `docs/world/world-player-start.png` (what a new player
 sees). In the app: map icon in the top bar → "World blueprint" / "Player view at start".

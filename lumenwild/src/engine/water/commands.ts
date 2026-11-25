@@ -10,6 +10,7 @@ export type WaterCmd =
   | { op: 'warmup'; steps: number }
   | { op: 'clear' }
   | { op: 'reset'; depth: Float32Array | null }
-  | { op: 'params'; params: Partial<WaterParams> };
+  | { op: 'params'; params: Partial<WaterParams> }
+  | { op: 'ports'; sources: Array<[number, number, number]>; drains: Array<[number, number, number]> };
 
 export interface WaterStats { stepMs: number; steps: number; total: number; active: number; added: number; removed: number; warming: boolean }

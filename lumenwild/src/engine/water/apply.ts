@@ -12,5 +12,6 @@ export function applyWaterCmd(sim: WaterSim, c: WaterCmd, dt: number): void {
     case 'clear': sim.clearWater(); break;
     case 'reset': sim.reset(c.depth); break;
     case 'params': Object.assign(sim.params, c.params); break;
+    case 'ports': sim.setPorts(c.sources, c.drains); break;
   }
 }

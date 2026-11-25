@@ -8,6 +8,12 @@ import { generateTerrain } from './engine/gen/terrain';
 import { generateWorld, prefillWater, type GenInfo } from './engine/gen/world';
 import { ObjectStore } from './engine/objects/ObjectStore';
 import { Dragon } from './engine/dragon/Dragon';
+import { WORLD } from './world/data';
+import { buildBlueprint } from './world/blueprint';
+import { ContinentTerrain } from './world/terrain';
+import { RegionCache, WorldWindow } from './world/stream';
+import { ContinentSession } from './world/session';
+import type { MapPt } from './world/schema';
 
 /** Load the bundled fonts for every glyph the atlas needs (unicode-range subsets load on demand). */
 export async function loadFonts(timeoutMs = 5000): Promise<void> {
@@ -40,9 +46,37 @@ export function generateVale(seed: number, share = canShare()): { world: World; 
 export const RIVER_RATE = 5;
 
 /**
- * scene: 'world' (generated vale), 'terrain' (bare heightmap, M1 test) or 'watertest' (deterministic water test).
+ * Continent mode: the world blueprint, seamless terrain and a 3 x 3 region window streamed around the view, starting
+ * at Lumenfall Village (or `at`, map units). The valley scenes are untouched.
+ */
+export function createContinentEngine(opts: { worker?: boolean; at?: MapPt } = {}): { engine: Engine; session: ContinentSession } {
+  const share = canShare() && opts.worker !== false;
+  const bp = buildBlueprint(WORLD);
+  const terrain = new ContinentTerrain(bp);
+  const worker = typeof Worker !== 'undefined' && opts.worker !== false ? new Worker(new URL('./world/region.worker.ts', import.meta.url), { type: 'module' }) : null;
+  const cache = new RegionCache(terrain, { worker, capacity: 24 });
+  const win = new WorldWindow(WORLD.coordinates.regionCells, share ? sharedAlloc : heapAlloc);
+  const start = opts.at ?? WORLD.settlements[0].at;
+  const session = new ContinentSession(bp, terrain, cache, win);
+  win.load(session.regionOf(start), (rx, ry) => cache.ensure(rx, ry));
+  win.world.name = WORLD.world.name;
+  win.world.seed = WORLD.world.seed;
+  const engine = new Engine(win.world);
+  const water = new WaterSystem(win.world, { useWorker: share, params: { edgeDrain: false }, init: (_sim, view) => { view.depth.set(win.waterDepth()); } });
+  engine.attachWater(water);
+  session.attach(engine);
+  engine.home = session.windowCellOf(start);
+  // Re-shade newly streamed strips over several frames (they load far from the view).
+  engine.composer.shadeBudgetMs = 4;
+  return { engine, session };
+}
+
+/**
+ * scene: 'world' (generated vale), 'terrain' (bare heightmap, M1 test), 'watertest' (deterministic water test) or
+ * 'continent' (the streamed continent).
  */
 export function createEngine(seed: number, scene = 'world', opts: { worker?: boolean } = {}): Engine {
+  if (scene === 'continent') return createContinentEngine(opts).engine;
   const share = canShare() && opts.worker !== false;
   if (scene === 'world') {
     const { world, objects, info } = generateVale(seed, share);

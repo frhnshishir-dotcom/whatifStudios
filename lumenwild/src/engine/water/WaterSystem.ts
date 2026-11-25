@@ -47,6 +47,8 @@ export class WaterSystem {
   disturb(x: number, y: number, r: number, strength: number) { this.send({ op: 'disturb', x, y, r, strength }); }
   setSource(x: number, y: number, rate: number) { this.send({ op: 'source', x, y, rate }); }
   setDrain(x: number, y: number, rate: number) { this.send({ op: 'drain', x, y, rate }); }
+  /** Many sources and drains in one command (one list rebuild). */
+  setPorts(sources: Array<[number, number, number]>, drains: Array<[number, number, number]>) { this.send({ op: 'ports', sources, drains }); }
   terrainChanged(x0: number, y0: number, x1: number, y1: number) { this.send({ op: 'terrain', x0, y0, x1, y1 }); }
   warmup(steps: number) { this.send({ op: 'warmup', steps }); }
   clear() { this.send({ op: 'clear' }); }

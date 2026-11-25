@@ -51,6 +51,11 @@ export class WorldIO {
 
   /** Save to a slot (null = a new slot). */
   async save(slotId: string | null, opts: { quiet?: boolean } = {}): Promise<SlotMeta | null> {
+    if (this.engine.streamer) {
+      // The continent streams regions in and out; its saves (per-region edits) are a later step. Valley slots stay untouched.
+      if (!opts.quiet) useUI.getState().showToast('Continent mode does not save yet (edits to streamed regions are not kept)');
+      return null;
+    }
     if (!this.store || this.busy) return null;
     this.busy = true;
     const ui = useUI.getState();
@@ -74,7 +79,7 @@ export class WorldIO {
   quickSave(): Promise<SlotMeta | null> { return this.save(this.currentSlot); }
 
   private async autosave(): Promise<void> {
-    if (useUI.getState().saveState !== 'unsaved' || this.engine.editor.active) return;
+    if (useUI.getState().saveState !== 'unsaved' || this.engine.editor.active || this.engine.streamer) return;
     const keep = this.currentSlot;
     await this.save('autosave', { quiet: true });
     this.currentSlot = keep;

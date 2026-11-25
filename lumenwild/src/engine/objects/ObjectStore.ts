@@ -106,6 +106,22 @@ export class ObjectStore {
     return out;
   }
 
+  /**
+   * Streaming: move every object by (-sx, -sy) cells, dropping those that leave the world, and rebuild the occupancy,
+   * solid mask and buckets. Ids (and cached sprites) are kept. No change callbacks: the caller resets the water.
+   */
+  shift(sx: number, sy: number): void {
+    const keep: WorldObject[] = [];
+    for (const o of this.objects.values()) {
+      const m = { ...o, x: o.x - sx, y: o.y - sy };
+      if (this.footprint(m).every(([x, y]) => this.world.inBounds(x, y))) keep.push(m);
+      else this.sprites.delete(o.id);
+    }
+    this.objects.clear(); this.buckets.clear(); this.occ.fill(0); this.world.solid.fill(0);
+    for (const o of keep) { this.objects.set(o.id, o); this.stamp(o, o.id); this.bucket(o).add(o.id); }
+    this.version++;
+  }
+
   clear(): void {
     for (const id of [...this.objects.keys()]) this.remove(id);
     this.nextId = 1;

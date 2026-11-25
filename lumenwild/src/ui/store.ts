@@ -53,6 +53,8 @@ interface UIState {
   setStats: (s: EngineStats) => void;
   setHover: (h: HoverInfo | null) => void;
   setWorldMeta: (name: string, seed: number) => void;
+  /** 'valley' (the sandbox world) or 'continent' (streamed regions). */
+  mode: 'valley' | 'continent';
   setSaveState: (s: UIState['saveState']) => void;
   markUnsaved: () => void;
 }
@@ -104,6 +106,7 @@ export const useUI = create<UIState>()((set) => ({
   setStats: (stats) => set({ stats }),
   setHover: (hover) => set({ hover }),
   setWorldMeta: (worldName, seed) => set({ worldName, seed }),
+  mode: typeof location !== 'undefined' && new URLSearchParams(location.search).get('scene') === 'continent' ? 'continent' : 'valley',
   setSaveState: (saveState) => set({ saveState }),
   markUnsaved: () => set((st) => (st.saveState === 'unsaved' ? st : { saveState: 'unsaved' })),
 }));

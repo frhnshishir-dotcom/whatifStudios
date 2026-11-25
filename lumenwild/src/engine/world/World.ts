@@ -2,6 +2,22 @@ import { Mat } from './materials';
 
 export const CHUNK = 16;
 
+type Grid = Float32Array | Uint8Array | Uint16Array | Uint32Array | Int32Array;
+
+/**
+ * Move a w x h grid's contents in place so that new[x, y] = old[x + sx, y + sy] (streaming: the window moved by
+ * (sx, sy) cells). Cells uncovered at the far edge keep stale values; the caller overwrites them.
+ */
+export function shiftGrid(a: Grid, w: number, h: number, sx: number, sy: number): void {
+  if (!sx && !sy) return;
+  const x0 = Math.max(0, -sx), x1 = Math.min(w, w - sx);
+  if (x1 <= x0 || Math.abs(sy) >= h) return;
+  const row = (y: number) => a.copyWithin(y * w + x0, (y + sy) * w + x0 + sx, (y + sy) * w + x1 + sx);
+  if (sy > 0) for (let y = 0; y < h - sy; y++) row(y);
+  else if (sy < 0) for (let y = h - 1; y >= -sy; y--) row(y);
+  else for (let y = 0; y < h; y++) row(y);
+}
+
 /** Buffer factory: ordinary ArrayBuffer, or SharedArrayBuffer when the page is cross-origin isolated. */
 export type Alloc = (bytes: number) => ArrayBuffer | SharedArrayBuffer;
 export const heapAlloc: Alloc = (bytes) => new ArrayBuffer(bytes);

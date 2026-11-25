@@ -105,6 +105,10 @@ export class Engine {
   /** World cell under the pointer (-1 = none). */
   hoverIndex = -1;
   onStats: ((s: EngineStats) => void) | null = null;
+  /** Continent streaming (moves the loaded window with the view); null in the valley. */
+  streamer: { update(e: Engine, dt: number): void } | null = null;
+  /** Height of the loaded window's zero (continent mode stores heights relative to it); 0 in the valley. */
+  elevationDatum = 0;
   /** Called at the end of every frame with its timestamp (benchmarks; keep it cheap). */
   onFrame: ((now: number) => void) | null = null;
   onHover: ((h: HoverInfo | null) => void) | null = null;
@@ -368,6 +372,7 @@ export class Engine {
       cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
       cam.clampTo(this.world.w, this.world.h);
     }
+    this.streamer?.update(this, Math.min(0.1, dt));
     this.objectLayer.selectedId = this.editor.selectedId;
     this.objectLayer.wind = this.env.gust;
     this.objectLayer.windDir = this.env.windDir;
@@ -444,7 +449,7 @@ export class Engine {
     if (i < 0) { this.onHover?.(null); return; }
     const w = this.world, x = i % w.w, y = Math.floor(i / w.w);
     const b = this.composer.buf, [cx, cy] = this.renderer.cellAt(hx, hy, this.cam);
-    this.onHover?.({ x, y, i, elev: w.elev[i], mat: w.mat[i], cover: w.cover[i], moisture: w.moisture[i], kind: b.kind[cy * b.cols + cx] });
+    this.onHover?.({ x, y, i, elev: w.elev[i] + this.elevationDatum, mat: w.mat[i], cover: w.cover[i], moisture: w.moisture[i], kind: b.kind[cy * b.cols + cx] });
   }
 
   private bindInput(canvas: HTMLCanvasElement): void {
