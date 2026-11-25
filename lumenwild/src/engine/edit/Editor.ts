@@ -51,7 +51,7 @@ export const DEFAULT_OPTIONS: ToolOptions = {
 /** Tools that act continuously while the pointer is held (applied every frame, not only on movement). */
 const CONTINUOUS = new Set<EditTool>(['raise', 'lower', 'water']);
 const PLANTS = new Set<ObjKind>(['tree', 'mushroom']);
-const ELEV_MIN = -6, ELEV_MAX = 70;
+const ELEV_MIN = -6, ELEV_MAX = 120;
 
 /** Before-values of every terrain cell a stroke touched (recorded lazily, once per cell). */
 class TerrainPatch {

@@ -166,7 +166,7 @@ describe('dragon: needs and the environment', () => {
     const { d } = dragonIn(42);
     d.e.needs.energy = 0.08; d.e.needs.thirst = 0;
     let rested = false, peak = 0;
-    run(d, 200, 1 / 20, () => { if (d.e.state === 'RESTING') { rested = true; peak = Math.max(peak, d.e.needs.energy); } });
+    run(d, 300, 1 / 20, () => { if (d.e.state === 'RESTING') { rested = true; peak = Math.max(peak, d.e.needs.energy); } });
     expect(rested).toBe(true);
     expect(peak).toBeGreaterThan(0.85);
   });
@@ -180,6 +180,25 @@ describe('dragon: needs and the environment', () => {
     env.night = 0; env.daylight = 1;
     run(d, 120);
     expect(d.e.state).not.toBe('SLEEPING');
+  });
+
+  it('at night it flies up the mountain and sleeps in its cave, facing the mouth', () => {
+    const { d } = dragonIn(7, { night: 1, daylight: 0, rain: 0, gust: 0.1, windDir: 1 });
+    d.e.needs.thirst = 0;
+    const lair = d.e.lair!;
+    expect(lair).not.toBeNull();
+    expect(d.senses.isLandable(lair.x, lair.y)).toBe(true);
+    let slept: [number, number, number] | null = null, minGap = Infinity;
+    run(d, 240, 1 / 20, () => {
+      if (d.e.state === 'SLEEPING' && !slept) slept = [d.e.x, d.e.y, d.e.heading];
+      if (d.e.airborne && d.e.state !== 'LANDING') minGap = Math.min(minGap, d.e.z - d.senses.ground(d.e.x, d.e.y));
+    });
+    expect(slept).not.toBeNull();
+    const [sx, sy, sh] = slept!;
+    expect(Math.hypot(sx - lair.x, sy - lair.y)).toBeLessThan(3);
+    expect(d.senses.terrain(sx, sy)).toBeGreaterThan(55); // up on the summit
+    expect(Math.sin(sh)).toBeLessThan(-0.8); // facing north, into the cave
+    expect(minGap).toBeGreaterThan(0);
   });
 
   it('rain makes a sensitive dragon seek shelter; wind pushes it', () => {

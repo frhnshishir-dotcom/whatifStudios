@@ -160,7 +160,7 @@ export function validateSave(input: unknown, expect?: { w: number; h: number }):
     for (let i = 0; i < n; i++) if (!Number.isFinite(elev[i]) || elev[i] < -100 || elev[i] > 300) bad++;
     if (bad) errors.push(`Elevation has ${bad} invalid values.`);
   }
-  if (mat) { let bad = 0; for (let i = 0; i < n; i++) if (mat[i] > 10) bad++; if (bad) errors.push(`Material grid has ${bad} unknown materials.`); }
+  if (mat) { let bad = 0; for (let i = 0; i < n; i++) if (mat[i] > 11) bad++; if (bad) errors.push(`Material grid has ${bad} unknown materials.`); }
   if (cover) { let bad = 0; for (let i = 0; i < n; i++) if (cover[i] > 8) bad++; if (bad) errors.push(`Cover grid has ${bad} unknown values.`); }
   if (depth) {
     let bad = 0;

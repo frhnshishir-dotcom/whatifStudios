@@ -50,7 +50,7 @@ export function cruiseAltitude(e: DragonEntity, senses: DragonSenses, heading: n
  * gets there, pick a detour heading (the side with the lower obstacles). Returns the detour or null.
  */
 export function avoidance(e: DragonEntity, senses: DragonSenses): number | null {
-  const sp = Math.max(3, e.speed);
+  const sp = Math.max(1.6, Math.min(e.speed, e.desiredSpeed + 0.5));
   // Already inside something taller (e.g. drifted into a big tree's crown): get out by the lowest way.
   if (requiredAlt(senses, e.x, e.y) > e.z + 0.5) {
     let best = e.heading, bestNeed = Infinity;

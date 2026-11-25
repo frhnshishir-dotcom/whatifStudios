@@ -125,6 +125,30 @@ describe('world generation', () => {
     expect(OBJECT_DEFS.tree.light!(t)!.r).toBeGreaterThan(8);
   });
 
+  it.each([7, 1, 42, 99, 2026])('seed %i has a huge snow-capped mountain with the dragon cave on its level summit', (seed) => {
+    const { world, objects, info } = gen(seed);
+    const m = info.features.find((f) => f.kind === 'mountain')!;
+    expect(m).toBeDefined();
+    const top = world.elevAt(m.x, m.y);
+    let foot = Infinity;
+    for (let a = 0; a < 16; a++) foot = Math.min(foot, world.elevAt(Math.round(m.x + Math.cos(a) * 30), Math.round(m.y + Math.sin(a) * 30)));
+    expect(top - foot).toBeGreaterThan(25);
+    // Away from the river (it never dams it): no prefilled water within 15 cells of the summit.
+    for (let dy = -15; dy <= 15; dy++) for (let dx = -15; dx <= 15; dx++) {
+      const i = (m.y + dy) * world.w + m.x + dx;
+      if (world.inBounds(m.x + dx, m.y + dy)) expect(info.level[i] === info.level[i]).toBe(false);
+    }
+    let snow = 0;
+    for (let i = 0; i < world.n; i++) if (world.mat[i] === Mat.Snow) snow++;
+    expect(snow).toBeGreaterThan(300);
+    const cave = [...objects.objects.values()].find((o) => o.kind === 'cave')!;
+    expect(cave).toBeDefined();
+    expect(Math.abs(world.elevAt(cave.x + 5, cave.y + 2) - top)).toBeLessThan(0.5);
+    const lair = info.features.find((f) => f.kind === 'dragon lair')!;
+    expect(lair).toBeDefined();
+    expect(world.elevAt(lair.x, lair.y)).toBeCloseTo(top, 1);
+  });
+
   it('is not mirror-symmetric', () => {
     const { world } = gen(7);
     let diff = 0;

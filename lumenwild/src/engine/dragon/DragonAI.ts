@@ -133,6 +133,8 @@ export class DragonAI {
       }
       case 'rest': case 'shelter': {
         if (onGround && (g === 'rest' || s.isSheltered(e.x, e.y))) { this.groundTo('RESTING', g); e.target = null; return; }
+        // Home first: the cave is its favourite place to rest, and dry in the rain.
+        if (this.toLair(g === 'shelter' ? 'shelter in its cave' : 'its cave on the mountain', g === 'shelter' ? 1 : 0.45 + 0.4 * e.personality.restfulness, onGround)) return;
         const fav = e.memory.rest[0];
         const ok = g === 'shelter'
           ? land(e.x, e.y, 'shelter', 'shelter from the rain', 'shelter', 45)
@@ -142,6 +144,8 @@ export class DragonAI {
         return this.travel('FLYING');
       }
       case 'sleep': {
+        if (this.atLair() && onGround) { this.faceLair(); this.groundTo('SLEEPING', 'sleep in its cave'); e.target = null; return; }
+        if (this.toLair('its cave, to sleep', 1, onGround)) return;
         if (onGround && (s.isSheltered(e.x, e.y) || this.senses.world.magic[Math.floor(e.y) * s.world.w + Math.floor(e.x)] > 60)) { this.groundTo('SLEEPING', 'sleep here'); e.target = null; return; }
         const fav = e.memory.rest[0];
         const ok = (fav && land(fav.x, fav.y, 'sleep', 'its sleeping place', 'shelter', 8)) || land(e.x, e.y, 'sleep', 'a sheltered place to sleep', 'shelter', 50) || land(e.x, e.y, 'sleep', 'somewhere to sleep', 'open', 40);
@@ -176,6 +180,26 @@ export class DragonAI {
     const e = this.e;
     if (e.state !== state && !this.fsm.allowed(e.state, state)) this.fsm.change(e, 'IDLE', reason);
     this.fsm.change(e, state, reason);
+  }
+
+  private atLair(): boolean {
+    const l = this.e.lair;
+    return !!l && Math.hypot(l.x - this.e.x, l.y - this.e.y) < 2.5;
+  }
+
+  private faceLair(): void {
+    const l = this.e.lair;
+    if (l) this.e.heading = Math.atan2(l.my - this.e.y, l.mx - this.e.x);
+  }
+
+  /** Head home to the cave (with probability p). Returns true if that is the plan. */
+  private toLair(label: string, p: number, onGround: boolean): boolean {
+    const e = this.e, l = e.lair;
+    if (!l || this.rand() > p || !this.senses.isLandable(l.x, l.y)) return false;
+    if (this.atLair()) { if (onGround) { this.faceLair(); this.groundTo(e.goal === 'sleep' ? 'SLEEPING' : 'RESTING', label); e.target = null; } return onGround; }
+    e.target = { x: l.x, y: l.y, kind: 'lair', label, land: true };
+    this.travel('FLYING');
+    return true;
   }
 
   private travel(state: DragonState): void {
@@ -279,6 +303,21 @@ export class DragonAI {
     e.desiredSpeed = st === 'GLIDING' ? DRAGON.glideSpeed : st === 'ROAMING' ? DRAGON.cruiseSpeed * 0.85 : DRAGON.cruiseSpeed;
     cruise(e, s);
     if (st === 'GLIDING') e.zTarget = Math.max(requiredAlt(s, e.x, e.y) + 1, e.z - 3);
+    // Climb planning along the whole route: start climbing early for high ground ahead (a mountain, its summit
+    // lair) and slow down enough that the climb rate can make the gradient, instead of turning away from it.
+    if (t) {
+      const dd = Math.hypot(t.x - e.x, t.y - e.y), ux = (t.x - e.x) / (dd || 1), uy = (t.y - e.y) / (dd || 1);
+      let need = 0, grad = 0;
+      const end = t.land ? dd - 8 : dd;
+      for (let k = 6; k < Math.min(end, 100); k += 5) {
+        const r = requiredAlt(s, e.x + ux * k, e.y + uy * k) + 2;
+        if (r > need) need = r;
+        const gk = (r - e.z) / k;
+        if (gk > grad) grad = gk;
+      }
+      if (need > e.zTarget) e.zTarget = need;
+      if (grad > 0.05) e.desiredSpeed = Math.min(e.desiredSpeed, Math.max(1.6, (DRAGON.climbRate * 0.85) / grad));
+    }
     // Approaching a landmark it will circle: be at circling height before arriving.
     if (t && !t.land && Math.hypot(t.x - e.x, t.y - e.y) < 45) e.zTarget = Math.max(e.zTarget, this.ringAlt(t.x, t.y, 12));
     const detour = guard(e, s, now);
@@ -339,6 +378,7 @@ export class DragonAI {
     this.onEvent?.('land');
     e.memory.noteVisit(e.x, e.y, now, 'landing');
     const g = e.goal;
+    if (e.target?.kind === 'lair') this.faceLair();
     if (g === 'drink') { this.faceWater(); this.fsm.change(e, 'DRINKING', 'drink'); }
     else if (g === 'rest' || g === 'shelter') { e.memory.noteRest(e.x, e.y, g === 'shelter' ? 0.8 : 0.6, now); this.fsm.change(e, 'RESTING', g); }
     else if (g === 'sleep') { e.memory.noteRest(e.x, e.y, 1, now, 'sleep'); this.fsm.change(e, 'SLEEPING', 'sleep'); }

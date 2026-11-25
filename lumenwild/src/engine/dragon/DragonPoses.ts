@@ -29,10 +29,11 @@ export interface PoseCell { dx: number; dy: number; g: number; fg: number; bg: n
 export interface ShadowCell { dx: number; dy: number; a: number }
 
 const C = (s: string) => hex(s);
+/** Obsidian scales, crimson wing membranes, ember ridge and amber eyes: dark, clean, and distinct from the grass. */
 export const PAL = {
-  scaleDark: C('#0c271d'), scale: C('#2b8a60'), scaleLit: C('#6fe0c0'), belly: C('#a8d4a2'), ridge: C('#6cf0cf'),
-  membrane: C('#2f7a60'), membraneLit: C('#5aae8e'), membraneEdge: C('#0b1712'), bone: C('#0b1712'), boneLit: C('#1d4235'),
-  claw: C('#d9d1b2'), clawDark: C('#2a2a24'), horn: C('#e2dabc'), eye: C('#ffb22e'), eyeLit: C('#ffe08a'), charcoal: C('#151c19'),
+  scaleDark: C('#07080b'), scale: C('#1b2028'), scaleLit: C('#56637a'), belly: C('#4a2a22'), ridge: C('#ff7a2c'),
+  membrane: C('#3c0d14'), membraneLit: C('#7a1c26'), membraneEdge: C('#050506'), bone: C('#050506'), boneLit: C('#2a2e36'),
+  claw: C('#c9bea2'), clawDark: C('#2a2a24'), horn: C('#c8bc9e'), eye: C('#ffb22e'), eyeLit: C('#ffe08a'), charcoal: C('#0b0c0f'),
 };
 
 type P3 = [number, number, number];
@@ -40,8 +41,8 @@ interface Poly { pts: P3[]; part: Part }
 interface Line { a: P3; b: P3; part: Part; w: number }
 
 const QUAD = ['', '▘', '▝', '▀', '▖', '▌', '▞', '▛', '▗', '▚', '▐', '▜', '▄', '▙', '▟', '█'].map((c) => (c ? g(c) : 0));
-const MEMBRANE = ['▒', '▒', '░', '▒', '▓'].map(g);
-const SCALES = ['▓', '◆', '▓', '⬩', '▓', '▪'].map(g);
+const MEMBRANE = ['▓', '▓', '▓', '▒'].map(g);
+const SOLID = g('█'), SHEEN = g('▓');
 const LINE_GLYPH = ['─', '╲', '│', '╱'].map(g);
 const RIDGE = g('▴');
 
@@ -250,39 +251,41 @@ export class DragonPoses {
       let gl: number, fg: number, bg: number, alpha: number;
       switch (c.part) {
         case Part.Membrane: {
-          // Translucent skin between the bones, lighter toward the light; the silhouette edge is a dark rim.
-          const k = (0.85 + lift * 0.2) * light;
-          const col = mixc(PAL.membrane, PAL.membraneLit, Math.min(1, Math.max(0, (light - 0.75) * 1.4)));
+          // Dense crimson skin, lighter toward the light and when the wing lifts; the silhouette edge is a black rim.
+          const k = (0.88 + lift * 0.16) * light;
+          const col = mixc(PAL.membrane, PAL.membraneLit, Math.min(1, Math.max(0, (light - 0.7) * 1.3)));
           gl = full ? MEMBRANE[Math.floor(hsh * MEMBRANE.length)] : QUAD[c.mask];
-          fg = full ? shade(mixc(col, C('#8fdcbc'), 0.3), k) : shade(PAL.membraneEdge, 1);
-          bg = shade(col, k * 0.78);
-          alpha = full ? 0.72 : 0;
+          fg = full ? shade(col, k * 1.08) : shade(PAL.membraneEdge, 1);
+          bg = shade(col, k * 0.72);
+          alpha = full ? 1 : 0;
           break;
         }
         case Part.Bone: case Part.Arm: {
           // Finger bones and the leading edge: dark strokes, as in the silhouette of a bat wing.
-          gl = c.part === Part.Arm && full ? g('█') : c.line ? lineGlyph(c.line.dx, c.line.dy) : QUAD[c.mask];
+          gl = c.part === Part.Arm && full ? SOLID : c.line ? lineGlyph(c.line.dx, c.line.dy) : QUAD[c.mask];
           fg = c.part === Part.Arm ? shade(PAL.boneLit, light) : shade(PAL.bone, 1);
-          bg = shade(mixc(PAL.membrane, PAL.bone, 0.45), 0.85 * light);
-          alpha = full ? 0.8 : 0;
+          bg = shade(mixc(PAL.membrane, PAL.bone, 0.35), 0.8 * light);
+          alpha = full ? 1 : 0;
           break;
         }
         case Part.Ridge: {
-          gl = RIDGE; fg = shade(PAL.ridge, light); bg = shade(PAL.scaleDark, light * 1.1); alpha = 1;
+          gl = RIDGE; fg = shade(PAL.ridge, Math.min(1.05, light)); bg = shade(PAL.scale, light * 0.9); alpha = 1;
           break;
         }
         case Part.Claw: {
           gl = c.line ? lineGlyph(c.line.dx, c.line.dy) : QUAD[c.mask];
-          fg = shade(mixc(PAL.claw, PAL.scale, 0.35), Math.min(1.05, light)); bg = shade(PAL.charcoal, 1); alpha = full ? 1 : 0;
+          fg = shade(mixc(PAL.claw, PAL.scale, 0.3), Math.min(1.05, light)); bg = shade(PAL.charcoal, 1); alpha = full ? 1 : 0;
           break;
         }
         default: {
           // Scales: lit from the upper left; the lowest body row in each column shows the lighter underside.
+          // Solid obsidian, shaded smoothly; lit cells show a steel sheen, the underside a dark ember-brown.
           const under = bodyLow.get(c.dx) === c.dy;
-          const base = under ? mixc(PAL.scale, PAL.belly, 0.7) : mixc(PAL.scale, PAL.scaleLit, Math.max(0, light - 1) * 2.2);
-          gl = full ? SCALES[Math.floor(hsh * SCALES.length)] : QUAD[c.mask];
+          const sheen = light > 1.08 && hsh > 0.35;
+          const base = under ? mixc(PAL.scale, PAL.belly, 0.8) : mixc(PAL.scale, PAL.scaleLit, Math.max(0, light - 1) * 1.6);
+          gl = full ? (sheen ? SHEEN : SOLID) : QUAD[c.mask];
           fg = shade(base, full ? light : light * 1.05);
-          bg = shade(under ? mixc(PAL.scaleDark, PAL.belly, 0.35) : PAL.scaleDark, light);
+          bg = shade(under ? mixc(PAL.scaleDark, PAL.belly, 0.4) : PAL.scale, light * 0.82);
           alpha = full ? 1 : 0;
         }
       }

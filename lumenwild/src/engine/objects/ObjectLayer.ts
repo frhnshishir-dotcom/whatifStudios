@@ -86,7 +86,10 @@ export class ObjectLayer implements SceneLayer {
           // Each bulb steps through the colours on its own phase and breathes in brightness.
           const k = (c.anim >> 4) & 15;
           const col = BULBS[(k + Math.floor(t * 0.9 + k * 0.618)) % BULBS.length];
-          fg = scale(col, (0.62 + 0.38 * (0.5 + 0.5 * Math.sin(t * 3.1 + k * 1.9))) * (1 + this.night * 0.2));
+          const br = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(t * 3.1 + k * 1.9));
+          fg = scale(col, br * (1 + this.night * 0.2));
+          // Coloured light: the bulb tints the needles around it (stronger at night).
+          if (bg) bg = mixPacked(bg, col, (0.28 + this.night * 0.32) * br);
                 } else if (base === Anim.Spark) {
           if (hash2(o.id, Math.floor(t * 3), 1) < 0.5) continue;
         } else if (base === Anim.Wheel) {

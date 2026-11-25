@@ -158,10 +158,45 @@ export class Atmosphere implements SceneLayer {
     }
   }
 
+  /** Colour grade: 0 = as authored, 1 = grey. A light desaturation keeps the world clear rather than vivid. */
+  desaturate = 0.2;
+  /** Midtone darkening (0..0.2) for a cleaner, deeper look. */
+  deepen = 0.06;
+
   after(buf: CellBuffer, cam: Camera, t: number): void {
     if (!this.enabled) return;
     this.sway(buf, t);
     this.light(buf, cam, t);
+    this.grade(buf);
+  }
+
+  /** Final colour grade over the frame: pull colours a little toward their luminance, deepen midtones slightly.
+   *  Emissive cells (lights, eyes, bulbs, fireflies) keep their full colour so they stay bright and colourful. */
+  private grade(buf: CellBuffer): void {
+    const s = this.desaturate, dp = this.deepen;
+    if (s <= 0 && dp <= 0) return;
+    const fg = buf.fg, bg = buf.bg, emit = buf.light, n = buf.n;
+    const g = (c: number, k: number): number => {
+      const r = c & 255, gg = (c >>> 8) & 255, b = (c >>> 16) & 255;
+      const l = 0.2126 * r + 0.7152 * gg + 0.0722 * b;
+      // Deepen: a gentle curve that lowers midtones more than shadows or highlights.
+      const m = 1 - dp * 4 * (l / 255) * (1 - l / 255);
+      const R = (r + (l - r) * k) * m, G = (gg + (l - gg) * k) * m, B = (b + (l - b) * k) * m;
+      return ((0xff << 24) | ((B < 0 ? 0 : B > 255 ? 255 : B | 0) << 16) | ((G < 0 ? 0 : G > 255 ? 255 : G | 0) << 8) | (R < 0 ? 0 : R > 255 ? 255 : R | 0)) >>> 0;
+    };
+    // Beyond the world's back edge: a sky that follows the time of day (deep above, hazy at the horizon).
+    const [hr, hgc, hb] = this.env.haze, cols = buf.cols, rows = buf.rows;
+    for (let k = 0; k < n; k++) {
+      if (buf.kind[k] === 0) {
+        const u = Math.min(1, ((k / cols) | 0) / Math.max(1, rows * 0.5));
+        const kk = 0.35 + 0.45 * u;
+        bg[k] = ((0xff << 24) | (((hb * kk) | 0) << 16) | (((hgc * kk) | 0) << 8) | ((hr * kk) | 0)) >>> 0;
+        continue;
+      }
+      if (emit[k] > 100) { bg[k] = g(bg[k], s * 0.5); continue; }
+      bg[k] = g(bg[k], s);
+      fg[k] = g(fg[k], s * 0.85);
+    }
   }
 
   /** Travelling gust bands bend tall grass, reeds and flowers. */

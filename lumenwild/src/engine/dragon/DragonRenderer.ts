@@ -10,7 +10,7 @@ import { pack, type RGB } from '../core/color';
 
 /** Cell kind written for dragon cells (picking: clicking the dragon opens its panel). */
 export const KIND_DRAGON = 7;
-const SCALES = [g('▓'), g('◆'), g('▓'), g('⬩')];
+const SOLID = g('█'), SHEEN = g('▓');
 const EYE_BIG = g('●'), EYE = g('•'), TIP = g('◆'), HORN_TIP = g('▴');
 const shadeP = (c: RGB, k: number) => pack(c[0] * k, c[1] * k, c[2] * k);
 
@@ -101,7 +101,7 @@ export class DragonRenderer implements SceneLayer {
       ax = bx; ay = by;
     }
     // Spaded tip.
-    drawn += this.put(Math.floor(ax), Math.floor(ay), TIP, shadeP(PAL.ridge, 1), 0, 0, 0);
+    drawn += this.put(Math.floor(ax), Math.floor(ay), TIP, shadeP(PAL.membraneLit, 1.3), 0, 0, 0);
 
     // Body and wings: the cached pose for this heading, wing frame and size (built on first use).
     const pose: PoseCell[] = this.poses.get(dir, mode, frame, size);
@@ -151,10 +151,11 @@ export class DragonRenderer implements SceneLayer {
       if (dist > r + 0.3) continue;
       const lit = Math.max(0.65, Math.min(1.25, 1.05 - (py - (ay + vy * u)) * 0.25 - (px - (ax + vx * u)) * 0.15));
       const thin = r < 0.55;
-      const gl = thin ? lineGlyph(vx, vy) : SCALES[(x * 3 + y * 5 + (k < 0 ? 1 : k)) & 3];
-      const edge = dist > r - 0.25;
-      const fg = shadeP(edge ? PAL.scaleLit : PAL.scale, lit * (k >= 0 ? 1 - (0.2 * k) / Math.max(1, n) : 1));
-      drawn += this.put(x, y, gl, fg, shadeP(PAL.scaleDark, lit), thin ? 0 : 1, 0);
+      const top = py < ay + vy * u - r * 0.35;
+      const gl = thin ? lineGlyph(vx, vy) : top && lit > 1 ? SHEEN : SOLID;
+      const fade = k >= 0 ? 1 - (0.15 * k) / Math.max(1, n) : 1;
+      const fg = shadeP(top ? PAL.scaleLit : PAL.scale, lit * fade * (top ? 0.8 : 1));
+      drawn += this.put(x, y, gl, fg, shadeP(PAL.scale, lit * 0.8), thin ? 0 : 1, 0);
       void t;
     }
     return drawn;
@@ -179,7 +180,7 @@ export class DragonRenderer implements SceneLayer {
         if (inside) hits++;
       }
       if (hits < 2) continue;
-      drawn += this.put(x, y, SCALES[(x + y) & 3], shadeP(PAL.scale, 1.05), shadeP(PAL.scaleDark, 1.1), 1, 0);
+      drawn += this.put(x, y, y < cy ? SHEEN : SOLID, shadeP(y < cy ? PAL.scaleLit : PAL.scale, y < cy ? 0.85 : 1.05), shadeP(PAL.scale, 0.9), 1, 0);
     }
     // Horns sweep back from the brow.
     for (const s of [-1, 1]) {
@@ -190,11 +191,11 @@ export class DragonRenderer implements SceneLayer {
     // Eyes (amber, glowing; closed when asleep).
     for (const s of [-1, 1]) {
       const [ex, ey] = P(0.35, 0.42 * s);
-      drawn += this.put(Math.floor(ex), Math.floor(ey), asleep ? g('─') : sc > 0.85 ? EYE_BIG : EYE, asleep ? shadeP(PAL.scaleDark, 1.4) : shadeP(PAL.eye, 1), shadeP(PAL.charcoal, 1), 1, asleep ? 0 : 230);
+      drawn += this.put(Math.floor(ex), Math.floor(ey), asleep ? g('─') : sc > 0.85 ? EYE_BIG : EYE, asleep ? shadeP(PAL.scaleLit, 0.7) : shadeP(PAL.eye, 1), shadeP(PAL.charcoal, 1), 1, asleep ? 0 : 230);
     }
     // Nostril glint at the snout.
     const [nx, ny] = P(1.7, 0);
-    drawn += this.put(Math.floor(nx), Math.floor(ny), g('▸'), shadeP(PAL.scaleLit, 1), 0, 0, 0);
+    drawn += this.put(Math.floor(nx), Math.floor(ny), g('▸'), shadeP(PAL.scaleLit, 0.9), 0, 0, 0);
     return drawn;
   }
 }

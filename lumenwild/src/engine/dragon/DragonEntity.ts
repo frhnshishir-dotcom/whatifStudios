@@ -46,6 +46,8 @@ export class DragonEntity {
   needs: Needs = { energy: 0.85, thirst: 0.25, comfort: 0.8, alertness: 0.3 };
   personality: Personality = { curiosity: 0.7, boldness: 0.6, restfulness: 0.5, wanderlust: 0.6, sensitivity: 0.5 };
   memory = new DragonMemory();
+  /** Its cave: where it lands to rest and sleep (the cell in front of the cave mouth), and the mouth itself. */
+  lair: { x: number; y: number; mx: number; my: number } | null = null;
   // Controls
   autonomous = true;
   paused = false;

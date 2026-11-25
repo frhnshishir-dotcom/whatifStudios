@@ -134,7 +134,9 @@ e2e/                   Playwright browser tests (run against `vite preview`)
   Changes fade in over a few seconds.
 
 ### The dragon
-Every generated world has one autonomous dragon (name and personality from the seed). Nothing scripts it:
+Every generated world has one autonomous dragon (name and personality from the seed), obsidian with crimson wings
+and a glowing ember ridge. Its home is a cave on the summit of a huge snow-capped mountain, where it rests and sleeps.
+Nothing scripts it:
 - **Mind:** needs (energy, thirst, comfort, alertness) and personality (curiosity, boldness, restfulness, wanderlust,
   sensitivity) feed a utility AI that scores eight goals a few times a second (explore, roam, drink, rest, sleep,
   shelter, investigate, idle) with cooldowns, commitment and noise. A finite-state machine with 15 states and an

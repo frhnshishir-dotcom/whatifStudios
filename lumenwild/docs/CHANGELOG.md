@@ -45,3 +45,16 @@ navigation, steering, flight, animation, interactions, cached character poses an
 (`ui/components/DragonPanel.tsx`), a top-bar button, follow camera, pick-a-place, quadrant-combination glyphs
 (`▞▛▚▜▙▟`), and an optional `dragon` field in the save format (older files still load). See the README section
 "The dragon" for behaviour, tests and limits. Tests: 95 unit, 32 browser, all passing.
+
+## Dark dragon, mountain lair, dense Christmas tree, clearer world
+- Dragon recoloured: obsidian scales with a steel sheen, crimson wing membranes, black finger bones and rim, an ember
+  ridge that glows, amber eyes. Body, neck, tail and wings are drawn with solid shaded blocks (dense, clean).
+- A huge snow-capped mountain (about 38 m above its foot) is generated far from the river toward the back of the map,
+  with rounded shoulders, spurs and crags, snow faces, and a dark rock cave on its level summit (new object `cave`,
+  new material `Snow`). The dragon rests and sleeps there: it plans its climb along the route (climbs early, slows
+  to spiral up steep rises), lands on the stone apron and lies facing into the cave. The cave counts as shelter.
+- Christmas tree rebuilt as dense block art: seven shaded tiers, drooping branch tips, snow on the branches, gold
+  bead garlands, glass baubles, a star with rays; about 60 bulbs cycle colours and tint the needles around them.
+- World colour grade: 20 % desaturation and a gentle midtone curve (lights, eyes and bulbs keep full colour); calmer
+  grass texture; denser rock faces; a sky beyond the world's back edge that follows the time of day.
+- Tests: mountain, cave and lair on five seeds; the dragon sleeps in its cave at night. 100 unit, 32 browser tests.

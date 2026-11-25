@@ -156,6 +156,49 @@ export function generateWorld(world: World, objects: ObjectStore, seed: number):
     if (d < c + 0.6) level[i] = bed(s) - 0.18;
   }
 
+  const features: Feature[] = [];
+  // ---- 3b. A huge mountain away from the river, toward the back (north) of the map, with a level summit
+  // where the dragon's cave sits. Placed by a score (no RNG draw), so the rest of the world is unchanged.
+  let peak: { x: number; y: number; R: number; top: number; base: number } | null = null;
+  for (const R of [32, 27, 22]) {
+    let best: [number, number, number] | null = null;
+    for (let y = R + 6; y <= Math.floor(h * 0.5); y += 4) for (let x = R + 6; x <= w - R - 7; x += 4) {
+      const i = y * w + x;
+      if (dist[i] < R + 8) continue;
+      const score = Math.min(dist[i], 80) - (y / h) * 40 - Math.abs(x - w / 2) * 0.05;
+      if (!best || score > best[2]) best = [x, y, score];
+    }
+    if (best) {
+      const [px, py] = best;
+      const base = world.elev[py * w + px];
+      peak = { x: px, y: py, R, top: base + R * 1.2, base };
+      break;
+    }
+  }
+  if (peak) {
+    const { x: px, y: py, R, top, base } = peak, H = top - base, plateau = 9.5;
+    for (let y = Math.max(0, py - Math.ceil(R * 1.5)); y <= Math.min(h - 1, py + Math.ceil(R * 1.5)); y++) {
+      for (let x = Math.max(0, px - Math.ceil(R * 1.5)); x <= Math.min(w - 1, px + Math.ceil(R * 1.5)); x++) {
+        const i = y * w + x, dx = x - px, dy = y - py, r = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx);
+        // Spurs and gullies: the radius varies with direction; ridged detail roughens the flanks.
+        const spur = 0.78 + 0.44 * fbm(Math.cos(ang) * 1.6 + 7, Math.sin(ang) * 1.6 + 3, 3, ns + 61);
+        const rr = Math.max(0, (r - plateau) / (R * spur - plateau));
+        if (rr >= 1.25) continue;
+        let e: number;
+        if (r <= plateau) e = top;
+        else {
+          // Rounded shoulders, steep middle, long gentle foot.
+          const f = Math.pow(Math.cos(Math.min(1, rr) * Math.PI / 2), 1.35);
+          const crag = ridged(x / 7, y / 7, 3, ns + 63) * 3.2 * Math.min(1, rr * 3) * (1 - rr);
+          e = base + H * f + crag + (1 - Math.min(1, rr)) * (fbm(x / 5, y / 5, 2, ns + 65) - 0.5) * 1.4;
+        }
+        if (e > world.elev[i]) world.elev[i] = e;
+      }
+    }
+    features.push({ kind: 'mountain', x: px, y: py });
+  }
+
   // ---- 4. Water bodies.
   const carveBasin = (px: number, py: number, rx: number, ry: number, depth: number, lvl: number, skip?: (i: number) => boolean) => {
     for (let y = Math.floor(py - ry - 1); y <= py + ry + 1; y++) for (let x = Math.floor(px - rx - 1); x <= px + rx + 1; x++) {
@@ -169,7 +212,6 @@ export function generateWorld(world: World, objects: ObjectStore, seed: number):
     }
   };
   const falls: GenInfo['falls'] = [];
-  const features: Feature[] = [];
   for (const d of drops) {
     const [px, py] = riverAt(d.s + (d.big ? 5 : 3.5));
     // Only below the drop: the pool must not notch the lip upstream.
@@ -262,6 +304,31 @@ export function generateWorld(world: World, objects: ObjectStore, seed: number):
   const clearRect = (x0: number, y0: number, x1: number, y1: number) => {
     for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x++) clear[y * w + x] = 1;
   };
+  if (peak) clearRect(peak.x - 12, peak.y - 12, peak.x + 12, peak.y + 7);
+  // Mountain surface: snow above the snow line (rock where too steep), bare stone on the summit, then the cave.
+  if (peak) {
+    const { x: px, y: py, R, top, base } = peak, snowLine = base + (top - base) * 0.58;
+    for (let y = Math.max(0, py - R * 2); y <= Math.min(h - 1, py + R * 2); y++) for (let x = Math.max(0, px - R * 2); x <= Math.min(w - 1, px + R * 2); x++) {
+      const i = y * w + x, e = world.elev[i];
+      if (level[i] === level[i]) continue;
+      const r = Math.hypot(x - px, y - py);
+      // Snowy summit with a dark stone apron in front of the cave mouth (where the dragon lands).
+      if (r <= 10.5) { const apron = Math.abs(x - px) <= 4 && y >= py - 4 && y <= py + 4; world.mat[i] = apron ? Mat.Stone : Mat.Snow; world.cover[i] = Cover.None; continue; }
+      const line = snowLine + (valueNoise(x * 0.25, y * 0.25, ns + 67) - 0.5) * 4;
+      if (e > line) {
+        const sl = Math.hypot(world.elevAt(x + 1, y) - world.elevAt(x - 1, y), world.elevAt(x, y + 1) - world.elevAt(x, y - 1)) * 0.5;
+        world.mat[i] = sl > 2.4 ? Mat.Cliff : Mat.Snow;
+        world.cover[i] = Cover.None;
+      } else if (e > base + 6 && world.mat[i] !== Mat.Cliff && world.mat[i] !== Mat.Stone && valueNoise(x * 0.3, y * 0.3, ns + 69) > 0.55) {
+        world.mat[i] = Mat.Stone; world.cover[i] = Cover.None;
+      }
+    }
+    // The cave: a rock arch on the north side of the summit, its mouth facing south (toward the viewer).
+    if (objects.add({ kind: 'cave', x: px - 5, y: py - 7, variant: 'lair', props: {} }) !== null) {
+      features.push({ kind: 'dragon lair', x: px, y: py + 1 });
+    }
+  }
+
   // ---- Structures: bridge, cottage, mill, paths.
   const segMid = (k: number) => segs[k] + (segs[k + 1] - segs[k]) * (k === bestSeg ? 0.18 : 0.5);
   let bridgeSeg = (bestSeg + 1) % (segs.length - 1);
@@ -395,6 +462,7 @@ export function generateWorld(world: World, objects: ObjectStore, seed: number):
     const x = Math.round(rng.range(34, w - 34)), y = Math.round(rng.range(h * 0.25, h - 30));
     const i = y * w + x;
     if (dist[i] < 34 || !dryFlat(x - 4, y - 3, 9, 7)) continue;
+    if (peak && Math.hypot(x - peak.x, y - peak.y) < peak.R * 1.25) continue;
     glade = [x, y];
   }
   if (glade) {

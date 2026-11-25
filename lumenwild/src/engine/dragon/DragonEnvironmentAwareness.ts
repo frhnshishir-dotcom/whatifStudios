@@ -14,7 +14,7 @@ const TILE = 4;
 const ROWS_PER_M = 0.75;
 const FEATURE_INTEREST: Record<string, number> = {
   'large waterfall': 1, waterfall: 0.8, lake: 0.7, pond: 0.45, 'glowing glade': 0.85, 'christmas tree': 0.75,
-  'water mill': 0.5, bridge: 0.35, cottage: 0.35, 'mill race': 0.3,
+  'water mill': 0.5, bridge: 0.35, cottage: 0.35, 'mill race': 0.3, mountain: 0.7,
 };
 
 /**
@@ -124,6 +124,7 @@ export class DragonSenses {
 
   /** Under trees or beside cliffs (cover from rain). */
   isSheltered(x: number, y: number): boolean {
+    if (this.countNear(x, y, 9, 'cave') > 0) return true;
     if (this.countNear(x, y, 5, 'tree') >= 4) return true;
     let cliff = 0;
     for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (this.terrain(x + dx, y + dy) > this.terrain(x, y) + 2.5) cliff++;

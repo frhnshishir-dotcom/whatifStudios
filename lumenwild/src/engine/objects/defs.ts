@@ -6,7 +6,7 @@ import { hash2 } from '../core/rng';
 // to the anchor cell: (dx, dy) on the ground grid, `up` rows above the ground surface, packed fg/bg (bg 0 =
 // transparent) and an animation code applied at draw time (sway, glow pulse, lit windows, mill wheel...).
 
-export const OBJ_KINDS = ['tree', 'rock', 'mushroom', 'bridge', 'cottage', 'mill', 'stone'] as const;
+export const OBJ_KINDS = ['tree', 'rock', 'mushroom', 'bridge', 'cottage', 'mill', 'stone', 'cave'] as const;
 export type ObjKind = (typeof OBJ_KINDS)[number];
 
 export interface WorldObject {
@@ -237,70 +237,123 @@ function millSprite(o: WorldObject): SpriteCell[] {
 }
 
 // ------------------------------------------------------------------ Christmas tree
-// A big decorated fir: six widening tiers with triangle-glyph silhouettes, needles lit from the upper left, gold
-// garlands on alternate tiers, baubles, a glowing star, a trunk and presents. Bulbs carry Anim.Twinkle with a
-// per-bulb phase (bits 4..7) so they cycle colours out of step; the layer draws them emissive.
-const XMAS_TIERS: Array<[number, number, number]> = [[0, 2, 3], [1, 3, 4], [2, 4, 4], [2, 5, 4], [3, 6, 4], [4, 7, 5]];
+// Dense block art: seven overlapping tiers of solid foliage shaded from the lit left side to the shadowed right,
+// with drooping branch tips (quadrant blocks) along each tier's lower edge, snow resting on the upper branches,
+// gold bead garlands sweeping across, coloured glass baubles, a glowing star with rays, a trunk, a red skirt and
+// presents. About 60 bulbs twinkle through five colours on their own phases (Anim.Twinkle, phase in bits 4..7);
+// each bulb also tints its own cell's background, so the lights colour the needles around them.
+const XMAS_TIERS: Array<[number, number, number]> = [[0, 1, 3], [1, 3, 3], [2, 4, 4], [2, 5, 4], [3, 6, 4], [3, 7, 4], [4, 8, 5]];
 const XMAS_ROWS = XMAS_TIERS.reduce((s, t) => s + t[2], 0);
-const XG_DK = C('#123a24'), XG_LIT = C('#3c8a4c'), XN_DK = C('#4c9a5e'), XN_LIT = C('#a6e6a0');
-const BAUBLES = ['#e8403a', '#3e7ee8', '#f0b82a', '#c84ad0', '#f4f0ea'].map(C);
-const PRESENTS: Array<[RGB, RGB]> = [[C('#c8323a'), C('#ffd45a')], [C('#2f62c8'), C('#f4f4f4')], [C('#2f8a4a'), C('#e8403a')], [C('#8a3ac0'), C('#ffd45a')]];
-export const XMAS_FOOTPRINT: Array<[number, number]> = [[-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [3, 0]];
+const XG_SHADOW = C('#06170f'), XG_DARK = C('#0d2a1a'), XG_MID = C('#1b4d2e'), XG_LIT = C('#2f7a47'), XG_TIP = C('#5fae6e');
+const XSNOW = C('#e9f1f4');
+const BAUBLES = ['#d8323a', '#2f6fd8', '#e8a820', '#a23ac8', '#e6e2da'].map(C);
+const PRESENTS: Array<[RGB, RGB]> = [[C('#b02a32'), C('#f2c94c')], [C('#2a56b0'), C('#eef0f2')], [C('#23704a'), C('#e04848')], [C('#6e2fa0'), C('#f2c94c')]];
+export const XMAS_FOOTPRINT: Array<[number, number]> = [[-4, 0], [-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [3, 0], [4, 0]];
 
 function christmasTree(o: WorldObject): SpriteCell[] {
   const cells: SpriteCell[] = [];
   const seed = o.props.seed ?? o.id;
   const hh = (a: number, b: number, s: number) => hash2(a + seed * 31, b, s);
-  const needles = [g('▲'), g('▲'), g('♠'), g('▴'), g('♣'), g('▲')];
   const topUp = 3 + XMAS_ROWS - 1;
-  let up = topUp, tier = 0;
+  let up = topUp, tier = 0, bulbs = 0;
   for (const [top, bot, rows] of XMAS_TIERS) {
     for (let j = 0; j < rows; j++, up--) {
       const hw = Math.round(top + ((bot - top) * j) / Math.max(1, rows - 1));
-      const garlandRow = tier % 2 === 1 && j === rows - 2;
+      const lowest = j === rows - 1, upper = j === 0;
+      // A garland sweeps across the middle of every other tier, drooping toward the centre.
+      const garland = tier % 2 === 1 && j === rows - 2;
       for (let dx = -hw; dx <= hw; dx++) {
         const side = dx / (hw + 0.5);
-        const light = Math.max(0, Math.min(1, 0.58 - side * 0.34 - (j / rows) * 0.12 + (hh(dx, up, 4) - 0.5) * 0.1));
-        const bg = mixc(XG_DK, XG_LIT, light);
-        if (hw > 0 && Math.abs(dx) === hw) {
-          // Silhouette: a triangle filled with the needle colour, open to the outside.
-          cells.push({ dx, dy: 0, up, g: g(dx < 0 ? '◢' : '◣'), fg: P(bg, 1.05), bg: 0, anim: 0 });
+        // Light from the upper left: lit left flank, dark right flank, darker toward each tier's underside.
+        const L = Math.max(0, Math.min(1, 0.62 - side * 0.42 - (j / rows) * 0.22 + (hh(dx, up, 4) - 0.5) * 0.08));
+        const col = L > 0.66 ? mixc(XG_MID, XG_LIT, (L - 0.66) / 0.34) : L > 0.3 ? mixc(XG_DARK, XG_MID, (L - 0.3) / 0.36) : mixc(XG_SHADOW, XG_DARK, L / 0.3);
+        const edge = hw > 0 && Math.abs(dx) === hw;
+        if (edge) {
+          // Silhouette: branch tips droop at the tier's lower edge; above, a smooth diagonal edge.
+          const ch = lowest ? (dx < 0 ? '▝' : '▘') : dx < 0 ? '▟' : '▙';
+          cells.push({ dx, dy: 0, up, g: g(ch), fg: P(mixc(col, XG_TIP, 0.35)), bg: 0, anim: 0 });
           continue;
         }
         const r = hh(dx, up, 7);
-        if (garlandRow && r < 0.85) {
-          cells.push({ dx, dy: 0, up, g: g('‿'), fg: P(C('#ffd45a'), 0.85 + r * 0.2), bg: P(bg), anim: Anim.Glow });
-        } else if (r < 0.24 || (j === rows - 1 && Math.abs(dx) === hw - 1 && hw > 1)) {
-          cells.push({ dx, dy: 0, up, g: g('•'), fg: P(C('#fff4d0')), bg: P(bg), anim: Anim.Twinkle + (Math.floor(hh(dx, up, 9) * 16) << 4) });
-        } else if (r < 0.33) {
+        const bulb = (j + Math.abs(dx) + tier) % 3 === 0 && r < 0.66 && !garland;
+        if (garland && r < 0.9) {
+          cells.push({ dx, dy: 0, up, g: g('•'), fg: P(C('#ffd76a'), 0.85 + r * 0.2), bg: P(col), anim: Anim.Glow });
+        } else if (bulb) {
+          cells.push({ dx, dy: 0, up, g: g('●'), fg: P(C('#fff4d0')), bg: P(col), anim: Anim.Twinkle + (Math.floor(hh(dx, up, 9) * 16) << 4) });
+          bulbs++;
+        } else if (r > 0.9 && !lowest) {
           const b = BAUBLES[Math.floor(hh(dx, up, 11) * BAUBLES.length)];
-          cells.push({ dx, dy: 0, up, g: g('●'), fg: P(b), bg: P(bg), anim: 0 });
+          cells.push({ dx, dy: 0, up, g: g('◉'), fg: P(b), bg: P(col), anim: 0 });
+        } else if (upper && L > 0.45 && r < 0.6) {
+          // Snow resting on the upper branches of each tier (lit side).
+          cells.push({ dx, dy: 0, up, g: g('▀'), fg: P(XSNOW, 0.82 + L * 0.18), bg: P(col), anim: 0 });
+        } else if (lowest) {
+          // Drooping tips along the tier's underside.
+          cells.push({ dx, dy: 0, up, g: g(r < 0.5 ? '▀' : '▛'), fg: P(col), bg: P(XG_SHADOW, 0.9), anim: 0 });
         } else {
-          const ng = needles[Math.floor(hh(dx, up, 13) * needles.length)];
-          cells.push({ dx, dy: 0, up, g: ng, fg: P(mixc(XN_DK, XN_LIT, Math.min(1, light + 0.15))), bg: P(bg), anim: 0 });
+          // Dense needles: solid foliage with a fine lighter texture on lit cells.
+          cells.push({ dx, dy: 0, up, g: g(L > 0.55 && r < 0.45 ? '▓' : '█'), fg: P(L > 0.55 && r < 0.45 ? mixc(col, XG_TIP, 0.3) : col), bg: P(col, 0.85), anim: 0 });
         }
       }
     }
     tier++;
   }
-  // Star with two small rays.
-  cells.push({ dx: 0, dy: 0, up: topUp + 1, g: g('✸'), fg: P(C('#ffe27a')), bg: 0, anim: Anim.Glow });
-  cells.push({ dx: -1, dy: 0, up: topUp + 1, g: g('✧'), fg: P(C('#ffeaa8')), bg: 0, anim: Anim.Glow });
-  cells.push({ dx: 1, dy: 0, up: topUp + 1, g: g('✧'), fg: P(C('#ffeaa8')), bg: 0, anim: Anim.Glow });
-  // Trunk (two rows) and the base row with a red skirt and presents.
-  const BARK = C('#6a4426'), BARK_DK = C('#3a2414');
+  // Star with rays.
+  const star = C('#ffe27a');
+  cells.push({ dx: 0, dy: 0, up: topUp + 1, g: g('✸'), fg: P(star), bg: 0, anim: Anim.Glow });
+  cells.push({ dx: 0, dy: 0, up: topUp + 2, g: g('╎'), fg: P(star, 0.8), bg: 0, anim: Anim.Glow });
+  cells.push({ dx: -1, dy: 0, up: topUp + 1, g: g('─'), fg: P(star, 0.8), bg: 0, anim: Anim.Glow });
+  cells.push({ dx: 1, dy: 0, up: topUp + 1, g: g('─'), fg: P(star, 0.8), bg: 0, anim: Anim.Glow });
+  // Trunk, red tree skirt and presents.
+  const BARK = C('#5a3820'), BARK_DK = C('#2e1c10');
   for (const u of [1, 2]) {
     cells.push({ dx: -1, dy: 0, up: u, g: g('▐'), fg: P(BARK, 0.9), bg: 0, anim: 0 });
-    cells.push({ dx: 0, dy: 0, up: u, g: g('▓'), fg: P(BARK), bg: P(BARK_DK), anim: 0 });
-    cells.push({ dx: 1, dy: 0, up: u, g: g('▌'), fg: P(BARK, 0.8), bg: 0, anim: 0 });
+    cells.push({ dx: 0, dy: 0, up: u, g: g('█'), fg: P(BARK), bg: P(BARK_DK), anim: 0 });
+    cells.push({ dx: 1, dy: 0, up: u, g: g('▌'), fg: P(BARK, 0.75), bg: 0, anim: 0 });
   }
-  cells.push({ dx: 0, dy: 0, up: 0, g: g('█'), fg: P(BARK, 0.85), bg: P(BARK_DK), anim: 0 });
-  for (const dx of [-1, 1]) cells.push({ dx, dy: 0, up: 0, g: g('▀'), fg: P(C('#a8262c')), bg: 0, anim: 0 });
-  [-3, -2, 2, 3].forEach((dx, k) => {
+  for (let dx = -2; dx <= 2; dx++) cells.push({ dx, dy: 0, up: 0, g: g('▄'), fg: P(C('#9a1f28'), 1 - Math.abs(dx) * 0.06), bg: 0, anim: 0 });
+  [-4, -3, 3, 4].forEach((dx, k) => {
     const [box, ribbon] = PRESENTS[(k + Math.floor(seed)) % PRESENTS.length];
     cells.push({ dx, dy: 0, up: 0, g: g('┼'), fg: P(ribbon), bg: P(box), anim: 0 });
   });
-  cells.push({ dx: -2, dy: 0, up: 1, g: g('┼'), fg: P(PRESENTS[(seed + 2) % 4][1]), bg: P(PRESENTS[(seed + 2) % 4][0], 0.9), anim: 0 });
+  const [b2, r2] = PRESENTS[(seed + 2) % 4];
+  cells.push({ dx: -3, dy: 0, up: 1, g: g('┼'), fg: P(r2), bg: P(b2, 0.9), anim: 0 });
+  void bulbs;
+  return cells;
+}
+
+// ------------------------------------------------------------------ cave (the dragon's lair)
+// A rock arch built from dense blocks, lit from the left, with a snow cap; the mouth is a deep dark opening with a
+// faint ember glow inside. Footprint 7 x 3; the mouth is on the front (south) row.
+const CAVE_ROCK = C('#2c2a2e'), CAVE_LIT = C('#5e5a62'), CAVE_DARK = C('#141317'), CAVE_SNOW = C('#eef3f6'), CAVE_IN = C('#060607');
+function caveSprite(): SpriteCell[] {
+  // 11 wide: a flared rock base, a 5-wide opening three rows high with a rounded top, a heavy crown and a snow cap.
+  const cells: SpriteCell[] = [];
+  const dy = 2;
+  const lit = (dx: number, up: number) => 1.18 - dx * 0.045 + up * 0.03;
+  const rock = (dx: number, up: number, ch: string, inner = false) => {
+    const L = lit(dx, up);
+    cells.push({ dx, dy, up, g: g(ch), fg: P(mixc(CAVE_ROCK, CAVE_LIT, Math.max(0, Math.min(1, L - 0.78))), L), bg: inner ? P(CAVE_IN) : P(CAVE_DARK, L), anim: 0 });
+  };
+  const dark = (dx: number, up: number) => cells.push({ dx, dy, up, g: g('█'), fg: P(CAVE_IN), bg: P(CAVE_IN), anim: 0 });
+  // Rows from the ground up: '.' none, 'o' opening, 'e' embers, other characters are rock glyphs; '{', '}', '^'
+  // are rock over the dark interior (rounded top of the opening).
+  const rows = [
+    '▟██ooeoo██▙',
+    '███ooooo███',
+    '▐██{^^^}██▌',
+    '.▜███████▛.',
+    '..▀█████▀..',
+  ];
+  const map: Record<string, string> = { '{': '▛', '^': '▀', '}': '▜' };
+  rows.forEach((row, up) => [...row].forEach((ch, dx) => {
+    if (ch === '.') return;
+    if (ch === 'o') return dark(dx, up);
+    if (ch === 'e') { cells.push({ dx, dy, up, g: g('▄'), fg: P(C('#a3361a')), bg: P(CAVE_IN), anim: Anim.Glow }); return; }
+    if (map[ch]) return rock(dx, up, map[ch], true);
+    rock(dx, up, ch);
+  }));
+  for (let dx = 3; dx <= 7; dx++) cells.push({ dx, dy, up: 5, g: g(dx === 3 ? '▗' : dx === 7 ? '▖' : '▄'), fg: P(CAVE_SNOW, 1 - (dx - 3) * 0.04), bg: 0, anim: 0 });
   return cells;
 }
 
@@ -319,7 +372,7 @@ export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
     footprint: (o) => (o.variant === 'christmas' ? XMAS_FOOTPRINT : [[0, 0]]),
     sprite: (o) => (o.variant === 'christmas' ? christmasTree(o) : o.variant === 'pine' ? pineTree(o) : roundTree(o, o.variant in TREE_LOOK ? o.variant : 'oak')),
     light: (o) => (o.variant === 'blossom' ? { r: 5, color: C('#ff9ad8'), intensity: 0.45, up: 3 }
-      : o.variant === 'christmas' ? { r: 12, color: C('#ffd08a'), intensity: 1.2, up: 11 } : null),
+      : o.variant === 'christmas' ? { r: 13, color: C('#ffd08a'), intensity: 1.2, up: 14 } : null),
   },
   rock: {
     label: 'Rock', variants: ['boulder', 'big', 'formation'],
@@ -353,7 +406,12 @@ export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
     footprint: () => rect(5, 3), sprite: cottageSprite,
     light: () => ({ r: 8, color: C('#ffc46a'), intensity: 1.05, up: 1 }),
   },
-  mill: {
+  cave: {
+    label: 'Cave', variants: ['lair'], props: [], defaults: {}, solid: true,
+    footprint: () => rect(11, 3), sprite: caveSprite,
+    light: () => ({ r: 4, color: C('#ff7a3a'), intensity: 0.35, up: 1 }),
+  },
+    mill: {
     label: 'Water mill', variants: ['stone'],
     props: [{ key: 'wheelSide', label: 'Wheel side (-1 left, 1 right)', min: -1, max: 1, step: 2 }], defaults: { wheelSide: 1 }, solid: true,
     footprint: () => rect(4, 3), sprite: millSprite,

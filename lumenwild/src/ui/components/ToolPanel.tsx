@@ -7,7 +7,7 @@ import { TOOL_GROUPS } from './Toolbar';
 const MATERIALS: Array<[number, string, string]> = [
   [Mat.Grass, 'Grass', '#3f6a2e'], [Mat.Meadow, 'Meadow', '#6a8a3a'], [Mat.ForestFloor, 'Forest floor', '#2a4222'],
   [Mat.Moss, 'Moss', '#3c6432'], [Mat.Dirt, 'Dirt', '#5f4630'], [Mat.Path, 'Stone path', '#736a58'],
-  [Mat.Sand, 'Sand', '#9c8858'], [Mat.Mud, 'Mud', '#4a3b28'], [Mat.Stone, 'Stone', '#626a68'], [Mat.Glade, 'Glowing moss', '#2f6a55'],
+  [Mat.Sand, 'Sand', '#9c8858'], [Mat.Mud, 'Mud', '#4a3b28'], [Mat.Stone, 'Stone', '#626a68'], [Mat.Snow, 'Snow', '#d8e0e6'], [Mat.Glade, 'Glowing moss', '#2f6a55'],
 ];
 const COVERS: Array<[number, string]> = [
   [Cover.Flowers, 'Wildflowers'], [Cover.TallGrass, 'Tall grass'], [Cover.ShortGrass, 'Short grass'], [Cover.Clover, 'Clover'],

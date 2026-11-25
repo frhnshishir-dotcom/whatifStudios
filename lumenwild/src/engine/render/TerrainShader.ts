@@ -32,6 +32,7 @@ const MAT_LOOK: Record<number, MatLook> = {
   [Mat.Mud]: look(['#1a140d', '#3b2e1f', '#5a4830'], false),
   [Mat.ForestFloor]: look(['#0b170d', '#1d3420', '#34522c'], true),
   [Mat.Glade]: look(['#0d1a14', '#1d3f30', '#2f5f47'], true),
+  [Mat.Snow]: look(['#6f7c88', '#c4ced6', '#f1f5f8'], false),
 };
 
 /** A glyph family: three density tiers, the share of bare cells, clump size, glyph colours and contrast. */
@@ -52,8 +53,8 @@ const fam = (sparse: string, mid: string, dense: string, blank: number, scale: n
 
 /** Bare ground, by material (used when a cell has no ground cover). */
 const MAT_FAMILY: Record<number, Family> = {
-  [Mat.Grass]: fam("‚.,'", "ʹ'’‛", 'ʺ"ʷ', 0.62, 3.2, '#8fc463', '#c9ea86', 0.3),
-  [Mat.Meadow]: fam("‚'.", "ʹ'’", 'ʺʷ', 0.62, 3.2, '#b4cf6e', '#e2ef96', 0.3),
+  [Mat.Grass]: fam("‚.,'", "ʹ'’‛", 'ʺ"ʷ', 0.7, 3.2, '#8fc463', '#c9ea86', 0.26),
+  [Mat.Meadow]: fam("‚'.", "ʹ'’", 'ʺʷ', 0.7, 3.2, '#b4cf6e', '#e2ef96', 0.26),
   [Mat.Dirt]: fam('⋅·.', '∴‚', '⁖⁏', 0.6, 2.4, '#b08d66', '#d4b48a', 0.3),
   [Mat.Path]: fam('⋅·', '◦▫◠', '⌓◡▪', 0.4, 1.6, '#cbbd9c', '#efe4c6', 0.3),
   [Mat.Sand]: fam('⋅·', '∴˚', '⁖∵', 0.58, 2.2, '#e6d4a4', '#fff2cc', 0.24),
@@ -63,12 +64,13 @@ const MAT_FAMILY: Record<number, Family> = {
   [Mat.Mud]: fam('⋅·', '∼∽', '≃‿', 0.5, 2.4, '#97825e', '#bba57c', 0.28),
   [Mat.ForestFloor]: fam("‚,.", "’‛ʹ", '❦⁏„', 0.46, 2.8, '#7f9a56', '#c6a35a', 0.36),
   [Mat.Glade]: fam('⋅˚', '✧·', '✦⋰', 0.5, 2.6, '#86f0d2', '#d8fff2', 0.62),
+  [Mat.Snow]: fam('⋅·', '˚∴', '⁖', 0.78, 2.6, '#ffffff', '#ffffff', 0.16),
 };
 
 /** Ground cover families. */
 const COVER_FAMILY: Record<number, Family> = {
-  [Cover.ShortGrass]: fam("‚.,'", "ʹ'’‛\"", 'ʺʷ"', 0.42, 3.4, '#96cc66', '#d2f08e', 0.34),
-  [Cover.TallGrass]: fam("ʹ'‚", '"ʺ|¦', 'ψʬʷ⁞', 0.18, 2.6, '#a2d066', '#e6f59a', 0.6),
+  [Cover.ShortGrass]: fam("‚.,'", "ʹ'’‛\"", 'ʺʷ"', 0.56, 3.4, '#96cc66', '#d2f08e', 0.27),
+  [Cover.TallGrass]: fam("ʹ'‚", '"ʺ|¦', 'ψʬʷ⁞', 0.3, 2.6, '#a2d066', '#e6f59a', 0.46),
   [Cover.Flowers]: fam("‚ʹ'", '✿❀✾*', '❁✣❃✲⚘', 0.12, 2.2, '#ffffff', '#ffffff', 0.95, '#8cc860'),
   [Cover.Fern]: fam('ψʹ‚', '♧ψ⚘', '❦♣♧', 0.2, 2.4, '#66b85a', '#b2e888', 0.62),
   [Cover.Reeds]: fam("ʹ'|", '¦|ψ', 'Ψ⁞ψ', 0.15, 2, '#c2c674', '#eef0a6', 0.6),
@@ -81,13 +83,14 @@ const FLOWER_COLORS: RGB[] = ['#ff9cc0', '#ffd95c', '#f6f4e8', '#bc96ff', '#ff8c
 // Faces (cliff sides): rock strata, layered soil, mossy rock, the diorama base.
 interface FaceLook { glyphs: Uint16Array; fg: RGB; bg: RGB }
 const SOIL_FACE: FaceLook = { glyphs: gs('▒░▒⁖'), fg: hex('#a07a52'), bg: hex('#3e2b1a') };
-const ROCK_FACE: FaceLook = { glyphs: gs('▓▒▓█⌓'), fg: hex('#aeb0a2'), bg: hex('#3c3e36') };
+const ROCK_FACE: FaceLook = { glyphs: gs('█▓█▓▒'), fg: hex('#8e9294'), bg: hex('#3a3d3f') };
 const MOSS_FACE: FaceLook = { glyphs: gs('▒░▓∴'), fg: hex('#86a46a'), bg: hex('#283222') };
 const BASE_FACE: FaceLook = { glyphs: gs('▓█▒'), fg: hex('#5e4c3a'), bg: hex('#21180f') };
+const SNOW_FACE: FaceLook = { glyphs: gs('█▓█▒'), fg: hex('#e4ebf0'), bg: hex('#a3afb9') };
 const LIP = gs('▀▀▀▀▘▝');
 const DRIP = gs("‚ʹ'¦");
 
-const rockyMats = new Set<number>([Mat.Stone, Mat.Cliff, Mat.Path]);
+const rockyMats = new Set<number>([Mat.Stone, Mat.Cliff, Mat.Path, Mat.Snow]);
 
 /** Light direction (from upper left, a little towards the viewer). */
 const LX = -0.55, LY = 0.3, LZ = 0.78;
@@ -239,7 +242,7 @@ export class TerrainShader {
     const w = this.world;
     const m = w.mat[i];
     const rocky = rockyMats.has(m);
-    const look = base ? BASE_FACE : rocky ? ROCK_FACE : m === Mat.Moss ? MOSS_FACE : SOIL_FACE;
+    const look = base ? BASE_FACE : m === Mat.Snow ? SNOW_FACE : rocky ? ROCK_FACE : m === Mat.Moss ? MOSS_FACE : SOIL_FACE;
     // Short steps on vegetated ground (gentle slopes facing the viewer) read as a shaded grassy bank.
     if (!base && total <= 2 && !rocky) {
       const tb = this.topBg[i], dk = k === 0 ? 0.74 : 0.62;

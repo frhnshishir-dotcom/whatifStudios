@@ -13,9 +13,10 @@ export const Mat = {
   Mud: 8,
   ForestFloor: 9,
   Glade: 10, // magical glowing ground
+  Snow: 11,
 } as const;
 export type MatId = (typeof Mat)[keyof typeof Mat];
-export const MAT_NAMES = ['Grass', 'Meadow', 'Dirt', 'Stone path', 'Sand', 'Stone', 'Moss', 'Cliff rock', 'Mud', 'Forest floor', 'Glade'] as const;
+export const MAT_NAMES = ['Grass', 'Meadow', 'Dirt', 'Stone path', 'Sand', 'Stone', 'Moss', 'Cliff rock', 'Mud', 'Forest floor', 'Glade', 'Snow'] as const;
 
 export const Cover = {
   None: 0,

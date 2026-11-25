@@ -57,6 +57,18 @@ export class Dragon {
     this.ai.onEvent = (n) => this.fx.event(this.e, n, this.senses, this.rand);
   }
 
+  /** Find its cave among the world's objects (the landing spot in front of the mouth). */
+  findLair(): void {
+    const e = this.e;
+    e.lair = null;
+    for (const o of this.senses.objects.objects.values()) {
+      if (o.kind !== 'cave') continue;
+      e.lair = { x: o.x + 5, y: o.y + 8, mx: o.x + 5, my: o.y + 2 };
+      e.memory.noteRest(e.lair.x, e.lair.y, 3, e.time, 'lair');
+      break;
+    }
+  }
+
   /** A new dragon for a world: personality and name from the seed, aloft near `home`. */
   spawn(seed: number, features: Array<{ kind: string; x: number; y: number }> | null, home: [number, number] | null): void {
     const r = mulberry32(seedOf('dragon-spawn', seed)), e = this.e, w = this.senses.world;
@@ -76,6 +88,7 @@ export class Dragon {
     e.autonomous = true; e.paused = false; e.effects = true;
     e.resetTail();
     this.senses.scanPOIs(features);
+    this.findLair();
   }
 
   step(dt: number): void {
@@ -144,6 +157,7 @@ export class Dragon {
     if (e.state === 'DESCENDING' && !e.target) e.state = 'FLYING';
     e.zTarget = e.z; e.vx = e.vy = e.vz = 0; e.angVel = 0;
     e.resetTail();
+    this.findLair();
     return warnings;
   }
 }
