@@ -43,6 +43,9 @@ export class Atmosphere implements SceneLayer {
   enabled = true;
   /** Particle density multiplier (low-performance mode lowers it). */
   density = 1;
+  /** Depth attenuation: far (upper) rows fade slightly toward the sky haze. Off in low-performance mode. */
+  aerial = true;
+  private rowHaze = new Float32Array(0);
   private lastT = -1;
   private rand = mulberry32(4242);
   private swayR = swayMap(1);
@@ -189,13 +192,19 @@ export class Atmosphere implements SceneLayer {
     const neutral = Math.abs(ar - 1) < 0.01 && Math.abs(ag - 1) < 0.01 && Math.abs(ab - 1) < 0.01;
     this.stats.lights = 0;
     this.stats.fogged = 0;
-    if (neutral && night < 0.02 && fog < 0.01) return;
+    const lit = !(neutral && night < 0.02);
+    if (!lit && fog < 0.01 && !this.aerial) return;
     this.cols = buf.cols;
     if (this.lr.length !== n) { this.lr = new Float32Array(n); this.lg = new Float32Array(n); this.lb = new Float32Array(n); }
     const lr = this.lr, lg = this.lg, lb = this.lb;
-    lr.fill(ar); lg.fill(ag); lb.fill(ab);
+    if (lit) { lr.fill(ar); lg.fill(ag); lb.fill(ab); }
     const cols = buf.cols, rows = buf.rows;
-    if (night > 0.05) {
+    // Depth haze per row: strongest at the top (farthest) of the view, none in the lower part.
+    if (this.rowHaze.length !== rows) this.rowHaze = new Float32Array(rows);
+    const hz = this.aerial ? 0.16 * (0.55 + 0.45 * env.daylight) * (1 - fog * 0.6) : 0;
+    for (let r = 0; r < rows; r++) { const u = Math.max(0, 1 - r / (rows * 0.8)); this.rowHaze[r] = hz * u * u; }
+    const [hr, hg, hb] = env.haze;
+    if (lit && night > 0.05) {
       // Point lights from objects in (and just around) the view.
       const x0 = Math.floor(cam.x), y0 = Math.floor(cam.y), hs = cam.heightScale;
       const list = this.objects.inRect(x0 - 8, y0 - 8, x0 + cols + 8, y0 + rows + Math.round(cam.maxLift) + 8, this.list);
@@ -234,9 +243,15 @@ export class Atmosphere implements SceneLayer {
       const e = emit[k] / 255;
       // Background (surfaces) takes the light; emissive glyphs keep at least their own brightness.
       let B = bg[k], F = fg[k];
-      B = mul(B, r, g, b);
-      if (e > 0) { r = Math.max(r, e * 1.05); g = Math.max(g, e * 1.05); b = Math.max(b, e); }
-      F = mul(F, r, g, b);
+      if (lit) {
+        B = mul(B, r, g, b);
+        if (e > 0) { r = Math.max(r, e * 1.05); g = Math.max(g, e * 1.05); b = Math.max(b, e); }
+        F = mul(F, r, g, b);
+      }
+      if (hz > 0 && buf.pick[k] >= 0) {
+        const a = this.rowHaze[(k / cols) | 0] * (e > 0 ? 0.4 : 1);
+        if (a > 0.004) { B = mixTo(B, hr, hg, hb, a); F = mixTo(F, hr, hg, hb, a * 0.85); }
+      }
       if (fogA) {
         const row = (k / cols) | 0;
         const p = buf.pick[k];

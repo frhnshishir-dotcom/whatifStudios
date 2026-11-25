@@ -15,6 +15,8 @@ export const GLYPH_DEFS: GlyphDef[] = [
   // ASCII
   ...base(".,:;'`\"^~-_=+*|/\\()[]<>!?#%&@$oO0ivxyY"),
   ...base('’·°˚ʬψΨ¦•※⁘⁙'),
+  // Fine marks for terrain texture (grass blades, tufts, pebbles, litter): baseline glyphs from Noto Sans Mono.
+  ...base('ʷʹʺˈˌ¨‚„‛⁏⁚⁖⁛⁝⁞⁓‿⁀ϒ⁂'),
   // Water / maths
   ...center('≈∿≋∴∙◦○⌒⌢', 0.95),
   ...center('◯', 0.95),
@@ -25,6 +27,8 @@ export const GLYPH_DEFS: GlyphDef[] = [
   // Shapes for structures
   ...center('▲△◢◣⌂◆◇◈▬▭▮▯⬩', 0.95),
   ...center('◓◒●◉■□▪▫☗⚘⚙☽✱✻❉▴▵◂▸◍◌✺❃✲', 0.92),
+  // Terrain and water texture: dotted moss, pebbles, cobbles, ripples and flow marks (Noto Sans Symbols 2).
+  ...center('∵∶∷⋅⋰⋱≀∾∽∼⚶⌇❈❊✼◜◝◞◟◠◡⌓⌔◖◗⬮⬯▾⏜⏝⎺⎻⎼⎽⩬≂≃⋍⏖⏗', 0.9),
   // Procedural: shades, blocks, quadrants, lines, small circle
   ...proc('░▒▓█▄▀▌▐▖▗▘▝│┃║╎╏─═｡╱╲╳┼┬┴├┤┌┐└┘╭╮╯╰'),
 ];

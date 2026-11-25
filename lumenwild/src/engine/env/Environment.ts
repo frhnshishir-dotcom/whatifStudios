@@ -43,6 +43,8 @@ export class Environment {
   /** Wind including gusts, 0..1.3. */
   gust = 0.35;
   readonly ambient: [number, number, number] = [1, 1, 1];
+  /** Sky haze for depth attenuation of far rows (0..255). */
+  readonly haze: [number, number, number] = [170, 200, 198];
   /** Fog colour for the current light (0..255). */
   readonly fogColor: [number, number, number] = [200, 210, 204];
 
@@ -89,6 +91,11 @@ export class Environment {
       const grey = 0.92;
       v = (v + (grey - v) * 0.3 * Math.max(this.rain, this.fog)) * overcast;
       this.ambient[c] = clamp(v, 0, 1.2);
+    }
+    const hd = [168, 200, 198], hn = [22, 32, 48], hw = [224, 168, 130];
+    for (let c = 0; c < 3; c++) {
+      const v = hn[c] + (hd[c] - hn[c]) * this.daylight;
+      this.haze[c] = v + (hw[c] - v) * warm * 0.7;
     }
     const fd = [214, 222, 216], fn = [38, 46, 62];
     for (let c = 0; c < 3; c++) this.fogColor[c] = fn[c] + (fd[c] - fn[c]) * this.daylight * (warm > 0.3 ? 0.9 : 1);

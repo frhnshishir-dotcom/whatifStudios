@@ -64,6 +64,7 @@ export class Composer {
 
     const W = w.w, H = w.h, elev = w.elev;
     const x0 = Math.floor(cam.x), y0 = Math.floor(cam.y), hs = cam.heightScale;
+    sh.heightScale = hs;
     const lift = Math.ceil(Math.max(0, sh.maxElev) * hs) + 2;
     const sink = Math.ceil(Math.max(0, -sh.minElev) * hs) + 2;
     const baseLevel = sh.minElev - BASE_DEPTH;

@@ -193,6 +193,7 @@ export class Engine {
   setLowPerf(on: boolean): void {
     this.lowPerf = on;
     this.atmosphere.density = on ? 0.45 : 1;
+    this.atmosphere.aerial = !on;
   }
 
   // ------------------------------------------------------------------ worlds: save, load, regenerate
