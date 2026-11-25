@@ -69,7 +69,8 @@ function draw(cv: HTMLCanvasElement, bp: Blueprint, m: Mods, player: DiscoverySt
     g.strokeStyle = '#5fb0e8';
     for (let k = 0; k < r.pts.length - 8; k += 8) {
       const f = k / r.pts.length;
-      g.lineWidth = Math.max(1.1, def.width[0] + (def.width[1] - def.width[0]) * f);
+      // Schematic width: four times the true channel width (a 60 m river would be invisible at this scale).
+      g.lineWidth = Math.max(1.1, (def.width[0] + (def.width[1] - def.width[0]) * f) * 4);
       g.beginPath(); g.moveTo(r.pts[k][0], r.pts[k][1]); g.lineTo(r.pts[k + 8][0], r.pts[k + 8][1]); g.stroke();
     }
   }
@@ -138,11 +139,11 @@ function draw(cv: HTMLCanvasElement, bp: Blueprint, m: Mods, player: DiscoverySt
     const [x, y] = s.at;
     g.lineWidth = 2; g.strokeStyle = '#111';
     g.setLineDash(s.status === 'proposed' ? [3, 2] : []);
-    if (s.kind === 'city') { g.fillStyle = '#ffd45a'; g.beginPath(); g.rect(x - 7, y - 7, 14, 14); g.fill(); g.stroke(); g.strokeStyle = '#ffd45a'; g.beginPath(); g.arc(x, y, s.footprintRadius, 0, Math.PI * 2); g.stroke(); }
-    else if (s.kind === 'village') { g.fillStyle = s.status === 'proposed' ? '#d8d8d8' : '#ffffff'; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill(); g.stroke(); }
-    else { g.fillStyle = '#9fe0ff'; g.beginPath(); g.moveTo(x, y - 8); g.lineTo(x + 7, y + 5); g.lineTo(x - 7, y + 5); g.closePath(); g.fill(); g.stroke(); }
+    const start = s.id === d.settlements[0].id;
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill(); g.stroke();
+    if (start) { g.strokeStyle = '#ffd45a'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.stroke(); }
     g.setLineDash([]);
-    label(g, s.status === 'proposed' ? `${s.name} (proposed)` : s.name, x, y - (s.kind === 'city' ? 26 : 17), s.kind === 'city' ? '#ffe7a0' : '#ffffff', s.kind === 'city' ? 18 : 14);
+    label(g, s.name, x, y - 18, start ? '#ffe7a0' : '#ffffff', 14);
   }
   if (!player) {
     for (const r of m.render.regionLabels(bp)) label(g, r.name.toUpperCase(), r.x, r.y, 'rgba(255,255,255,0.7)', 17, 700);
@@ -177,7 +178,7 @@ export function BlueprintView({ mode }: { mode: 'blueprint' | 'player' }) {
       <canvas ref={ref} className="continent-canvas" data-testid="blueprint-canvas" />
       {mode === 'blueprint' ? (
         <div className="legend" style={{ marginTop: 8 }}>
-          <span>▣ city · ● village · ▲ outpost (dashed = proposed)</span><span style={{ color: '#f2c66d' }}>━ major road</span><span>┄ trail</span>
+          <span>● village (gold ring: start)</span><span style={{ color: '#f2c66d' }}>━ major road</span><span>┄ trail</span>
           <span style={{ color: '#ffe08a' }}>★ known</span><span>◆ rumoured</span><span style={{ color: '#c9a0ff' }}>✧ hidden</span><span style={{ color: '#8ff0ff' }}>fantastical</span>
           <span style={{ color: '#ff9a80' }}>◯ dragon territory ✦ nest ▴ landing</span><span style={{ color: '#ffcf80' }}>┈ flight corridor</span><span>≋ waterfall</span>
         </div>

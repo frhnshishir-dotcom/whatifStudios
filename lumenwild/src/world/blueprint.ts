@@ -307,7 +307,7 @@ export function buildBlueprint(data: WorldData): Blueprint {
       const hw = (r.width[0] + (r.width[1] - r.width[0]) * f) / 2, mountain = surface[k] > 600;
       // Valley width grows with how deep the river sits below the land: gentle banks in the lowlands, gorges in the mountains.
       const entrench = Math.max(0, ground[k] - surface[k]);
-      const ch = Math.max(hw, 1.2), vw = mountain ? hw * 2 + 4 : surface[k] > 300 ? Math.max(hw * 3 + 8, hw + entrench * 0.5) : Math.max(hw * 5 + 16, hw + entrench * 0.9);
+      const ch = Math.max(hw, 1.2), vw = mountain ? hw * 2 + 4 : surface[k] > 300 ? Math.max(hw * 3 + 8, hw + (entrench * 5) / mpu) : Math.max(hw * 5 + 16, hw + (entrench * 9) / mpu);
       for (let j = Math.max(0, Math.floor((py - vw) / U)); j <= Math.min(N - 1, Math.ceil((py + vw) / U)); j++) {
         for (let i = Math.max(0, Math.floor((px - vw) / U)); i <= Math.min(N - 1, Math.ceil((px + vw) / U)); i++) {
           const k2 = j * N + i, d = Math.hypot(mx(i) - px, mx(j) - py);
@@ -366,7 +366,7 @@ export function buildBlueprint(data: WorldData): Blueprint {
       const g = slope[k];
       if (g > (pass ? 0.8 : 0.32)) { c[gj * G + gi] = Infinity; continue; }
       let v = 1 + (extra[regions[region[k]]?.id] ?? 0) + 220 * g * g;
-      if (wv === W_RIVER) v += 60;
+      if (wv === W_RIVER) v += 160; // cross at bridges: a road keeps to its bank until a crossing point
       if (wv === W_MARSH) v += 4;
       const x = (gi + 0.5) * STEP, y = (gj + 0.5) * STEP;
       for (const t of nests) if (Math.hypot(x - t.centre[0], y - t.centre[1]) < t.radius * 0.85) v += 500;
@@ -442,12 +442,13 @@ export function buildBlueprint(data: WorldData): Blueprint {
     const wd = fresh[k] * U, nroads = data.roads.filter((r) => r.via.includes(s.id)).length;
     const reg = regions[region[k]]?.id ?? 'sea';
     const issues: string[] = [];
-    const maxSlope = s.kind === 'city' ? 0.1 : s.kind === 'village' ? 0.15 : 0.3;
+    const maxSlope = 0.12;
     if (reg !== s.region) issues.push(`lies in ${reg}, declared ${s.region}`);
     if (sl > maxSlope) issues.push(`ground too steep (${(sl * 100).toFixed(0)}%)`);
-    if (wd > (s.kind === 'city' ? 30 : 45)) issues.push(`fresh water ${Math.round(wd)} units away`);
+    if (wd * mpu > 800) issues.push(`fresh water ${Math.round(wd * mpu)} m away`);
     if (water[k] !== W_NONE) issues.push('centre is in water');
-    if (nroads < (s.kind === 'city' ? 3 : 1)) issues.push(`only ${nroads} road(s)`);
+    if (nroads < 1) issues.push('no road');
+    if ((s.kind as string) !== 'village') issues.push('not a village');
     for (const t of nests) if (Math.hypot(s.at[0] - t.centre[0], s.at[1] - t.centre[1]) < t.radius) issues.push(`inside dragon territory ${t.name}`);
     return { id: s.id, region: reg, slope: Math.round(sl * 1000) / 1000, waterDist: Math.round(wd), roads: nroads, ok: issues.length === 0, issues };
   });
@@ -480,7 +481,7 @@ export function buildBlueprint(data: WorldData): Blueprint {
     const overflights: Corridor['overflights'] = [];
     for (const s of data.settlements) {
       const q = nearestOnLine([a, b], s.at[0], s.at[1]);
-      if (q.d > s.footprintRadius + 15) continue;
+      if (q.d > F.noLowFlightRadius) continue;
       const g = at(s.at[0], s.at[1]);
       if (cruise - g < F.settlementMinAGL) cruise = g + F.settlementMinAGL;
       overflights.push({ id: s.id, agl: 0 });
@@ -521,7 +522,7 @@ function runChecks(bp: Blueprint): Check[] {
   const { N, data, region, water, elev } = bp;
   const out: Check[] = [];
   // 1-2. One connected landmass; every region reachable on foot from Lumenfall.
-  const start = data.settlements.find((s) => s.kind === 'city') ?? data.settlements[0];
+  const start = data.settlements[0];
   const seen = new Uint8Array(N * N);
   const s0 = Math.floor(start.at[1] / bp.unit) * N + Math.floor(start.at[0] / bp.unit);
   const stack = [s0]; seen[s0] = 1;

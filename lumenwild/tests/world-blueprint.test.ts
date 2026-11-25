@@ -20,14 +20,26 @@ describe('world data files', () => {
     d.settlements[0].at = [1200, 10];
     d.rivers[1].from = 'missing-river';
     d.territories[0].huntingGrounds.push('no-habitat');
+    (d.settlements[1] as { kind: string }).kind = 'city';
+    d.settlements[2].buildings = [10, 60];
     const v = validateWorld(d);
-    for (const s of ['duplicate id "skyfall-summit"', 'unknown stop "nowhere"', 'outside 0-1000', 'unknown parent river', 'unknown hunting ground']) {
+    for (const s of ['duplicate id "skyfall-summit"', 'unknown stop "nowhere"', 'outside 0-1000', 'unknown parent river', 'unknown hunting ground', 'villages only, no cities', 'within 10-30']) {
       expect(v.errors.some((e) => e.includes(s)), s).toBe(true);
     }
   });
-  it('has the specification content: six regions, four main settlements, six dragon territories, five rivers', () => {
+  it('has the specification content: six regions, six villages and no cities, six dragon territories, five rivers', () => {
     expect(WORLD.regions.map((r) => r.id)).toEqual(['dragon-peaks', 'elderwood', 'heartlands', 'whispering-marshes', 'golden-plains', 'hollow-lands']);
-    expect(WORLD.settlements.filter((s) => s.status === 'spec').map((s) => s.id)).toEqual(['lumenfall', 'greenhaven', 'frostwatch', 'marshlight']);
+    expect(WORLD.settlements.map((s) => s.id)).toEqual(['lumenfall', 'greenhaven', 'frostwatch', 'marshlight', 'windmere', 'moonrest']);
+    for (const s of WORLD.settlements) {
+      expect(s.kind).toBe('village');
+      expect(s.name).not.toMatch(/city|outpost/i);
+      expect(s.buildings[1]).toBeLessThanOrEqual(30);
+      expect(s.footprintRadius * WORLD.coordinates.metresPerMapUnit).toBeLessThanOrEqual(250); // a village, not a town
+    }
+    expect(WORLD.settlements[0].name).toBe('Lumenfall Village');
+    expect(WORLD.settlements[0].at).toEqual([500, 510]);
+    expect(WORLD.landmarks.map((l) => l.name)).toEqual(expect.arrayContaining(['Riverwatch Tower', 'Sunspire Watchtower']));
+    expect(WORLD.landmarks.some((l) => /old watchtower/i.test(l.name))).toBe(false);
     expect(WORLD.territories).toHaveLength(6);
     for (const id of ['lumen-river', 'moonwater-stream', 'ashen-run', 'goldenbrook', 'witchwater-channels']) expect(WORLD.rivers.some((r) => r.id === id), id).toBe(true);
     expect(WORLD.lakes.map((l) => l.name)).toEqual(['Skyglass Lake', 'Moonlit Lake', "King's Basin", 'Witchwater Pool']);
@@ -37,10 +49,11 @@ describe('world data files', () => {
 describe('coordinates (one conversion utility)', () => {
   const c = new WorldCoords(WORLD.coordinates);
   it('sizes the continent in cells, chunks and regions', () => {
-    expect(c.metresPerUnit).toBe(10);
-    expect(c.cells).toBe(5000);
-    expect(c.chunks).toBe(313);
-    expect(c.regions).toBe(20);
+    expect(c.metresPerUnit).toBe(100);
+    expect(WORLD.coordinates.terrainCellMetres).toBe(1); // World.ts: one cell is 1 m
+    expect(c.cells).toBe(100_000);
+    expect(c.chunks).toBe(6250);
+    expect(c.regions).toBe(391);
   });
   it('round-trips between map, metres, 3D world, cells, regions and the prototype grid', () => {
     for (const p of [[0, 0], [500, 510], [999.9, 999.9], [123.4, 876.5]] as [number, number][]) {
@@ -49,16 +62,16 @@ describe('coordinates (one conversion utility)', () => {
       const back = c.world3DToMap(w);
       expect(back[0]).toBeCloseTo(p[0], 9); expect(back[1]).toBeCloseTo(p[1], 9);
       const cell = c.mapToCell(p), centre = c.cellToMap(cell);
-      expect(Math.abs(centre[0] - p[0])).toBeLessThanOrEqual(0.2);
-      expect(Math.abs(centre[1] - p[1])).toBeLessThanOrEqual(0.2);
+      expect(Math.abs(centre[0] - p[0])).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(centre[1] - p[1])).toBeLessThanOrEqual(0.01);
       const { region, local } = c.cellToRegion(cell);
       expect(region[0] * 256 + local[0]).toBe(cell[0]);
       const proto = c.mapToPrototype(p), pc = c.prototypeToMap(proto);
       expect(Math.abs(pc[0] - p[0])).toBeLessThanOrEqual(1000 / 256);
     }
-    expect(c.mapToRegionId([500, 510])).toBe('r9-9');
-    expect(c.metresBetween([0, 0], [3, 4])).toBe(50);
-    expect(c.prototypeCellMetres()).toBeCloseTo(39.06, 1);
+    expect(c.mapToRegionId([500, 510])).toBe('r195-199');
+    expect(c.metresBetween([0, 0], [3, 4])).toBe(500);
+    expect(c.prototypeCellMetres()).toBeCloseTo(390.6, 1);
   });
 });
 
@@ -85,7 +98,7 @@ describe('blueprint geography', () => {
     expect(lumen.surface[0]).toBeCloseTo(bp.lakeLevels['skyglass-lake'], 0); // it leaves Skyglass Lake
     // It passes near Lumenfall and through King's Basin.
     const near = (p: [number, number], d: number) => lumen.pts.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= d);
-    expect(near([500, 510], 25)).toBe(true);
+    expect(near([500, 510], 7)).toBe(true); // within 700 m of Lumenfall (riverside)
     expect(near([470, 475], 10)).toBe(true);
   });
   it('mountains are high and the marshes low; regions are where the specification puts them', () => {
@@ -96,10 +109,15 @@ describe('blueprint geography', () => {
     expect(regionAt(bp, 850, 330)).toBe('hollow-lands');
     expect(regionAt(bp, 160, 720)).toBe('golden-plains');
   });
-  it('Lumenfall has roads and water; King\'s Road crosses the Lumen at King\'s Bridge', () => {
-    const city = bp.settlements.find((s) => s.id === 'lumenfall')!;
-    expect(city.roads).toBeGreaterThanOrEqual(4);
-    expect(city.waterDist).toBeLessThanOrEqual(30);
+  it('every village has a road and fresh water within 800 m; King\'s Road crosses the Lumen at King\'s Bridge', () => {
+    const start = bp.settlements.find((s) => s.id === 'lumenfall')!;
+    expect(start.roads).toBeGreaterThanOrEqual(4);
+    for (const s of bp.settlements) {
+      expect(s.roads, s.id).toBeGreaterThanOrEqual(1);
+      expect(s.waterDist * WORLD.coordinates.metresPerMapUnit, s.id).toBeLessThanOrEqual(800);
+    }
+    // Villages are separated by real wilderness: at least 15 km apart.
+    for (const a of WORLD.settlements) for (const b of WORLD.settlements) if (a !== b) expect(Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1]) * 100).toBeGreaterThan(15_000);
     const kings = bp.roads.find((r) => r.id === 'kings-road')!;
     expect(kings.bridges.some((b) => b.name === "King's Bridge" && b.river === 'lumen-river')).toBe(true);
     for (const r of bp.roads) {
@@ -124,6 +142,18 @@ describe('blueprint geography', () => {
     const sky = WORLD.territories.find((t) => t.id === 'territory-southern-sky-corridor')!;
     expect(sky.kind).toBe('corridor');
     expect(sky.nest).toBeUndefined();
+    expect(sky.dragon).toBeUndefined();
+    expect(sky.migration).toBe(true);
+    expect(WORLD.flight.migrationRoutes.every((r) => r.includes(sky.id))).toBe(true);
+    // No low flight over villages: every corridor passing within the no-low-flight radius holds 450 m above the village.
+    for (const c of bp.corridors) for (const s of WORLD.settlements) {
+      const ax = c.a[0], ay = c.a[1], bx = c.b[0], by = c.b[1], dx = bx - ax, dy = by - ay;
+      const t = Math.max(0, Math.min(1, ((s.at[0] - ax) * dx + (s.at[1] - ay) * dy) / (dx * dx + dy * dy)));
+      if (Math.hypot(ax + dx * t - s.at[0], ay + dy * t - s.at[1]) <= WORLD.flight.noLowFlightRadius) {
+        const g = bp.elev[Math.floor(s.at[1] / bp.unit) * bp.N + Math.floor(s.at[0] / bp.unit)];
+        expect(c.cruise - g, `${c.from}-${c.to} over ${s.id}`).toBeGreaterThanOrEqual(450);
+      }
+    }
     for (const s of WORLD.settlements) for (const t of WORLD.territories.filter((q) => q.kind === 'nest')) {
       expect(Math.hypot(s.at[0] - t.centre[0], s.at[1] - t.centre[1]), `${s.id} in ${t.id}`).toBeGreaterThan(t.radius);
     }

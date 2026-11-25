@@ -1,8 +1,13 @@
 {
-  "notes": "Corridors between territories. Cruise altitude is derived: highest ground along the corridor plus clearance.",
+  "notes": "Corridors between territories. Cruise altitude is derived: highest ground along the corridor plus clearance. Within noLowFlightRadius of a village dragons stay at least settlementMinAGL above the ground.",
   "clearance": 150,
   "ceiling": 2600,
   "settlementMinAGL": 450,
-  "edges": [["territory-skyfall", "territory-frozen-crown"], ["territory-skyfall", "territory-ember-nest"], ["territory-frozen-crown", "territory-elderwood-canopy"], ["territory-ember-nest", "territory-ashen-rift"],
-    ["territory-elderwood-canopy", "territory-southern-sky-corridor"], ["territory-ashen-rift", "territory-southern-sky-corridor"], ["territory-skyfall", "territory-southern-sky-corridor"]]
+  "noLowFlightRadius": 25,
+  "edges": [["territory-skyfall", "territory-frozen-crown"], ["territory-skyfall", "territory-ember-nest"], ["territory-frozen-crown", "territory-elderwood-canopy"], ["territory-ember-nest", "territory-ashen-rift"], ["territory-elderwood-canopy", "territory-southern-sky-corridor"], ["territory-ashen-rift", "territory-southern-sky-corridor"], ["territory-skyfall", "territory-southern-sky-corridor"]],
+  "migrationRoutes": [
+    ["territory-skyfall", "territory-southern-sky-corridor", "territory-ashen-rift"],
+    ["territory-frozen-crown", "territory-southern-sky-corridor", "territory-ember-nest"],
+    ["territory-elderwood-canopy", "territory-southern-sky-corridor", "territory-ashen-rift"]
+  ]
 }

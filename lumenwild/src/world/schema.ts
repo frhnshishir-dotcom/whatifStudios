@@ -59,9 +59,12 @@ export interface River {
   falls?: Array<{ id: string; at: MapPt; drop: number; note?: string }>;
   added?: boolean; note?: string;
 }
-export type SettlementKind = 'city' | 'village' | 'outpost';
+/** Lumenwild has no cities: every settlement is a village (the validator rejects anything else). */
+export type SettlementKind = 'village';
 export interface Settlement {
   id: string; name: string; kind: SettlementKind; region: string; at: MapPt; footprintRadius: number;
+  /** Design range of buildings (10-30 for a village). */
+  buildings: [number, number];
   population: [number, number]; roles: string[]; status: 'spec' | 'proposed'; note?: string;
 }
 export type Discovery = 'known' | 'rumoured' | 'hidden';
@@ -77,8 +80,17 @@ export interface Territory {
   /** Preferred height above ground while flying (m). */
   preferredAltitude: [number, number];
   awarenessRadius: number; huntingGrounds: string[]; note?: string;
+  /** Corridor airspace used for migration and long-distance flight. */
+  migration?: boolean;
 }
-export interface FlightRoutes { notes?: string; clearance: number; ceiling: number; settlementMinAGL: number; edges: Array<[string, string]> }
+export interface FlightRoutes {
+  notes?: string; clearance: number; ceiling: number;
+  /** Minimum height above ground within noLowFlightRadius (map units) of any village. */
+  settlementMinAGL: number; noLowFlightRadius: number;
+  edges: Array<[string, string]>;
+  /** Long-distance routes: territory ids in order (each hop is flown as a corridor). */
+  migrationRoutes: string[][];
+}
 export interface DiscoveryConfig {
   fogCellUnits: number; playerRevealRadius: number; start: { at: MapPt; revealRadius: number };
   knownAtStart: string[]; rumourRadius: number; notes?: string;
@@ -147,7 +159,12 @@ export function validateWorld(d: WorldData): Validation {
     if (r.mouth === 'split' && !d.rivers.some((q) => q.from === r.id)) errors.push(`river ${r.id}: splits but has no branches`);
     for (const f of r.falls ?? []) { id('waterfall', f.id); pt(`fall ${f.id}`, f.at); if (!(f.drop > 0)) errors.push(`fall ${f.id}: drop must be positive`); }
   }
-  for (const s of d.settlements) { id('settlement', s.id); pt(`settlement ${s.id}`, s.at); inRegion('settlement', s.id, s.region, s.at); }
+  for (const s of d.settlements) {
+    id('settlement', s.id); pt(`settlement ${s.id}`, s.at); inRegion('settlement', s.id, s.region, s.at);
+    if ((s.kind as string) !== 'village') errors.push(`settlement ${s.id}: kind "${s.kind}" not allowed (villages only, no cities)`);
+    if (!Array.isArray(s.buildings) || s.buildings[0] < 10 || s.buildings[1] > 30 || s.buildings[0] > s.buildings[1]) errors.push(`settlement ${s.id}: buildings must be a range within 10-30`);
+    if (/\bcity\b/i.test(s.name)) errors.push(`settlement ${s.id}: "${s.name}" names a city`);
+  }
   for (const l of d.landmarks) {
     id('landmark', l.id); pt(`landmark ${l.id}`, l.at); inRegion('landmark', l.id, l.region, l.at);
     if (l.lake && !lakes.has(l.lake)) errors.push(`landmark ${l.id}: unknown lake`);
@@ -181,6 +198,10 @@ export function validateWorld(d: WorldData): Validation {
     if (t.preferredAltitude[0] >= t.preferredAltitude[1]) errors.push(`territory ${t.id}: empty altitude range`);
   }
   for (const [a, b] of d.flight.edges) if (!terr.has(a) || !terr.has(b)) errors.push(`flight edge ${a}-${b}: unknown territory`);
+  for (const route of d.flight.migrationRoutes ?? []) {
+    if (route.length < 2) errors.push('migration route needs two or more territories');
+    for (const t of route) if (!terr.has(t)) errors.push(`migration route: unknown territory "${t}"`);
+  }
   for (const k of d.discovery.knownAtStart) if (!places.has(k) && !d.roads.some((r) => r.id === k)) errors.push(`discovery: unknown known-at-start id "${k}"`);
   pt('discovery start', d.discovery.start.at);
   return { errors, warnings };

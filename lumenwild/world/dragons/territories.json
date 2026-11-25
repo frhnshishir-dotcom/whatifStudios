@@ -17,5 +17,6 @@
     "preferredAltitude": [150, 450], "awarenessRadius": 40, "huntingGrounds": ["ashen-wastes", "dead-forest"] },
   { "id": "territory-southern-sky-corridor", "name": "Southern Sky Corridor", "kind": "corridor", "centre": [550, 500], "radius": 70,
     "preferredAltitude": [450, 900], "awarenessRadius": 25, "huntingGrounds": ["heartland-meadows"],
-    "note": "50 units from Lumenfall City, so it is designed as shared high airspace with no nest or landing (decision 4)." }
+    "migration": true,
+    "note": "Shared high-altitude airspace: no nest, no resident dragon; used for migration and long-distance flight. Never below 450 m over villages." }
 ]
