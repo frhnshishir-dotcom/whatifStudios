@@ -16,6 +16,8 @@ import { Environment } from './env/Environment';
 import { Atmosphere } from './env/Atmosphere';
 import { generateWorld, prefillWater, type GenInfo } from './gen/world';
 import { buildSave, type SaveData, type LoadedWorld } from '../persist/format';
+import type { Dragon } from './dragon/Dragon';
+import { DragonRenderer, KIND_DRAGON } from './dragon/DragonRenderer';
 
 export interface EngineStats {
   fps: number;
@@ -65,6 +67,13 @@ export class Engine {
   home: [number, number] | null = null;
   /** Generator report for the current world (null after loading a save). */
   gen: GenInfo | null = null;
+  /** The autonomous dragon (generated worlds). */
+  dragon: Dragon | null = null;
+  dragonLayer: DragonRenderer | null = null;
+  /** Clicked on the dragon (select tool). */
+  onDragonClick: (() => void) | null = null;
+  /** One-shot: the next left click picks a world cell for this callback instead of using the tool. */
+  pickLocation: ((i: number) => void) | null = null;
   /** Low-performance mode: 30 fps cap and fewer particles. */
   lowPerf = false;
   private lastRender = 0;
@@ -206,6 +215,7 @@ export class Engine {
       depth: this.water ? this.water.view.depth : new Float32Array(w.n),
       objects: this.objects.toJSON(), sources: this.editor.sources, drains: this.editor.drains,
       env: this.env.state(), camera: { x: this.cam.x, y: this.cam.y, zoom: this.cam.zoomIndex }, home: this.home,
+      dragon: this.dragon ? this.dragon.toJSON() : undefined,
     });
   }
 
@@ -231,6 +241,14 @@ export class Engine {
     this.cam.clampTo(w.w, w.h);
     this.home = L.home;
     this.gen = null;
+    if (this.dragon) {
+      const d = this.dragon;
+      d.rebind(w, this.objects, this.water ? this.water.view : null);
+      d.attach(this.water, this.particles);
+      if (L.dragon) problems.push(...d.load(L.dragon));
+      else d.spawn(w.seed, null, this.home);
+      d.senses.scanPOIs(null);
+    }
     this.particles.n = 0;
     this.renderer?.blitter.invalidate();
     if (this.renderer) { const r = this.renderer.canvas.getBoundingClientRect(); this.resize(r.width, r.height, window.devicePixelRatio || 1); }
@@ -258,9 +276,35 @@ export class Engine {
     this.home = xt ? [xt.x, xt.y - 6] : br ? [br.x, br.y + 6] : null;
     this.particles.n = 0;
     this.renderer?.blitter.invalidate();
+    if (this.dragon) {
+      this.dragon.rebind(w, this.objects, this.water ? this.water.view : null);
+      this.dragon.attach(this.water, this.particles);
+      this.dragon.spawn(seed, info.features, this.home);
+    }
     const [hx, hy] = this.home ?? [w.w / 2, w.h / 2];
     this.focus(hx, hy);
     return info;
+  }
+
+  /** Add the dragon: simulated with the world (fixed step), drawn before weather and light. */
+  attachDragon(d: Dragon): void {
+    this.dragon = d;
+    d.attach(this.water, this.particles);
+    this.sims.push(d);
+    this.dragonLayer = new DragonRenderer(d);
+    const k = this.composer.layers.indexOf(this.atmosphere);
+    this.composer.layers.splice(k < 0 ? this.composer.layers.length : k, 0, this.dragonLayer);
+  }
+
+  /** Screen position (CSS px, relative to the canvas) of the dragon's body, or null if off screen. */
+  dragonScreen(): [number, number] | null {
+    const d = this.dragon, r = this.renderer;
+    if (!d || !r) return null;
+    const cam = this.cam, e = d.e;
+    const col = e.x - Math.floor(cam.x), row = e.y - Math.floor(cam.y) - e.z * cam.heightScale;
+    const ox = (cam.x - Math.floor(cam.x)) * cam.cellW, oy = (cam.y - Math.floor(cam.y)) * cam.cellH;
+    const s = r.canvas.getBoundingClientRect().width / r.canvas.width;
+    return [(col * cam.cellW - ox) * s, (row * cam.cellH - oy) * s];
   }
 
   /** Connect the water simulation: rendering layer + stepping (main-thread mode) or worker control. */
@@ -295,6 +339,14 @@ export class Engine {
     for (let s = 0; s < steps; s++) for (const sim of this.sims) sim.step(this.clock.dt);
     const t1 = performance.now();
     this.editor.tick(Math.min(0.05, dt));
+    if (this.dragon?.follow && this.renderer) {
+      // Ease the view toward the dragon (its projected position).
+      const e = this.dragon.e, cam = this.cam;
+      const tx = e.x - cam.viewW / cam.cellW / 2, ty = e.y - e.z * cam.heightScale - cam.viewH / cam.cellH / 2;
+      const k = Math.min(1, dt * 2.5);
+      cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
+      cam.clampTo(this.world.w, this.world.h);
+    }
     this.objectLayer.selectedId = this.editor.selectedId;
     this.objectLayer.wind = this.env.gust;
     this.objectLayer.windDir = this.env.windDir;
@@ -331,6 +383,15 @@ export class Engine {
   }
 
   // ------------------------------------------------------------------ input
+  /** Cell kind under a device-pixel position (KIND_DRAGON for the dragon), or -1. */
+  cellKind(px: number, py: number): number {
+    if (!this.renderer) return -1;
+    const [cx, cy] = this.renderer.cellAt(px, py, this.cam);
+    const b = this.composer.buf;
+    if (cx < 0 || cy < 0 || cx >= b.cols || cy >= b.rows) return -1;
+    return b.kind[cy * b.cols + cx];
+  }
+
   /** World cell index under a device-pixel position, or -1. */
   pickAt(px: number, py: number): number {
     if (!this.renderer) return -1;
@@ -378,6 +439,8 @@ export class Engine {
         if (touches.size === 2) { this.editor.end(); this.panning = null; pinch = gesture(); return; }
         if (touches.size > 2) return;
         const i = this.pickAt(px, py);
+        if (this.pickLocation) { const cb = this.pickLocation; this.pickLocation = null; if (i >= 0) cb(i); return; }
+        if (this.tool === 'select' && this.dragon && this.cellKind(px, py) === KIND_DRAGON) { this.onDragonClick?.(); return; }
         if (this.tool === 'select' && (i < 0 || !this.objects.occ[i]) && !(this.water && i >= 0 && this.water.view.depth[i] > 0.025)) {
           this.panning = { x: px, y: py };
           return;
@@ -393,9 +456,21 @@ export class Engine {
         canvas.style.cursor = 'grabbing';
         return;
       }
+      if (ev.button === 0 && this.pickLocation) {
+        const i = this.pickAt(px, py), cb = this.pickLocation;
+        this.pickLocation = null;
+        if (i >= 0) cb(i);
+        return;
+      }
+      if (ev.button === 0 && this.tool === 'select' && this.dragon && this.cellKind(px, py) === KIND_DRAGON) {
+        this.onDragonClick?.();
+        return;
+      }
       if (ev.button === 0 && this.toolHandler) {
         canvas.setPointerCapture(ev.pointerId);
-        this.toolHandler.down(this.pickAt(px, py), ev);
+        const i = this.pickAt(px, py);
+        this.toolHandler.down(i, ev);
+        if (i >= 0 && this.dragon && this.tool !== 'select') this.dragon.notifyDisturbance(i % this.world.w, Math.floor(i / this.world.w), this.tool === 'ripple' ? 0.6 : 0.9);
       }
     });
     on(canvas, 'pointermove', (ev) => {

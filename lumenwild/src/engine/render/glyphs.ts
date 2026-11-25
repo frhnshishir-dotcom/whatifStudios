@@ -30,7 +30,7 @@ export const GLYPH_DEFS: GlyphDef[] = [
   // Terrain and water texture: dotted moss, pebbles, cobbles, ripples and flow marks (Noto Sans Symbols 2).
   ...center('∵∶∷⋅⋰⋱≀∾∽∼⚶⌇❈❊✼◜◝◞◟◠◡⌓⌔◖◗⬮⬯▾⏜⏝⎺⎻⎼⎽⩬≂≃⋍⏖⏗', 0.9),
   // Procedural: shades, blocks, quadrants, lines, small circle
-  ...proc('░▒▓█▄▀▌▐▖▗▘▝│┃║╎╏─═｡╱╲╳┼┬┴├┤┌┐└┘╭╮╯╰'),
+  ...proc('░▒▓█▄▀▌▐▖▗▘▝│┃║╎╏─═｡╱╲╳┼┬┴├┤┌┐└┘╭╮╯╰▞▛▚▜▙▟'),
 ];
 
 /** char -> glyph index. */

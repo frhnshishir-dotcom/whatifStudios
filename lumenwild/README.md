@@ -74,6 +74,9 @@ src/engine/            framework-free engine (no React)
                        base terrain and surface materials, deterministic test scenes
   env/                 Environment (time of day, weather targets, ambient light), Atmosphere (weather particles,
                        grass sway, point lights, emissive glow, fog)
+  dragon/              the autonomous dragon: entity + validation, needs, memory, state machine, utility AI, senses
+                       (terrain/water/objects), navigation, steering, flight physics, animation, interactions,
+                       cached character poses, renderer
   edit/                Editor (all tools, strokes, terrain patches, commands), History (undo/redo, composites),
                        EditorOverlay (brush disc, building footprint preview, spring/drain markers)
   Engine.ts            frame loop, simulations at a fixed step, layers (water, objects, particles, overlay), input
@@ -129,6 +132,31 @@ e2e/                   Playwright browser tests (run against `vite preview`)
   mushroom and rune glow pulses, lit windows, the turning mill wheel.
 - Weather presets: clear, breezy, rain, storm, fog; or set rain, fog, wind and wind direction directly.
   Changes fade in over a few seconds.
+
+### The dragon
+Every generated world has one autonomous dragon (name and personality from the seed). Nothing scripts it:
+- **Mind:** needs (energy, thirst, comfort, alertness) and personality (curiosity, boldness, restfulness, wanderlust,
+  sensitivity) feed a utility AI that scores eight goals a few times a second (explore, roam, drink, rest, sleep,
+  shelter, investigate, idle) with cooldowns, commitment and noise. A finite-state machine with 15 states and an
+  explicit transition table, minimum durations and a history carries the plan out. It remembers visited places,
+  water it found, landmarks it liked and good resting places (recently visited places are much less attractive).
+- **Flight:** steering (seek, arrive, wander, circle, obstacle and terrain avoidance, edge avoidance) drives a
+  physical model with limited turn rate and turn acceleration, acceleration and braking, climb and sink rates per
+  state, gliding that trades height for speed, wind drift, and a coarse obstacle map (terrain, water, trees,
+  buildings) for clearance. It never teleports and never enters the ground.
+- **World:** it lands only on dry, level, free ground; drinks at the shore (real ripples in the water simulation
+  plus droplets); skims water with a wake; circles waterfalls and landmarks; sleeps at night in sheltered places;
+  seeks shelter in rain (more if sensitive); is pushed by wind; comes to look when you edit nearby.
+- **Look:** a 2.5D anatomical model (body, bat wings with finger bones and scalloped edges, legs) posed for 8 wing
+  frames, glide, landing, standing and lying, rotated to 24 headings at 4 altitude scales, rasterised once into
+  characters (quadrant blocks on the silhouette, membrane, scales, ridge and claw glyphs inside) and cached. Neck,
+  head (horns, glowing amber eyes) and the 14-segment tail are drawn live; the tail follows the body with a delay.
+  Its ground shadow fades and softens with altitude; it takes the time-of-day light and fog; the ridge glows faintly.
+- **You:** click it (select tool) or the dragon button in the top bar for its panel: behaviour, destination, altitude,
+  needs, personality, memory, and Follow, Autonomous/Holding, Pause, Effects, Reset, Investigate (click a place).
+- **Saved** with the world (position, state, needs, personality, memory, settings), validated on load; older saves
+  without a dragon load fine and a new dragon hatches.
+- **Sound:** optional hooks only (`DragonInteractions.sound`: wingbeat, call, land, lap, breathing). No audio ships.
 
 ### Saving and loading
 - **Slots:** worlds are saved in the browser with IndexedDB (falling back to localStorage, then memory), each with a
@@ -319,3 +347,19 @@ Everything comes from the seed (seeded PRNG and hash noise only, no `Math.random
 - Splash particles are visual only; very thin sheet flow (under about 1 cm) is not drawn.
 - Measurements above come from headless Chromium with a software rasteriser; real laptops will differ (the renderer
   uses the CPU and `putImageData`, so integrated graphics are not a bottleneck).
+
+### The dragon: verified
+- 13 unit tests (`tests/dragon.test.ts`, plus one in `tests/persist.test.ts`): a 15-minute day and night on a real
+  generated world with no refused transitions, no repairs, no teleports, clearance kept, ten different states seen,
+  minimum durations respected and landmarks remembered; different seeds behave differently; weighted destinations
+  that avoid just-visited places; acceleration, turn rate and turn acceleration, climb and sink limits; a 30 m ridge
+  in the way is crossed without touching the ground; thirst leads to landing on dry level ground, drinking and real
+  ripples on water; tiredness to resting; night to sleeping and morning to waking; rain to shelter, wind to drift;
+  investigating a disturbance; save -> JSON -> load; recovery from invalid state; corrupt saves; old saves.
+- 4 browser tests (`e2e/m7-dragon.spec.ts`): drawn with a shadow, moving, wing frames changing; a real click opens its
+  panel; pause, holding and follow work; Investigate sends it to a clicked place; it survives save and load.
+- Screenshots: `docs/screenshots/dragon/` (forest, river, waterfall, landing, drinking, night, rain).
+- Cost: 0.015 ms per simulation step, 0.04 ms to draw, 0.9 ms to build a new pose once (then cached). The frame rate
+  table above is unchanged (60 fps; low-performance mode 30 fps).
+- Limits: the dragon sees the world through a 4 x 4-cell obstacle map, so a very tall single tree can make it climb
+  early; it does not walk long distances on the ground (it flies); poses use 24 headings, so a slow turn steps by 15°.

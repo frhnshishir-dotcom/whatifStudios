@@ -2,8 +2,9 @@ import { useUI } from '../store';
 import { MAT_NAMES, COVER_NAMES } from '../../engine/world/materials';
 import { ToolPanel, SelectionPanel } from './ToolPanel';
 import { EnvPanel } from './EnvPanel';
+import { DragonPanel } from './DragonPanel';
 
-const KIND = ['Void', 'Terrain', 'Cliff face', 'Water', 'Waterfall', 'Object', 'Particle'];
+const KIND = ['Void', 'Terrain', 'Cliff face', 'Water', 'Waterfall', 'Object', 'Particle', 'Dragon'];
 
 export function Inspector() {
   const hover = useUI((s) => s.hover);
@@ -11,6 +12,7 @@ export function Inspector() {
   const setSettings = useUI((s) => s.setSettings);
   return (
     <aside className="inspector" aria-label="Inspector">
+      <DragonPanel />
       <SelectionPanel />
       <ToolPanel />
       <EnvPanel />

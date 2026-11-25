@@ -23,6 +23,7 @@ interface UIState {
   history: HistoryState;
   toast: { text: string; id: number } | null;
   dialog: 'worlds' | null;
+  dragonOpen: boolean;
   slots: SlotMeta[];
   currentSlot: string | null;
   storageKind: 'indexeddb' | 'localstorage' | 'memory' | null;
@@ -41,6 +42,7 @@ interface UIState {
   setHistory: (h: HistoryState) => void;
   showToast: (text: string) => void;
   setDialog: (d: UIState['dialog']) => void;
+  setDragonOpen: (open: boolean) => void;
   togglePanels: () => void;
   toggleInspector: () => void;
   setPaused: (p: boolean) => void;
@@ -62,6 +64,7 @@ export const useUI = create<UIState>()((set) => ({
   history: { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null },
   toast: null,
   dialog: null,
+  dragonOpen: false,
   slots: [],
   currentSlot: null,
   storageKind: null,
@@ -83,6 +86,7 @@ export const useUI = create<UIState>()((set) => ({
   setHistory: (history) => set({ history }),
   showToast: (text) => set((st) => ({ toast: { text, id: (st.toast?.id ?? 0) + 1 } })),
   setDialog: (dialog) => set({ dialog }),
+  setDragonOpen: (dragonOpen) => set((s) => ({ dragonOpen, inspectorOpen: dragonOpen ? true : s.inspectorOpen })),
   togglePanels: () => set((s) => ({ panelsHidden: !s.panelsHidden })),
   toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   setPaused: (paused) => set({ paused }),

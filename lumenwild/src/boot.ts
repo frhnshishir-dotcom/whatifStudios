@@ -7,6 +7,7 @@ import { Engine } from './engine/Engine';
 import { generateTerrain } from './engine/gen/terrain';
 import { generateWorld, prefillWater, type GenInfo } from './engine/gen/world';
 import { ObjectStore } from './engine/objects/ObjectStore';
+import { Dragon } from './engine/dragon/Dragon';
 
 /** Load the bundled fonts for every glyph the atlas needs (unicode-range subsets load on demand). */
 export async function loadFonts(timeoutMs = 5000): Promise<void> {
@@ -56,6 +57,10 @@ export function createEngine(seed: number, scene = 'world', opts: { worker?: boo
     engine.attachWater(water);
     engine.editor.setSourceDirect('source', info.source[0], info.source[1], RIVER_RATE);
     water.warmup(600);
+    // The dragon: its own life in this world (personality and name from the seed).
+    const dragon = new Dragon(world, objects, water.view, engine.env, seed);
+    engine.attachDragon(dragon);
+    dragon.spawn(seed, info.features, engine.home);
     return engine;
   }
   let world: World;

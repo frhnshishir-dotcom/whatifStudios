@@ -38,3 +38,10 @@ baseline screenshots (`docs/screenshots/before/`), and records baseline performa
   cottage and a clearing around it, never in front of a building or the bridge. The opening view frames it.
 - Place more with the Tree tool (type: Christmas). Tests: `tests/world.test.ts` (five seeds).
 - Screenshots: `docs/screenshots/christmas-tree-day.png`, `christmas-tree-night.png`.
+
+## Autonomous dragon
+New subsystem `src/engine/dragon/` (14 files): entity and validation, needs, memory, state machine, utility AI, senses,
+navigation, steering, flight, animation, interactions, cached character poses and renderer, plus the dragon panel
+(`ui/components/DragonPanel.tsx`), a top-bar button, follow camera, pick-a-place, quadrant-combination glyphs
+(`▞▛▚▜▙▟`), and an optional `dragon` field in the save format (older files still load). See the README section
+"The dragon" for behaviour, tests and limits. Tests: 95 unit, 32 browser, all passing.

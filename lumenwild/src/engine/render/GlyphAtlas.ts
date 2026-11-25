@@ -88,6 +88,13 @@ export function drawProcedural(ch: string, out: Uint8Array, w: number, h: number
     case '▗': rect(w / 2, h / 2, w, h); break;
     case '▘': rect(0, 0, w / 2, h / 2); break;
     case '▝': rect(w / 2, 0, w, h / 2); break;
+    // Quadrant combinations (silhouette edges of creatures).
+    case '▞': rect(w / 2, 0, w, h / 2); rect(0, h / 2, w / 2, h); break;
+    case '▚': rect(0, 0, w / 2, h / 2); rect(w / 2, h / 2, w, h); break;
+    case '▛': rect(0, 0, w, h / 2); rect(0, h / 2, w / 2, h); break;
+    case '▜': rect(0, 0, w, h / 2); rect(w / 2, h / 2, w, h); break;
+    case '▙': rect(0, 0, w / 2, h); rect(w / 2, h / 2, w, h); break;
+    case '▟': rect(w / 2, 0, w, h); rect(0, h / 2, w / 2, h); break;
     case '│': rect(cx - t / 2, 0, cx - t / 2 + t, h); break;
     case '┃': rect(cx - t, 0, cx + t, h); break;
     case '║': rect(w * 0.3 - t / 2, 0, w * 0.3 + t / 2 + 0.5, h); rect(w * 0.7 - t / 2, 0, w * 0.7 + t / 2 + 0.5, h); break;

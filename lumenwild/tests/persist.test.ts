@@ -96,6 +96,42 @@ describe('save format', () => {
     expect(good.format).toBe(SAVE_FORMAT);
   });
 
+  it('worlds keep their dragon; older saves without one still load and a new dragon hatches', async () => {
+    const { Dragon } = await import('../src/engine/dragon/Dragon');
+    const mk = (seed: number) => {
+      const e = makeEngine(seed);
+      const d = new Dragon(e.world, e.objects, e.water!.view, e.env, seed);
+      e.attachDragon(d);
+      d.spawn(seed, e.gen?.features ?? null, e.home);
+      return e;
+    };
+    const a = mk(7);
+    for (let k = 0; k < 600; k++) a.dragon!.step(1 / 20);
+    const json = JSON.stringify(a.snapshot());
+    const v = validateSave(json, { w: 256, h: 256 });
+    expect(v.ok).toBe(true);
+    const b = mk(42);
+    expect(b.applyWorld(v.world!)).toEqual([]);
+    expect(b.dragon!.e.name).toBe(a.dragon!.e.name);
+    expect(b.dragon!.e.x).toBeCloseTo(a.dragon!.e.x, 4);
+    expect(b.dragon!.e.memory.landmarks).toEqual(a.dragon!.e.memory.landmarks);
+    // Version-1 file from before the dragon: no "dragon" field.
+    const old = JSON.parse(json); delete old.dragon;
+    const v2 = validateSave(old, { w: 256, h: 256 });
+    expect(v2.ok).toBe(true);
+    expect(v2.world!.dragon).toBeNull();
+    const c = mk(9);
+    expect(c.applyWorld(v2.world!)).toEqual([]);
+    expect(c.dragon!.e.airborne).toBe(true);
+    for (let k = 0; k < 200; k++) c.dragon!.step(1 / 20);
+    expect(c.dragon!.recoveries).toBe(0);
+    // A corrupt dragon is reported and replaced, the world still loads.
+    const bad = JSON.parse(json); bad.dragon = 'garbage';
+    const v3 = validateSave(bad, { w: 256, h: 256 });
+    expect(v3.ok).toBe(true);
+    expect(v3.warnings.join(' ')).toMatch(/Dragon data unreadable/);
+  });
+
   it('a new world from a seed regenerates the same world as the generator', () => {
     const a = makeEngine(1234), b = makeEngine(1234);
     expect(a.world.elev).toEqual(b.world.elev);

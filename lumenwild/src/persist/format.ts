@@ -1,5 +1,6 @@
 import { OBJ_KINDS, OBJECT_DEFS, type WorldObject } from '../engine/objects/defs';
 import type { EnvState } from '../engine/env/Environment';
+import { validateDragon, type DragonSave } from '../engine/dragon/DragonEntity';
 
 /**
  * Lumenwild save format (JSON). Grids are little-endian typed arrays in base64; everything else is plain JSON.
@@ -24,6 +25,8 @@ export interface SaveData {
   env: EnvState;
   camera: { x: number; y: number; zoom: number };
   home: [number, number] | null;
+  /** Optional (added after version 1 shipped; older files have none and get a newly hatched dragon). */
+  dragon?: DragonSave;
 }
 
 /** Decoded save, ready to apply. */
@@ -45,6 +48,7 @@ export interface LoadedWorld {
   env: EnvState;
   camera: { x: number; y: number; zoom: number };
   home: [number, number] | null;
+  dragon: DragonSave | null;
 }
 
 // ------------------------------------------------------------------ base64 <-> typed arrays (no Buffer: browser + node)
@@ -103,6 +107,7 @@ export interface SaveSource {
   env: EnvState;
   camera: { x: number; y: number; zoom: number };
   home: [number, number] | null;
+  dragon?: DragonSave;
 }
 
 export function buildSave(s: SaveSource): SaveData {
@@ -116,6 +121,7 @@ export function buildSave(s: SaveSource): SaveData {
     objects: s.objects.map((o) => ({ ...o, props: { ...o.props } })),
     sources: [...s.sources], drains: [...s.drains],
     env: { ...s.env }, camera: { ...s.camera }, home: s.home,
+    ...(s.dragon ? { dragon: JSON.parse(JSON.stringify(s.dragon)) as DragonSave } : {}),
   };
 }
 
@@ -199,9 +205,15 @@ export function validateSave(input: unknown, expect?: { w: number; h: number }):
   const camera = { x: num(c.x, -64, w + 64, w / 2), y: num(c.y, -128, h + 64, h / 2), zoom: Math.round(num(c.zoom, 0, 13, 4)) };
   const home = Array.isArray(d.home) && isNum(d.home[0]) && isNum(d.home[1]) ? [d.home[0], d.home[1]] as [number, number] : null;
   const name = typeof d.name === 'string' && d.name.trim() ? d.name.trim().slice(0, 60) : 'Imported world';
+  let dragon: DragonSave | null = null;
+  if (d.dragon !== undefined) {
+    const r = validateDragon(d.dragon, w, h);
+    warnings.push(...r.warnings);
+    dragon = r.save;
+  }
   if (errors.length) return { ok: false, errors, warnings };
   return {
     ok: true, errors, warnings,
-    world: { name, seed: d.seed as number, w, h, elev: elev!, mat: mat!, cover: cover!, coverVar: coverVar!, moisture: moisture!, magic: magic!, depth: depth!, objects, sources, drains, env, camera, home },
+    world: { name, seed: d.seed as number, w, h, elev: elev!, mat: mat!, cover: cover!, coverVar: coverVar!, moisture: moisture!, magic: magic!, depth: depth!, objects, sources, drains, env, camera, home, dragon },
   };
 }

@@ -16,6 +16,7 @@ export function connectEditor(engine: Engine): () => void {
   ed.onSelect = (o) => ui().setSelected(o);
   ed.onMessage = (m) => ui().showToast(m);
   ed.onEdit = () => { if (ui().saveState !== 'unsaved') ui().setSaveState('unsaved'); };
+  engine.onDragonClick = () => ui().setDragonOpen(true);
   pushHistory();
   const apply = (s: ReturnType<typeof ui>) => {
     if (engine.tool !== s.tool) {
