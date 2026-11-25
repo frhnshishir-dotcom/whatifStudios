@@ -36,31 +36,36 @@ const VIEWS: View[] = [
   ['8-rain', `env({ time: 15, rain: 1, wind: 0.8, fog: 0.2 }); zoom(6); e.focus(...e.home); step(210);`],
 ];
 
-async function boot(page: Page): Promise<void> {
-  await page.goto('/?seed=7&worker=0&manual=1');
-  await page.waitForFunction(() => {
+type Kind = 'canvas2d' | 'webgl2';
+
+async function boot(page: Page, kind: Kind = 'canvas2d'): Promise<void> {
+  await page.goto(`/?seed=7&worker=0&manual=1${kind === 'webgl2' ? '&presenter=webgl' : ''}`);
+  await page.waitForFunction((k) => {
     const e = (window as any).__lumenwild?.getEngine();
-    return !!e?.renderer && e.cam.viewW > 0 && e.water?.mode === 'main';
-  }, null, { timeout: 30_000 });
+    return !!e?.renderer && e.renderer.kind === k && e.cam.viewW > 0 && e.water?.mode === 'main';
+  }, kind, { timeout: 30_000 });
   await page.evaluate(() => { (window as any).__gt = 0; });
 }
 
 const canvas = (page: Page) => page.getByTestId('world-canvas');
 const exact = { maxDiffPixels: 0, threshold: 0 } as const;
 
+// Both presenters are compared against the same baselines (the Canvas 2D output): the WebGL2 presenter must
+// reproduce it pixel for pixel. Update baselines only from the Canvas 2D run: --update-snapshots --grep canvas2d.
+for (const kind of ['canvas2d', 'webgl2'] as Kind[]) {
 for (const [name, js] of VIEWS) {
-  test(`golden: ${name}`, async ({ page }) => {
+  test(`golden[${kind}]: ${name}`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
-    await boot(page);
+    await boot(page, kind);
     await page.evaluate(`(() => { ${SETUP} ${js} })()`);
     await expect(canvas(page)).toHaveScreenshot(`${name}.png`, exact);
     expect(errors).toEqual([]);
   });
 }
 
-test('golden: 9-fullscreen (UI hidden)', async ({ page }) => {
-  await boot(page);
+test(`golden[${kind}]: 9-fullscreen (UI hidden)`, async ({ page }) => {
+  await boot(page, kind);
   await page.keyboard.press('h');
   await page.waitForFunction(() => {
     const c = document.querySelector('[data-testid=world-canvas]') as HTMLCanvasElement;
@@ -70,6 +75,7 @@ test('golden: 9-fullscreen (UI hidden)', async ({ page }) => {
     env({ time: 9.5 }); e.cam.zoomIndex = 5; e.resize(r2.width, r2.height, 1); e.focus(...e.home); step(150); })()`);
   await expect(canvas(page)).toHaveScreenshot('9-fullscreen.png', exact);
 });
+}
 
 test('golden: the same frame sequence renders identical pixels twice', async ({ page }) => {
   await boot(page);

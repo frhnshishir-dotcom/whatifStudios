@@ -10,13 +10,18 @@ export function CanvasView() {
   const resolutionScale = useUI((s) => s.settings.resolutionScale);
   const heightScale = useUI((s) => s.settings.heightScale);
   const lowPerf = useUI((s) => s.settings.lowPerf);
+  const presenter = useUI((s) => s.settings.presenter);
   useEffect(() => { getEngine()?.setLowPerf(lowPerf); }, [lowPerf]);
 
   useEffect(() => {
     const engine = getEngine();
     const canvas = ref.current;
     if (!engine || !canvas) return;
-    engine.attach(canvas);
+    // A canvas holds one kind of context for life, so switching presenter remounts the canvas (see `key` below);
+    // the world, camera and simulation are untouched.
+    const first = !engine.renderer;
+    engine.attach(canvas, presenter);
+    if (engine.presenterFallback) useUI.getState().showToast(`WebGL2 unavailable, using Canvas 2D (${engine.presenterFallback})`);
     const ui = useUI.getState();
     engine.onStats = (s) => useUI.getState().setStats(s);
     let lastHover = '';
@@ -33,16 +38,18 @@ export function CanvasView() {
     ro.observe(canvas);
     const r = canvas.getBoundingClientRect();
     engine.resize(r.width, r.height, window.devicePixelRatio || 1);
-    if (r.width < 700) engine.fitZoom(64);
-    const [hx, hy] = engine.home ?? [engine.world.w * 0.5, engine.world.h * 0.55];
-    engine.focus(hx, hy);
+    if (first) {
+      if (r.width < 700) engine.fitZoom(64);
+      const [hx, hy] = engine.home ?? [engine.world.w * 0.5, engine.world.h * 0.55];
+      engine.focus(hx, hy);
+    }
     const unlink = connectEditor(engine);
     const io = new WorldIO(engine);
     setWorldIO(io);
     void io.init();
     engine.start();
     return () => { ro.disconnect(); unlink(); io.dispose(); setWorldIO(null); engine.stop(); };
-  }, []);
+  }, [presenter]);
 
   useEffect(() => {
     const engine = getEngine();
@@ -55,5 +62,5 @@ export function CanvasView() {
   }, [resolutionScale, heightScale]);
 
   const tool = useUI((s) => s.tool);
-  return <canvas ref={ref} className={`world-canvas tool-${tool}`} data-testid="world-canvas" aria-label="Lumenwild world" />;
+  return <canvas key={presenter} ref={ref} data-presenter={presenter} className={`world-canvas tool-${tool}`} data-testid="world-canvas" aria-label="Lumenwild world" />;
 }

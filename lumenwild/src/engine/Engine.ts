@@ -3,8 +3,8 @@ import { Camera } from './world/Camera';
 import { Clock } from './world/Clock';
 import { TerrainShader } from './render/TerrainShader';
 import { Composer } from './render/Composer';
-import type { Presenter } from './render/Presenter';
-import { Canvas2DPresenter } from './render/Canvas2DPresenter';
+import { AtlasCache, type Presenter, type PresenterKind } from './render/Presenter';
+import { createPresenter } from './render/createPresenter';
 import { Particles } from './render/Particles';
 import type { WaterSystem } from './water/WaterSystem';
 import { WaterLayer } from './water/WaterLayer';
@@ -45,6 +45,8 @@ export interface EngineStats {
   fog: number;
   wind: number;
   lights: number;
+  /** Presenter in use ('canvas2d' or 'webgl2'). */
+  presenter: PresenterKind;
 }
 
 export interface HoverInfo { x: number; y: number; i: number; elev: number; mat: number; cover: number; moisture: number; kind: number }
@@ -64,6 +66,10 @@ export class Engine {
   composer: Composer;
   /** Turns composed cells into pixels (Canvas 2D by default). Named `renderer` for compatibility with tests. */
   renderer: Presenter | null = null;
+  /** Why the requested presenter could not be used (null when it was). */
+  presenterFallback: string | null = null;
+  /** Glyph atlases, shared across presenters (switching presenter does not re-bake them). */
+  readonly atlases = new AtlasCache();
   readonly sims: Simulation[] = [];
   /** Where the view opens (and the Home key returns to). */
   home: [number, number] | null = null;
@@ -175,8 +181,14 @@ export class Engine {
     this.cam.centerOn(x, y, w.w, w.h, w.elevAt(Math.round(x), Math.round(y)));
   }
 
-  attach(canvas: HTMLCanvasElement): void {
-    this.renderer = new Canvas2DPresenter(canvas);
+  /** Attach to a canvas with the requested presenter (Canvas 2D by default; WebGL2 falls back to Canvas 2D). */
+  attach(canvas: HTMLCanvasElement, kind: PresenterKind = 'canvas2d'): void {
+    const scale = this.renderer?.resolutionScale ?? 1;
+    this.renderer?.dispose();
+    const { presenter, fallback } = createPresenter(canvas, kind, this.atlases);
+    presenter.resolutionScale = scale;
+    this.renderer = presenter;
+    this.presenterFallback = fallback;
     this.bindInput(canvas);
   }
 
@@ -382,6 +394,7 @@ export class Engine {
         simMode: ws ? ws.mode : 'none', water: ws ? ws.stats.total : 0, activeChunks: ws ? ws.stats.active : 0, particles: this.particles.n,
         objects: this.objects.objects.size, objectCells: this.objectLayer.drawn,
         time: this.env.time, rain: this.env.rain, fog: this.env.fog, wind: this.env.wind, lights: this.atmosphere.stats.lights,
+        presenter: this.renderer.kind,
       });
     }
     this.updateHover();

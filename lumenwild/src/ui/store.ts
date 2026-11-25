@@ -12,6 +12,8 @@ export interface Settings {
   heightScale: number;
   simQuality: 'low' | 'medium' | 'high';
   lowPerf: boolean;
+  /** Requested presenter; the one actually used is in stats.presenter (WebGL2 falls back to Canvas 2D). */
+  presenter: 'canvas2d' | 'webgl2';
 }
 
 interface UIState {
@@ -55,6 +57,13 @@ interface UIState {
   markUnsaved: () => void;
 }
 
+/** `?presenter=webgl` (or `webgl2`) requests the GPU presenter at start-up. */
+function initialPresenter(): Settings['presenter'] {
+  if (typeof location === 'undefined') return 'canvas2d';
+  const p = new URLSearchParams(location.search).get('presenter');
+  return p === 'webgl' || p === 'webgl2' ? 'webgl2' : 'canvas2d';
+}
+
 export const useUI = create<UIState>()((set) => ({
   worldName: 'Lumenwild',
   seed: 7,
@@ -72,7 +81,7 @@ export const useUI = create<UIState>()((set) => ({
   inspectorOpen: false,
   paused: false,
   speed: 1,
-  settings: { resolutionScale: 1, heightScale: 0.75, simQuality: 'high', lowPerf: false },
+  settings: { resolutionScale: 1, heightScale: 0.75, simQuality: 'high', lowPerf: false, presenter: initialPresenter() },
   stats: null,
   hover: null,
   saveState: 'unsaved',
