@@ -9,6 +9,7 @@ import { getEngine } from './engineRef';
 import { editorShortcut } from './editorBridge';
 import { TOOL_KEYS } from './components/Toolbar';
 import { WorldDialog } from './components/WorldDialog';
+import { ContinentDialog } from './components/ContinentDialog';
 import { getWorldIO } from './persistence';
 
 function Toast() {
@@ -58,6 +59,7 @@ export function App() {
       {!panelsHidden && <Inspector />}
       {!panelsHidden && <BottomBar />}
       <WorldDialog />
+      <ContinentDialog />
       {panelsHidden && <button className="show-panels" onClick={togglePanels} title="Show panels (H)">Show panels</button>}
     </div>
   );

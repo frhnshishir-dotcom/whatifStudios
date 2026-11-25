@@ -24,7 +24,7 @@ interface UIState {
   selected: WorldObject | null;
   history: HistoryState;
   toast: { text: string; id: number } | null;
-  dialog: 'worlds' | null;
+  dialog: 'worlds' | 'continent' | null;
   dragonOpen: boolean;
   slots: SlotMeta[];
   currentSlot: string | null;

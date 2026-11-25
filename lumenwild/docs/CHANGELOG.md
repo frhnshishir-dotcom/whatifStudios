@@ -1,5 +1,17 @@
 # Lumenwild changelog
 
+## Continent and settlement design (2026-11-25)
+No cities: a wilderness continent (1024 x 1024 cells, about 2 km) with five small villages, generated as design data
+in `src/engine/continent/` and previewed in the app (top bar → map icon). The playable valley is unchanged.
+- Six biomes, three rivers with falls, four lakes, marshes, caves; four dragon territories, eight wildlife habitats.
+- Greenhaven, Frostwatch, Windmere, Marshlight and Moonrest at the brief's coordinates, each with its own
+  architecture, building programme, farmland, households, trades and daily routines (weather and danger reactions).
+- 21-23 outposts, about 25 ruins, dungeons, landmarks, lairs and abandoned hamlets; terrain-following footpaths,
+  forest trails, a mountain pass, boardwalks, bridges, fords and broken ancient roads.
+- Measured on seeds 1-6: 87.7-88.4 % wilderness, 6.0-6.3 % settlements and paths, 5.6-6.0 % special locations.
+- Tests: `tests/continent.test.ts` (17, the eight acceptance criteria), `e2e/m11-continent.spec.ts`.
+- Plan to make it playable (region streaming): `docs/audit/CONTINENT_PLAN.md`, awaiting approval.
+
 ## Phase 1, steps 1.1-1.3 (2026-11-25)
 **1.1 Presenter interface and golden images.** `render/Presenter.ts` defines how composed cells become pixels; the
 CPU blitter is now `render/Canvas2DPresenter.ts` (no behaviour change). `?manual=1` lets tests drive frames with
