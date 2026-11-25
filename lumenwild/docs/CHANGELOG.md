@@ -1,5 +1,18 @@
 # Lumenwild changelog
 
+## World map specification: Phase 0 and Phase 1 blueprint (2026-11-25)
+- Phase 0 reuse report: `docs/world/PHASE0_REUSE_REPORT.md` (source-backed; conflicts with the settlement revision listed).
+- Editable world data in `lumenwild/world/` (regions, coastline, ranges, elevation features, lakes, rivers, settlements,
+  landmarks, roads, habitats, dragon territories and corridors, discovery), typed and validated (`src/world/schema.ts`).
+- One coordinate utility (`src/world/coords.ts`): map units, metres, 3D world, 2 m cells, chunks, regions, prototype.
+- Blueprint (`src/world/blueprint.ts`): design elevation from authored ranges and regional planes, rivers that never
+  flow uphill (Emberfall 177 m), lakes, routed roads with bridges, settlement suitability, dragon landing sites and
+  flight corridors; 41 geography checks, all passing. The existing A* was made grid-independent and reused.
+- Discovery model (`src/world/discovery.ts`): fog of war, rumoured and hidden places, exploration per region, save/load.
+- Map dialog: "World blueprint", "Player view at start" and the earlier draft. Previews in `docs/world/`.
+- Design and plan for review: `docs/world/WORLD_BLUEPRINT.md`. Tests: `tests/world-blueprint.test.ts` (13),
+  `e2e/m12-world-map.spec.ts`.
+
 ## Continent and settlement design (2026-11-25)
 No cities: a wilderness continent (1024 x 1024 cells, about 2 km) with five small villages, generated as design data
 in `src/engine/continent/` and previewed in the app (top bar → map icon). The playable valley is unchanged.

@@ -39,8 +39,13 @@ export function costGrid(height: Float32Array, biome: Uint8Array, water: Uint8Ar
   return cost;
 }
 
-/** A* over the coarse grid (8-connected, octile heuristic). Returns world points (node centres) and the path cost. */
-export function findPath(cost: Float32Array, from: Pt, to: Pt): { pts: Pt[]; cost: number } | null {
+/**
+ * A* over a coarse cost grid (8-connected, octile heuristic). Returns points (node centres, in the grid's source
+ * units) and the path cost. `grid` defaults to the continent draft's 256 x 256 nodes of 4 cells; the world blueprint
+ * reuses it with its own grid.
+ */
+export function findPath(cost: Float32Array, from: Pt, to: Pt, grid: { G: number; step: number; minCost?: number } = { G, step: STEP }): { pts: Pt[]; cost: number } | null {
+  const G = grid.G, STEP = grid.step, hMin = grid.minCost ?? 0.6;
   const sx = Math.min(G - 2, Math.max(1, Math.floor(from[0] / STEP))), sy = Math.min(G - 2, Math.max(1, Math.floor(from[1] / STEP)));
   const tx = Math.min(G - 2, Math.max(1, Math.floor(to[0] / STEP))), ty = Math.min(G - 2, Math.max(1, Math.floor(to[1] / STEP)));
   const n = G * G, g = new Float32Array(n).fill(Infinity), came = new Int32Array(n).fill(-1), closed = new Uint8Array(n);
@@ -68,7 +73,7 @@ export function findPath(cost: Float32Array, from: Pt, to: Pt): { pts: Pt[]; cos
     }
     return top;
   };
-  const hx = (k: number) => { const dx = Math.abs((k % G) - tx), dy = Math.abs(Math.floor(k / G) - ty); return 0.6 * (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)); };
+  const hx = (k: number) => { const dx = Math.abs((k % G) - tx), dy = Math.abs(Math.floor(k / G) - ty); return hMin * (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)); };
   const s = sy * G + sx, t = ty * G + tx;
   const cs = cost[s], ct = cost[t];
   cost[s] = Math.min(cs, 1); cost[t] = Math.min(ct, 1);
@@ -94,7 +99,7 @@ export function findPath(cost: Float32Array, from: Pt, to: Pt): { pts: Pt[]; cos
   cost[s] = cs; cost[t] = ct;
   if (!found) return null;
   const nodes: Pt[] = [];
-  for (let k = t; k !== -1; k = came[k]) nodes.push([(k % G) * STEP + 2, Math.floor(k / G) * STEP + 2]);
+  for (let k = t; k !== -1; k = came[k]) nodes.push([(k % G) * STEP + STEP / 2, Math.floor(k / G) * STEP + STEP / 2]);
   nodes.reverse();
   nodes[0] = [from[0], from[1]];
   nodes[nodes.length - 1] = [to[0], to[1]];

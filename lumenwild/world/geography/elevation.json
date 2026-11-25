@@ -1,0 +1,15 @@
+{
+  "notes": "Authored shaping layers applied over the regional base elevation and the ranges (all elevations in metres, distances in map units).",
+  "coastFalloff": 55,
+  "detail": { "amplitude": 0.05, "scale": 0.012 },
+  "basins": [ { "id": "kings-basin-bowl", "at": [470, 475], "radius": 60, "floor": 118 } ],
+  "plateaus": [
+    { "id": "skyfall-plateau", "at": [612, 62], "radius": 22, "elevation": 1240 },
+    { "id": "lumenfall-terrace", "at": [500, 510], "radius": 20, "elevation": 130, "note": "Terrain correction: the city's terrace above the Lumen." },
+    { "id": "frostwatch-shelf", "at": [430, 300], "radius": 14, "elevation": 645, "note": "Terrain correction: a level shelf for the outpost on the foothill slope." }
+  ],
+  "fissures": [
+    { "id": "rift-of-shadows-trench", "line": [[868, 468], [900, 500], [936, 542]], "depth": 130, "width": 6 },
+    { "id": "crimson-fissures", "line": [[812, 300], [846, 330], [878, 352]], "depth": 45, "width": 3 }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  { "id": "skyglass-lake", "name": "Skyglass Lake", "region": "dragon-peaks", "at": [515, 160], "radius": 13, "kind": "glacial, frozen in winter" },
+  { "id": "moonlit-lake", "name": "Moonlit Lake", "region": "elderwood", "at": [250, 460], "radius": 16, "kind": "forest lake" },
+  { "id": "kings-basin", "name": "King's Basin", "region": "heartlands", "at": [470, 475], "radius": 24, "kind": "river basin lake" },
+  { "id": "witchwater-pool", "name": "Witchwater Pool", "region": "whispering-marshes", "at": [850, 840], "radius": 14, "kind": "marsh pool" }
+]

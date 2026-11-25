@@ -1,0 +1,8 @@
+{
+  "id": "realm-of-lumenwild",
+  "name": "The Realm of Lumenwild",
+  "schemaVersion": 1,
+  "seed": 1,
+  "status": "blueprint",
+  "notes": "Phase 1 design data. Every file here is editable; `npm test` validates it (ids, references, geography)."
+}

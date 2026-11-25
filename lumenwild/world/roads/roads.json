@@ -1,0 +1,11 @@
+[
+  { "id": "kings-road", "name": "King's Road", "class": "major", "via": ["lumenfall", "kings-bridge", "greenhaven", "windmere"],
+    "note": "Lumenfall to Greenhaven and the Golden Plains; crosses the Lumen at King's Bridge." },
+  { "id": "northern-expedition-route", "name": "Northern Expedition Route", "class": "major", "pass": true,
+    "via": ["lumenfall", "frostwatch", [455, 222]], "note": "Ends at the expedition camp below Skyglass Lake (mountain pass beyond Frostwatch)." },
+  { "id": "eastern-trade-route", "name": "Eastern Trade Route", "class": "major", "via": ["lumenfall", [600, 490], [672, 488]],
+    "note": "Toward the Hollow Lands; ends at the Hollow Gate where the climb into the corrupted highlands begins (that ascent is Phase 3)." },
+  { "id": "marsh-road", "name": "Marsh Road", "class": "major", "via": ["lumenfall", "old-watchtower-heartlands", "marshlight"] },
+  { "id": "merchant-road", "name": "Merchant Road", "class": "minor", "via": ["greenhaven", "merchant-road-stones", "old-watchtower-plains"] },
+  { "id": "moonrest-trail", "name": "Moonrest Trail", "class": "trail", "status": "proposed", "via": ["greenhaven", [250, 560], "moonrest"] }
+]

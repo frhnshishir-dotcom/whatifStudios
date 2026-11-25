@@ -1,0 +1,21 @@
+[
+  { "id": "territory-skyfall", "name": "Skyfall Summit", "kind": "nest", "centre": [480, 90], "radius": 85, "nest": [482, 96],
+    "dragon": { "id": "dragon-aurath", "name": "Aurath", "species": "elder storm dragon", "size": "huge" },
+    "preferredAltitude": [250, 700], "awarenessRadius": 45, "huntingGrounds": ["high-crags", "snowfields"] },
+  { "id": "territory-ember-nest", "name": "Ember Nest", "kind": "nest", "centre": [690, 185], "radius": 60, "nest": [690, 188],
+    "dragon": { "id": "dragon-emberfang", "name": "Emberfang", "species": "obsidian fire dragon", "size": "large",
+      "note": "The dragon already simulated in the valley (obsidian, crimson and ember)." },
+    "preferredAltitude": [180, 500], "awarenessRadius": 40, "huntingGrounds": ["high-crags", "dead-forest"] },
+  { "id": "territory-frozen-crown", "name": "Frozen Crown", "kind": "nest", "centre": [365, 190], "radius": 55, "nest": [362, 196],
+    "dragon": { "id": "dragon-rimeclaw", "name": "Rimeclaw", "species": "frost dragon", "size": "large" },
+    "preferredAltitude": [150, 450], "awarenessRadius": 35, "huntingGrounds": ["snowfields"] },
+  { "id": "territory-elderwood-canopy", "name": "Elderwood Canopy", "kind": "nest", "centre": [280, 355], "radius": 50, "nest": [276, 352],
+    "dragon": { "id": "dragon-mossheart", "name": "Mossheart", "species": "forest drake", "size": "medium" },
+    "preferredAltitude": [60, 220], "awarenessRadius": 30, "huntingGrounds": ["elder-deep"] },
+  { "id": "territory-ashen-rift", "name": "Ashen Rift", "kind": "nest", "centre": [810, 430], "radius": 60, "nest": [812, 426],
+    "dragon": { "id": "dragon-ashmaw", "name": "Ashmaw", "species": "corrupted dragon", "size": "large" },
+    "preferredAltitude": [150, 450], "awarenessRadius": 40, "huntingGrounds": ["ashen-wastes", "dead-forest"] },
+  { "id": "territory-southern-sky-corridor", "name": "Southern Sky Corridor", "kind": "corridor", "centre": [550, 500], "radius": 70,
+    "preferredAltitude": [450, 900], "awarenessRadius": 25, "huntingGrounds": ["heartland-meadows"],
+    "note": "50 units from Lumenfall City, so it is designed as shared high airspace with no nest or landing (decision 4)." }
+]

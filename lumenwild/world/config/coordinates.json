@@ -1,0 +1,14 @@
+{
+  "map": { "min": 0, "max": 1000, "x": "west to east", "y": "north to south", "north": "y = 0" },
+  "metresPerMapUnit": 10,
+  "metresPerMapUnitStatus": "proposed: 10 m per unit gives a 10 km continent on which 1600 m peaks have believable slopes (decision 3)",
+  "elevationUnit": "metre",
+  "terrainCellMetres": 2,
+  "chunkCells": 16,
+  "regionCells": 256,
+  "renderTileMetres": 64,
+  "creatureCellMetres": 128,
+  "navCellMetres": 8,
+  "blueprintSampleUnits": 2,
+  "prototypeGrid": 256
+}

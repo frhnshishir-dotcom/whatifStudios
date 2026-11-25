@@ -1,0 +1,14 @@
+[
+  { "id": "skyfall-range", "name": "Skyfall Range", "region": "dragon-peaks", "style": "alpine", "halfWidth": 70,
+    "crest": [[300, 210, 1050], [360, 150, 1260], [420, 105, 1460], [480, 90, 1600], [545, 100, 1480], [610, 125, 1350], [690, 165, 1220], [752, 212, 1000]] },
+  { "id": "frozen-crown-spur", "name": "Frozen Crown Spur", "region": "dragon-peaks", "style": "alpine", "halfWidth": 40,
+    "crest": [[365, 190, 1280], [332, 245, 960], [300, 292, 700]] },
+  { "id": "ember-ridge", "name": "Ember Ridge", "region": "dragon-peaks", "style": "volcanic", "halfWidth": 45,
+    "crest": [[690, 185, 1260], [735, 235, 1000], [770, 288, 800]] },
+  { "id": "hollow-spine", "name": "Hollow Spine", "region": "hollow-lands", "style": "jagged", "halfWidth": 40,
+    "crest": [[742, 285, 820], [800, 330, 850], [860, 392, 780], [905, 460, 700], [932, 532, 560]] },
+  { "id": "elder-highlands", "name": "Elder Highlands", "region": "elderwood", "style": "rounded", "halfWidth": 55,
+    "crest": [[60, 232, 620], [130, 282, 650], [190, 332, 560], [150, 420, 470]] },
+  { "id": "golden-downs", "name": "Golden Downs", "region": "golden-plains", "style": "rounded", "halfWidth": 45,
+    "crest": [[60, 602, 300], [130, 640, 280], [205, 622, 250]] }
+]

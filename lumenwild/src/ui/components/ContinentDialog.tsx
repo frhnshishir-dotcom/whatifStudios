@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../store';
 import type { Continent, Village } from '../../engine/continent/types';
 import type { Culture } from '../../engine/continent/cultures';
+import { BlueprintView } from './BlueprintView';
 
 type Mods = {
   gen: typeof import('../../engine/continent/generate');
@@ -121,21 +122,23 @@ export function ContinentDialog() {
   const setDialog = useUI((s) => s.setDialog);
   const [data, setData] = useState<{ c: Continent; m: Mods } | null>(cache);
   const [tab, setTab] = useState('map');
+  /** World spec blueprint (default), the player's starting map, or the earlier settlement draft. */
+  const [mode, setMode] = useState<'blueprint' | 'player' | 'draft'>('blueprint');
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDialog(null); };
     window.addEventListener('keydown', onKey);
-    if (!data) setTimeout(() => { void load().then(setData); }, 30);
+    if (!data && mode === 'draft') setTimeout(() => { void load().then(setData); }, 30);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, data, setDialog]);
+  }, [open, data, setDialog, mode]);
 
   useEffect(() => {
-    if (!open || !data || !ref.current) return;
+    if (!open || !data || !ref.current || mode !== 'draft') return;
     const v = data.c.villages.find((q) => q.id === tab);
     if (v) drawVillage(ref.current, data.c, v, data.m); else drawMap(ref.current, data.c, data.m);
-  }, [open, data, tab]);
+  }, [open, data, tab, mode]);
 
   if (!open) return null;
   const c = data?.c, v = c?.villages.find((q) => q.id === tab);
@@ -144,21 +147,31 @@ export function ContinentDialog() {
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialog(null); }}>
       <div className="modal wide" role="dialog" aria-label="Continent" data-testid="continent-dialog">
         <header className="modal-head">
-          <h2>Continent design preview</h2>
+          <h2>World map</h2>
           <button className="icon-btn" onClick={() => setDialog(null)} aria-label="Close">✕</button>
         </header>
         <section className="modal-sec">
-          <p className="muted">Design layout of the whole continent (1024 × 1024 cells, about 2 km across). Not playable yet: you still play in the valley. Five villages, no cities.</p>
+          <div className="tabs" role="tablist">
+            {([['blueprint', 'World blueprint'], ['player', 'Player view at start'], ['draft', 'Earlier draft (5 villages)']] as const).map(([id, name]) => (
+              <button key={id} role="tab" aria-selected={mode === id} className={`tab${mode === id ? ' on' : ''}`} onClick={() => setMode(id)} data-testid={`map-mode-${id}`}>{name}</button>
+            ))}
+          </div>
+          <p className="muted" style={{ marginTop: 8 }}>{mode === 'draft'
+            ? 'The settlement-revision draft (1024 × 1024 cells, five villages, no cities). Superseded by the world specification pending your decisions.'
+            : 'Phase 1 blueprint of the Realm of Lumenwild from the editable files in lumenwild/world/ (map units 0-1000). Design data, not yet playable terrain.'}</p>
+        </section>
+        {mode !== 'draft' && <section className="modal-sec"><BlueprintView mode={mode} /></section>}
+        {mode === 'draft' && <section className="modal-sec">
           <div className="tabs" role="tablist">
             {[['map', 'Map'], ...(c?.villages.map((q) => [q.id, q.name]) ?? [])].map(([id, name]) => (
               <button key={id} role="tab" aria-selected={tab === id} className={`tab${tab === id ? ' on' : ''}`} onClick={() => setTab(id)} data-testid={`continent-tab-${id}`}>{name}</button>
             ))}
           </div>
-        </section>
-        <section className="modal-sec">
+        </section>}
+        {mode === 'draft' && <section className="modal-sec">
           {!data ? <p className="muted" data-testid="continent-loading">Generating the continent…</p> : <canvas ref={ref} className="continent-canvas" data-testid="continent-canvas" />}
-        </section>
-        {s && !v && (
+        </section>}
+        {mode === 'draft' && s && !v && (
           <section className="modal-sec" data-testid="continent-stats">
             <h3>Land use</h3>
             <div className="stat-row"><b>{s.wilderness.toFixed(1)}%</b> wilderness · <b>{s.settlements.toFixed(1)}%</b> villages, farmland, outposts and paths · <b>{s.special.toFixed(1)}%</b> ruins, dungeons, landmarks and lairs</div>
@@ -171,7 +184,7 @@ export function ContinentDialog() {
             </div>
           </section>
         )}
-        {v && sum && (
+        {mode === 'draft' && v && sum && (
           <section className="modal-sec two" data-testid="village-info">
             <div>
               <h3>{v.name} · {data!.m.types.BIOME_NAMES[v.biome]}</h3>

@@ -18,6 +18,7 @@ test('continent preview: map, five village close-ups and land-use figures', asyn
   const before = await page.evaluate(() => { const e = (window as any).__lumenwild.getEngine(); return { w: e.world.w, objects: e.objects.objects.size }; });
   await page.getByTestId('open-continent').click();
   await expect(page.getByTestId('continent-dialog')).toBeVisible();
+  await page.getByTestId('map-mode-draft').click();
   await expect(page.getByTestId('continent-canvas')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('continent-stats')).toContainText('wilderness');
   const s = await page.evaluate(() => (window as any).__lumenwild.continent.stats);

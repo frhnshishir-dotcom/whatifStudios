@@ -1,0 +1,8 @@
+{
+  "fogCellUnits": 5,
+  "playerRevealRadius": 14,
+  "start": { "at": [500, 520], "revealRadius": 55 },
+  "knownAtStart": ["lumenfall", "greenhaven", "kings-road", "kings-bridge", "kings-basin-shore", "merchant-road-stones"],
+  "rumourRadius": 6,
+  "notes": "Known: shown at start. Rumoured: a marker without detail until visited (tall ones are revealed when seen from visibleFrom). Hidden: only when found."
+}

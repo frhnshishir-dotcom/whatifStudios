@@ -1,0 +1,14 @@
+[
+  { "id": "high-crags", "region": "dragon-peaks", "at": [600, 160], "radius": 55, "species": ["mountain goat", "giant eagle"], "density": "low" },
+  { "id": "snowfields", "region": "dragon-peaks", "at": [400, 150], "radius": 45, "species": ["snow wolf", "snow hare"], "density": "low" },
+  { "id": "elder-deep", "region": "elderwood", "at": [150, 380], "radius": 60, "species": ["bear", "owl", "forest spirit"], "density": "medium" },
+  { "id": "wolf-range", "region": "elderwood", "at": [100, 500], "radius": 45, "species": ["wolf", "fox"], "density": "medium" },
+  { "id": "heartland-meadows", "region": "heartlands", "at": [600, 450], "radius": 50, "species": ["deer", "hare", "pheasant"], "density": "high" },
+  { "id": "basin-wetland", "region": "heartlands", "at": [420, 560], "radius": 30, "species": ["heron", "frog", "otter"], "density": "medium" },
+  { "id": "reed-beds", "region": "whispering-marshes", "at": [800, 640], "radius": 50, "species": ["marsh birds", "amphibians", "insects"], "density": "high" },
+  { "id": "deep-fen", "region": "whispering-marshes", "at": [760, 880], "radius": 50, "species": ["crocodilian predators", "swamp creatures"], "density": "medium" },
+  { "id": "open-steppe", "region": "golden-plains", "at": [110, 820], "radius": 55, "species": ["wild horse", "herd animals", "birds"], "density": "high" },
+  { "id": "downs-wolves", "region": "golden-plains", "at": [260, 610], "radius": 35, "species": ["wolf", "deer"], "density": "low" },
+  { "id": "ashen-wastes", "region": "hollow-lands", "at": [900, 380], "radius": 60, "species": ["corrupted wildlife", "shadow creatures"], "density": "medium" },
+  { "id": "dead-forest", "region": "hollow-lands", "at": [700, 360], "radius": 40, "species": ["supernatural predators", "corrupted wildlife"], "density": "low" }
+]
