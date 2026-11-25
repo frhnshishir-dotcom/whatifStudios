@@ -3,7 +3,8 @@ import { Camera } from './world/Camera';
 import { Clock } from './world/Clock';
 import { TerrainShader } from './render/TerrainShader';
 import { Composer } from './render/Composer';
-import { Renderer } from './render/Renderer';
+import type { Presenter } from './render/Presenter';
+import { Canvas2DPresenter } from './render/Canvas2DPresenter';
 import { Particles } from './render/Particles';
 import type { WaterSystem } from './water/WaterSystem';
 import { WaterLayer } from './water/WaterLayer';
@@ -61,7 +62,8 @@ export class Engine {
   readonly clock = new Clock(60);
   shader: TerrainShader;
   composer: Composer;
-  renderer: Renderer | null = null;
+  /** Turns composed cells into pixels (Canvas 2D by default). Named `renderer` for compatibility with tests. */
+  renderer: Presenter | null = null;
   readonly sims: Simulation[] = [];
   /** Where the view opens (and the Home key returns to). */
   home: [number, number] | null = null;
@@ -76,6 +78,8 @@ export class Engine {
   pickLocation: ((i: number) => void) | null = null;
   /** Low-performance mode: 30 fps cap and fewer particles. */
   lowPerf = false;
+  /** Frames are driven by the caller (`frame(t)`) instead of requestAnimationFrame: deterministic tests and benchmarks. */
+  manual = false;
   private lastRender = 0;
   water: WaterSystem | null = null;
   waterLayer: WaterLayer | null = null;
@@ -137,7 +141,7 @@ export class Engine {
     this.editor.objects = store;
     this.atmosphere.objects = store;
     this.bindObjects();
-    this.renderer?.blitter.invalidate();
+    this.renderer?.invalidate();
   }
 
   /** Object edits that change the solid mask wake the water there. */
@@ -152,7 +156,7 @@ export class Engine {
     this.shader = new TerrainShader(world);
     this.composer = new Composer(world, this.shader);
     this.composer.layers.push(...layers);
-    this.renderer?.blitter.invalidate();
+    this.renderer?.invalidate();
   }
 
   /** Zoom in until at most `maxCols` columns are visible (small screens open closer). */
@@ -172,7 +176,7 @@ export class Engine {
   }
 
   attach(canvas: HTMLCanvasElement): void {
-    this.renderer = new Renderer(canvas);
+    this.renderer = new Canvas2DPresenter(canvas);
     this.bindInput(canvas);
   }
 
@@ -184,6 +188,7 @@ export class Engine {
   }
 
   start(): void {
+    if (this.manual) { this.last = 0; return; }
     const loop = (now: number) => {
       // Low-performance mode renders every other display frame (about 30 fps).
       if (!this.lowPerf || now - this.lastRender >= 30) { this.lastRender = now; this.frame(now); }
@@ -250,7 +255,7 @@ export class Engine {
       d.senses.scanPOIs(null);
     }
     this.particles.n = 0;
-    this.renderer?.blitter.invalidate();
+    this.renderer?.invalidate();
     if (this.renderer) { const r = this.renderer.canvas.getBoundingClientRect(); this.resize(r.width, r.height, window.devicePixelRatio || 1); }
     return problems;
   }
@@ -275,7 +280,7 @@ export class Engine {
     const xt = info.features.find((f) => f.kind === 'christmas tree'), br = info.features.find((f) => f.kind === 'bridge');
     this.home = xt ? [xt.x, xt.y - 6] : br ? [br.x, br.y + 6] : null;
     this.particles.n = 0;
-    this.renderer?.blitter.invalidate();
+    this.renderer?.invalidate();
     if (this.dragon) {
       this.dragon.rebind(w, this.objects, this.water ? this.water.view : null);
       this.dragon.attach(this.water, this.particles);

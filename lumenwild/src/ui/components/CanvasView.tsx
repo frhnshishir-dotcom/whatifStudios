@@ -51,7 +51,7 @@ export function CanvasView() {
     engine.cam.heightScale = heightScale;
     const r = ref.current.getBoundingClientRect();
     engine.resize(r.width, r.height, window.devicePixelRatio || 1);
-    engine.renderer.blitter.invalidate();
+    engine.renderer.invalidate();
   }, [resolutionScale, heightScale]);
 
   const tool = useUI((s) => s.tool);

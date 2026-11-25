@@ -2,7 +2,8 @@
 
 Vertical (9:16) 3D "What If?" city-simulation shorts, built procedurally in **Blender 5.2.2 LTS** through the
 **Blender MCP** server, rendered with **EEVEE** on a laptop with **Intel UHD integrated graphics (no dedicated GPU)**.
-The owner (Farhan) does voiceover, music and SFX himself in **CapCut**. Never add, generate or claim audio.
+The owner (Farhan) does voiceover, music and SFX himself in **CapCut**. Never add, generate or claim audio in the video pipeline
+(the Lumenwild game in `lumenwild/` is exempt; see the Lumenwild section at the end).
 
 ## Current episode
 **EP001, "What If AI Disappeared Overnight?"**, being rebuilt from a 12-20 s question-only teaser into a
@@ -105,3 +106,18 @@ For the posted reel (CapCut export, with audio), run `tools/pipeline/reel_check.
 - **vidIQ**: signed in as shishir.farhn@gmail.com with **no YouTube channel authorized**. Connect Farhn47 in vidIQ before using channel analytics. Keyword, title and trend research work without it.
 - **OpusClip**: Starter plan, so no API/MCP access (Pro needed). Not required.
 Check that there are no missing or undersized PNGs before encoding. Pull 4-6 stills from the MP4 and look at them, including the hook text and every story event.
+
+## Lumenwild (`lumenwild/`): project-specific rules (approved 2026-11-25)
+A separate browser game (TypeScript, Vite, Canvas 2D 2.5D view). The video-pipeline rules above do not apply to it, except Git/LFS.
+- **Audio exemption:** Lumenwild may have audio. Hybrid design: Web Audio API for procedural ambience and basic effects;
+  original or properly licensed audio files (licence recorded next to each file) for creature sounds, footsteps, combat,
+  music and environmental effects. No paid dependencies.
+- **Three.js** is approved for the 3D view; **Blender** is approved as an optional asset tool (render/export inside the open
+  session, never `blender -b`). The original "no Three.js / no Blender" restriction is lifted for Lumenwild only.
+- **2.5D stays the default view** until the 3D view passes the parity acceptance tests in
+  `lumenwild/docs/audit/LUMENWILD_ROADMAP.md`. Develop 3D alongside it; never remove or replace a working system without tests.
+- Targets: 8 GB RAM, Intel integrated graphics. Zero-cost-first: no paid services, infrastructure or subscriptions without approval.
+- Server: develop and test locally on Windows first; move the authoritative server to cloud hosting only when the networking
+  architecture is ready (and approved).
+- Work incrementally with measurable acceptance tests. Present architecture and migration plans for approval before any major
+  architectural replacement. Docs: `lumenwild/docs/audit/`. Tests: `npm test`, `npm run e2e` (in `lumenwild/`).

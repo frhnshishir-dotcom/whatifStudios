@@ -4,17 +4,36 @@ Principle: **one simulation, several views, one server later.** The existing sim
 environment, dragon) stays the single source of truth. Renderers only read it. The server later runs the same code.
 Every step keeps the current app working and keeps all existing tests green.
 
-## Decisions needed before Phase 1
+## Approved decisions (2026-11-25)
 
-1. **Three.js and Blender.** The original Lumenwild brief banned Three.js and Blender; the new brief prefers them.
-   Lifting the ban for Three.js is needed for the 3D view (Phase 1b). Blender assets would be authored on your laptop
-   through the open Blender session (background `blender -b` renders crash there, per `CLAUDE.md`).
-2. **Audio.** The repository `CLAUDE.md` says "never add, generate or claim audio" (written for the video pipeline).
-   The new brief asks for an audio system. Please confirm that Lumenwild is exempt, and whether sounds should be
-   synthesised in code or come from licensed files you supply.
-3. **Primary view.** Keep the 2.5D character view as the main game view until the 3D view reaches parity
-   (recommended), or switch to 3D as soon as it exists.
-4. **Server hosting** for Phase 3 (laptop, cloud VM or both).
+1. **Three.js** approved for the 3D view; **Blender** approved as an optional asset tool. The 2.5D implementation is kept.
+2. **Audio:** Lumenwild is exempt from the repository's audio rule (recorded in `CLAUDE.md`). Hybrid: Web Audio API for
+   procedural ambience and basic effects; original or properly licensed files for creature sounds, footsteps, combat,
+   music and environmental effects. No paid dependencies.
+3. **View:** 2.5D stays the default. 3D is developed alongside it and becomes the default only after it passes the
+   parity gates below.
+4. **Server:** local development and testing on Windows first; cloud hosting for the authoritative server once the
+   networking architecture is ready and approved.
+5. **Constraints:** 8 GB RAM and Intel integrated graphics first; zero-cost-first (no paid infrastructure or subscriptions
+   without approval); preserve existing functionality; incremental steps with measurable acceptance tests; architecture
+   and migration plans are presented for approval before any major replacement.
+
+## 3D parity gates (all must pass before 3D becomes the default)
+
+Measured on the target laptop with the in-app benchmark (step 1.3) unless stated otherwise.
+
+| Area | Acceptance test |
+|---|---|
+| Rendering | The nine review views render in 3D with no missing terrain, objects or water; side-by-side frames reviewed and approved by you; glyphs stable under camera motion (mean per-pixel change between two frames 1/60 s apart with a 0.1-cell camera pan below a set threshold) |
+| Navigation | Pan, zoom, orbit, focus on a cell, follow the dragon; picking returns the same world cell as the 2.5D view for 99 % of 1,000 random screen points that hit terrain |
+| Water | Same `WaterSim` state drives both views; flow direction, falls, ripples and rain rings visible; no water rendered where depth is 0 |
+| Weather and time | Day, dusk, night, rain, fog and storm presets visibly match the 2.5D presets' intent; transitions without pops |
+| Creatures and dragon | Every entity in the simulation is drawn at its simulated position (max error 0.5 cell); all dragon animation modes and wing frames shown; no behavioural difference (the simulation is shared) |
+| Lighting | Ambient, point lights, emissive windows and glow, shadows for terrain and large objects; glyph contrast ratio of at least 3:1 against the local background in all presets |
+| Editor | Every editor tool works in 3D (cursor, brush preview, undo/redo) |
+| Performance | MEDIUM: 60 fps (p95 frame time ≤ 20 ms) at 1280 x 720; LOW: 30 fps (p95 ≤ 40 ms); JS heap ≤ 400 MB; GPU memory ≤ 512 MB; no frame over 100 ms after warm-up during a 5-minute run |
+| Fallback | Without WebGL2, or when the benchmark fails the budget, the app starts in 2.5D automatically |
+| Regression | All existing unit and browser tests pass; golden images of the 2.5D view unchanged |
 
 ## Phase 1: visual foundation (single-player, existing world)
 
@@ -27,7 +46,7 @@ Every step keeps the current app working and keeps all existing tests green.
 | 1.5 | Palette registry with per-biome palettes (base navy-black, timber, amber, vegetation, magic crimson and emerald), replacing scattered constants | new `render/Palette.ts`, `TerrainShader`, `WaterLayer`, `defs`, `DragonPoses` | Before/after screenshots; unit test that every material resolves |
 | 1.6 | Effects framework v1 in the 2.5D view: red energy pillar and green transformation (activation, duration, particles, local light, cleanup), pooled | new `env/Effects.ts`, `Particles`, `Atmosphere` | Effect lights nearby cells, ends cleanly, no allocations per frame |
 | 1.7 | Camera presentation: easing, shake, framing for effects | `world/Camera.ts`, `Engine.ts` | e2e checks |
-| 1.8 (gate) | **3D view prototype** (needs decision 1): heightfield, water surface, instanced objects, dragon mesh, world-space glyph surfaces, bloom, perspective three-quarter camera, ray picking | new `render3d/` | Side-by-side frames with the reference; parity checklist; laptop frame time |
+| 1.8 (gate) | **3D view prototype** (architecture and migration plan presented for approval first): heightfield, water surface, instanced objects, dragon mesh, world-space glyph surfaces, bloom, perspective three-quarter camera, ray picking | new `render3d/` | Side-by-side frames with the reference; parity checklist; laptop frame time |
 
 ## Phase 2: living ecosystem (single-player)
 

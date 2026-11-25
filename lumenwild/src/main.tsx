@@ -15,6 +15,8 @@ async function start() {
   const q = new URLSearchParams(location.search);
   const seed = Number(q.get('seed') || 7);
   const engine = createEngine(seed, q.get('scene') || 'world', { worker: q.get('worker') !== '0' });
+  // ?manual=1: no animation loop; tests drive frames with engine.frame(t) (golden images, benchmarks).
+  if (q.get('manual') === '1') engine.manual = true;
   setEngine(engine);
   useUI.getState().setWorldMeta(engine.world.name, seed);
   // Test/debug hook (read-only use in browser tests).
