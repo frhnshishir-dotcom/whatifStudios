@@ -137,3 +137,19 @@ select { width: 100%; background: var(--panel); color: var(--text); border: 1px 
 .report .warn { color: var(--warn); }
 .report.bad { background: rgba(120, 40, 30, 0.12); }
 @media (max-width: 600px) { .modal-sec.two { grid-template-columns: 1fr; } }
+
+/* Narrow screens and phones */
+.narrow-only { display: none; }
+@media (max-width: 900px) {
+  .narrow-only { display: inline-flex; }
+  .app.inspector-open .inspector { display: flex; position: fixed; z-index: 15; right: 0; top: calc(44px + env(safe-area-inset-top, 0px)); bottom: calc(40px + env(safe-area-inset-bottom, 0px)); width: min(300px, 86vw); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45); }
+}
+@media (max-width: 600px) {
+  .wide-only, .brand-name, .save-state { display: none; }
+  .topbar { gap: 4px; padding: 0 8px; }
+  .world-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+  .topbar .spacer { display: none; }
+  .bottombar { gap: 6px; padding: 0 8px; }
+  .perf span:nth-child(n+2) { display: none; }
+  .seg button { padding: 4px 6px; }
+}

@@ -146,6 +146,14 @@ export class Engine {
     this.renderer?.blitter.invalidate();
   }
 
+  /** Zoom in until at most `maxCols` columns are visible (small screens open closer). */
+  fitZoom(maxCols: number): void {
+    while (this.cam.cols > maxCols && this.cam.zoomIndex < 13) {
+      this.cam.zoomIndex++;
+      if (this.renderer) { const r = this.renderer.canvas.getBoundingClientRect(); this.resize(r.width, r.height, window.devicePixelRatio || 1); }
+    }
+  }
+
   /** Centre the view on a world cell, accounting for its elevation in the oblique projection. */
   focus(x: number, y: number): void {
     const w = this.world;
@@ -161,7 +169,8 @@ export class Engine {
 
   resize(cssW: number, cssH: number, dpr: number): void {
     if (!this.renderer) return;
-    this.renderer.resize(cssW, cssH, dpr, this.cam);
+    // Phones report 3x pixel density: 2x is sharp enough and keeps the pixel work affordable.
+    this.renderer.resize(cssW, cssH, Math.min(dpr, 2), this.cam);
     this.cam.clampTo(this.world.w, this.world.h);
   }
 
@@ -353,8 +362,28 @@ export class Engine {
       el.addEventListener(type, fn as EventListener, opts);
       this.cleanup.push(() => el.removeEventListener(type, fn as EventListener, opts));
     };
+    // Touch: two fingers pan and pinch-zoom; one finger on empty ground with the select tool pans.
+    const touches = new Map<number, [number, number]>();
+    let pinch: { cx: number; cy: number; d: number } | null = null;
+    const gesture = () => {
+      const p = [...touches.values()];
+      return { cx: (p[0][0] + p[1][0]) / 2, cy: (p[0][1] + p[1][1]) / 2, d: Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]) };
+    };
     on(canvas, 'pointerdown', (ev) => {
       const [px, py] = this.devicePos(canvas, ev);
+      if (ev.pointerType === 'touch') {
+        touches.set(ev.pointerId, [px, py]);
+        canvas.setPointerCapture(ev.pointerId);
+        if (touches.size === 2) { this.editor.end(); this.panning = null; pinch = gesture(); return; }
+        if (touches.size > 2) return;
+        const i = this.pickAt(px, py);
+        if (this.tool === 'select' && (i < 0 || !this.objects.occ[i]) && !(this.water && i >= 0 && this.water.view.depth[i] > 0.025)) {
+          this.panning = { x: px, y: py };
+          return;
+        }
+        this.toolHandler?.down(i, ev);
+        return;
+      }
       if (ev.button === 1 || (ev.button === 0 && this.spaceDown) || ev.button === 2) {
         ev.preventDefault();
         this.panning = { x: px, y: py };
@@ -370,6 +399,17 @@ export class Engine {
     });
     on(canvas, 'pointermove', (ev) => {
       const [px, py] = this.devicePos(canvas, ev);
+      if (ev.pointerType === 'touch' && touches.has(ev.pointerId)) {
+        touches.set(ev.pointerId, [px, py]);
+        if (touches.size >= 2 && pinch) {
+          const g = gesture();
+          this.cam.panPixels(g.cx - pinch.cx, g.cy - pinch.cy, this.world.w, this.world.h);
+          pinch.cx = g.cx; pinch.cy = g.cy;
+          const r = g.d / Math.max(1, pinch.d);
+          if (r > 1.25 || r < 0.8) { this.cam.zoomAt(g.cx, g.cy, r > 1 ? 1 : -1, this.world.w, this.world.h); pinch.d = g.d; }
+          return;
+        }
+      }
       this.hoverCell = [px, py];
       if (this.panning) {
         this.cam.panPixels(px - this.panning.x, py - this.panning.y, this.world.w, this.world.h);
@@ -380,6 +420,15 @@ export class Engine {
       if (this.toolHandler && ev.buttons & 1) this.toolHandler.move(this.pickAt(px, py), ev);
     });
     const end = (ev: PointerEvent) => {
+      if (ev.pointerType === 'touch') {
+        const was = touches.size;
+        touches.delete(ev.pointerId);
+        if (canvas.hasPointerCapture(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
+        if (was >= 2) { pinch = null; this.panning = null; return; }
+        if (this.panning) { this.panning = null; return; }
+        this.toolHandler?.up(ev);
+        return;
+      }
       if (this.panning) {
         this.panning = null;
         canvas.style.cursor = '';

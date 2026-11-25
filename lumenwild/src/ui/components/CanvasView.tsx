@@ -33,6 +33,7 @@ export function CanvasView() {
     ro.observe(canvas);
     const r = canvas.getBoundingClientRect();
     engine.resize(r.width, r.height, window.devicePixelRatio || 1);
+    if (r.width < 700) engine.fitZoom(64);
     const [hx, hy] = engine.home ?? [engine.world.w * 0.5, engine.world.h * 0.55];
     engine.focus(hx, hy);
     const unlink = connectEditor(engine);

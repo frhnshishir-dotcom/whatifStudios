@@ -27,6 +27,8 @@ interface UIState {
   currentSlot: string | null;
   storageKind: 'indexeddb' | 'localstorage' | 'memory' | null;
   panelsHidden: boolean;
+  /** Narrow screens: the inspector opens as a drawer. */
+  inspectorOpen: boolean;
   paused: boolean;
   speed: number;
   settings: Settings;
@@ -40,6 +42,7 @@ interface UIState {
   showToast: (text: string) => void;
   setDialog: (d: UIState['dialog']) => void;
   togglePanels: () => void;
+  toggleInspector: () => void;
   setPaused: (p: boolean) => void;
   setSpeed: (s: number) => void;
   setSettings: (s: Partial<Settings>) => void;
@@ -63,6 +66,7 @@ export const useUI = create<UIState>()((set) => ({
   currentSlot: null,
   storageKind: null,
   panelsHidden: false,
+  inspectorOpen: false,
   paused: false,
   speed: 1,
   settings: { resolutionScale: 1, heightScale: 0.75, simQuality: 'high', lowPerf: false },
@@ -80,6 +84,7 @@ export const useUI = create<UIState>()((set) => ({
   showToast: (text) => set((st) => ({ toast: { text, id: (st.toast?.id ?? 0) + 1 } })),
   setDialog: (dialog) => set({ dialog }),
   togglePanels: () => set((s) => ({ panelsHidden: !s.panelsHidden })),
+  toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
   setPaused: (paused) => set({ paused }),
   setSpeed: (speed) => set({ speed }),
   setSettings: (s) => set((st) => ({ settings: { ...st.settings, ...s } })),

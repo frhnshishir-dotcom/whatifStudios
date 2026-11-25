@@ -21,7 +21,8 @@ export function TopBar() {
       <button className="icon-btn" onClick={onRedo} disabled={!history.canRedo} title={`Redo${history.redoLabel ? `: ${history.redoLabel}` : ''} (Ctrl+Y)`} aria-label="Redo" data-testid="redo"><Icon name="redo" /></button>
       <button className="icon-btn" onClick={() => { void getWorldIO()?.quickSave(); }} title="Save (Ctrl+S)" aria-label="Save" data-testid="quick-save"><Icon name="save" /></button>
       <button className="icon-btn" onClick={() => useUI.getState().setDialog('worlds')} title="Worlds: save slots, new world, import / export" aria-label="Worlds"><Icon name="folder" /></button>
-      <button className="icon-btn" onClick={togglePanels} title="Hide panels (H)" aria-label="Hide panels"><Icon name="expand" /></button>
+      <button className="icon-btn narrow-only" onClick={() => useUI.getState().toggleInspector()} title="Tool, weather and view settings" aria-label="Settings panel" data-testid="toggle-inspector"><Icon name="settings" /></button>
+      <button className="icon-btn wide-only" onClick={togglePanels} title="Hide panels (H)" aria-label="Hide panels"><Icon name="expand" /></button>
     </header>
   );
 }

@@ -26,6 +26,7 @@ function Toast() {
 
 export function App() {
   const panelsHidden = useUI((s) => s.panelsHidden);
+  const inspectorOpen = useUI((s) => s.inspectorOpen);
   const togglePanels = useUI((s) => s.togglePanels);
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export function App() {
   }, [togglePanels]);
 
   return (
-    <div className={`app${panelsHidden ? ' panels-hidden' : ''}`}>
+    <div className={`app${panelsHidden ? ' panels-hidden' : ''}${inspectorOpen ? ' inspector-open' : ''}`}>
       {!panelsHidden && <TopBar />}
       {!panelsHidden && <Toolbar />}
       <main className="stage"><CanvasView /><Toast /></main>
