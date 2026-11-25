@@ -133,8 +133,8 @@ Tests added: `tests/world-terrain.test.ts` (9), `tests/world-stream.test.ts` (3)
 `e2e/m13-continent-mode.spec.ts`. All earlier tests still pass (145 unit, 59 browser in total).
 
 ### Not done yet (honest limits of Phase 2)
-- **Saving the continent**: edits to streamed regions are lost when a region leaves the window; continent mode does
-  not save (valley saves are untouched). Per-region edit diffs are the next persistence step.
+- **Saving the continent**: done since the persistence milestone. Per-region edit diffs are kept when regions unload,
+  and continent saves have their own slots; see `PHASE2_TECHNICAL_REPORT.md` section 5.
 - **Villages, bridges and landmarks at 1 m**: village sites are kept clear and paths are drawn as ground, but no
   buildings or bridge structures exist yet (Phase 3). Paths ford rivers where the blueprint has a bridge.
 - **Water state across moves**: since the biome increment, depth, flow, ripples and the sleep state move with the

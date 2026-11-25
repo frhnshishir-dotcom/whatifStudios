@@ -1,5 +1,22 @@
 # Lumenwild changelog
 
+## Phase 3a: persistent continent data (2026-11-25)
+- Baseline kept: the approved biome transition system (commit baa9516) is unchanged.
+- `src/world/edits.ts`: each region's difference from generation. It covers changed cells, removed and added objects,
+  ponds on dry ground, and the player's sources and drains. The difference is taken when a region leaves the window,
+  put back when it returns, and serialised for saves.
+- `src/world/continentSave.ts`: continent save format (position, zoom, weather and time, edits), validation and a
+  world fingerprint; a save from different world files loads with a warning.
+- `ContinentSession`:
+  - captures and reapplies edits on every window move
+  - carries the player's sources and drains across moves
+  - `collectEdits` for saving
+  - `loadAt` rebuilds the window around any map point with edits applied
+- Storage: `SlotStore` takes a namespace; the continent uses its own (`lumenwild-continent`). Valley slots, format and
+  behaviour are unchanged.
+- App: in continent mode, save, load, autosave, export and import use continent saves; "New world" is hidden there.
+- Tests: `tests/world-persist.test.ts` (5) and `e2e/m15-continent-save.spec.ts`; 172 unit and 61 browser tests pass.
+
 ## World Phase 2c: natural biome transitions (2026-11-25)
 - Borders between biomes are irregular ecological patches instead of per-cell random speckle (`src/world/ecotone.ts`,
   `src/world/terrain.ts`):
