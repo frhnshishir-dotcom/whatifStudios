@@ -36,6 +36,23 @@ export const PAL = {
   claw: C('#c9bea2'), clawDark: C('#2a2a24'), horn: C('#c8bc9e'), eye: C('#ffb22e'), eyeLit: C('#ffe08a'), charcoal: C('#0b0c0f'),
 };
 
+export type Palette = typeof PAL;
+
+/**
+ * How a dragon is built and coloured. The Valley's dragon uses CLASSIC (unchanged); the continent's five dragons
+ * each have their own palette and size, a longer wing with a third finger, a lit leading edge, and bank into turns.
+ */
+export interface DragonStyle {
+  pal: Palette;
+  /** Overall scale, wingspan and body multipliers. */
+  scale: number; span: number; body: number;
+  /** A third finger bone (a more articulated, bat-like wing). */
+  fingers3: boolean;
+  /** Bank into turns (roll poses) and a lit leading edge. */
+  bank: boolean; rim: boolean;
+}
+export const CLASSIC: DragonStyle = { pal: PAL, scale: 1, span: 1, body: 1, fingers3: false, bank: false, rim: false };
+
 type P3 = [number, number, number];
 interface Poly { pts: P3[]; part: Part }
 interface Line { a: P3; b: P3; part: Part; w: number }
@@ -47,16 +64,20 @@ const LINE_GLYPH = ['─', '╲', '│', '╱'].map(g);
 const RIDGE = g('▴');
 
 /** Wing outline for one side (s = +1 right, -1 left) in a given mode and flap angle. */
-function wing(s: number, mode: Mode, theta: number): { poly: P3[]; bones: Array<[P3, P3]> } {
+function wing(s: number, mode: Mode, theta: number, st: DragonStyle = CLASSIC): { poly: P3[]; bones: Array<[P3, P3]> } {
   // Base outline (extended): shoulder S, wrist W, tip T, finger tips F2/F3, trailing root R.
   let S: number[] = [1.1, 1.2], W = [3.2, 5.6], T = [-0.6, 12.6], F2 = [-5.6, 10.6], F3 = [-6.2, 6.6], R = [-3.3, 1.3];
+  if (st.span !== 1) { const k = st.span; W = [W[0], 1.2 + (W[1] - 1.2) * k]; T = [T[0] + 0.4, 1.2 + (T[1] - 1.2) * k]; F2 = [F2[0], 1.2 + (F2[1] - 1.2) * k]; F3 = [F3[0], 1.2 + (F3[1] - 1.2) * k]; }
+  let F1: number[] | null = st.fingers3 ? [(T[0] + F2[0]) / 2 - 0.9, (T[1] + F2[1]) / 2 + 0.3] : null;
   let zs = [0, 0, 0, 0, 0, 0];
   if (mode === Mode.Standing || mode === Mode.Lying) {
     const k = mode === Mode.Lying ? 0.5 : 1;
     S = [0.9, 1.1]; W = [1.3, 2.5]; T = [-3.9, 3.1]; F2 = [-4.3, 2.5]; F3 = [-3.4, 1.9]; R = [-2.3, 1.2];
     zs = [0.4, 2.2 * k, 1.1 * k, 0.9 * k, 0.7 * k, 0.4 * k];
   }
-  const pts0 = [S, W, T, F2, F3, R];
+  if (F1 && (mode === Mode.Standing || mode === Mode.Lying)) F1 = [(T[0] + F2[0]) / 2, (T[1] + F2[1]) / 2];
+  const pts0 = F1 ? [S, W, T, F2, F3, R, F1] : [S, W, T, F2, F3, R];
+  if (F1) zs.push((zs[2] + zs[3]) / 2);
   const out: P3[] = pts0.map((p, k) => {
     let [x, y] = p as [number, number];
     let z = zs[k];
@@ -73,18 +94,29 @@ function wing(s: number, mode: Mode, theta: number): { poly: P3[]; bones: Array<
     }
     return [x, y * s, z];
   });
-  const [Sp, Wp, Tp, F2p, F3p, Rp] = out;
+  const [Sp, Wp, Tp, F2p, F3p, Rp, F1p] = out;
   // Scalloped trailing edge: midpoints between finger tips pulled toward the wrist.
   const pull = (a: P3, b: P3, k: number): P3 => {
     const m: P3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
     return [m[0] + (Wp[0] - m[0]) * k, m[1] + (Wp[1] - m[1]) * k, m[2] + (Wp[2] - m[2]) * k];
   };
-  const poly: P3[] = [Sp, Wp, Tp, pull(Tp, F2p, 0.36), F2p, pull(F2p, F3p, 0.33), F3p, pull(F3p, Rp, 0.26), Rp];
   const folded = mode === Mode.Standing || mode === Mode.Lying;
+  if (F1p) {
+    const poly: P3[] = [Sp, Wp, Tp, pull(Tp, F1p, 0.3), F1p, pull(F1p, F2p, 0.32), F2p, pull(F2p, F3p, 0.33), F3p, pull(F3p, Rp, 0.26), Rp];
+    return { poly, bones: folded ? [[Sp, Wp], [Wp, Tp]] : [[Sp, Wp], [Wp, Tp], [Wp, F1p], [Wp, F2p], [Wp, F3p]] };
+  }
+  const poly: P3[] = [Sp, Wp, Tp, pull(Tp, F2p, 0.36), F2p, pull(F2p, F3p, 0.33), F3p, pull(F3p, Rp, 0.26), Rp];
   return { poly, bones: folded ? [[Sp, Wp], [Wp, Tp]] : [[Sp, Wp], [Wp, Tp], [Wp, F2p], [Wp, F3p]] };
 }
 
-function body(mode: Mode): { polys: Poly[]; lines: Line[] } {
+function body(mode: Mode, st: DragonStyle = CLASSIC): { polys: Poly[]; lines: Line[] } {
+  const r = classicBody(mode);
+  if (st.body === 1) return r;
+  const k = st.body, f = (p: P3): P3 => [p[0] * k, p[1] * (0.85 + k * 0.15), p[2]];
+  return { polys: r.polys.map((q) => ({ ...q, pts: q.pts.map(f) })), lines: r.lines.map((l) => ({ ...l, a: f(l.a), b: f(l.b) })) };
+}
+
+function classicBody(mode: Mode): { polys: Poly[]; lines: Line[] } {
   const zb = mode === Mode.Standing ? 1.2 : mode === Mode.Lying ? 0.35 : 0.6;
   const pts: P3[] = [];
   for (let k = 0; k < 16; k++) {
@@ -136,6 +168,7 @@ const shade = (c: RGB, k: number) => pack(c[0] * k, c[1] * k, c[2] * k);
 const mixc = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 export class DragonPoses {
+  constructor(readonly style: DragonStyle = CLASSIC) {}
   private cache = new Map<number, PoseCell[]>();
   private shadows = new Map<number, ShadowCell[]>();
   private hs = 0.75;
@@ -151,10 +184,12 @@ export class DragonPoses {
   static key(dir: number, mode: Mode, frame: number, size: number): number { return ((dir * 8 + mode) * 16 + frame) * 8 + size; }
   has(dir: number, mode: Mode, frame: number, size: number): boolean { return this.cache.has(DragonPoses.key(dir, mode, frame, size)); }
 
-  get(dir: number, mode: Mode, frame: number, size: number): PoseCell[] {
-    const key = DragonPoses.key(dir, mode, frame, size);
+  /** A pose; `bank` (-2..2) rolls the body into a turn (styles that bank only). */
+  get(dir: number, mode: Mode, frame: number, size: number, bank = 0): PoseCell[] {
+    const b = this.style.bank && (mode === Mode.Flight || mode === Mode.Glide) ? Math.max(-2, Math.min(2, Math.round(bank))) : 0;
+    const key = DragonPoses.key(dir, mode, frame, size) * 5 + b + 2;
     let p = this.cache.get(key);
-    if (!p) { p = this.build(dir, mode, frame, size, false) as PoseCell[]; this.cache.set(key, p); this.built++; }
+    if (!p) { p = this.build(dir, mode, frame, size, false, b) as PoseCell[]; this.cache.set(key, p); this.built++; }
     return p;
   }
 
@@ -167,12 +202,18 @@ export class DragonPoses {
     return p;
   }
 
-  private build(dir: number, mode: Mode, frame: number, size: number, flat: boolean): PoseCell[] | ShadowCell[] {
-    const h = (dir / DIRS) * Math.PI * 2, ch = Math.cos(h), sh = Math.sin(h), sc = SIZES[size], hs = flat ? 0 : this.hs;
+  private build(dir: number, mode: Mode, frame: number, size: number, flat: boolean, bank = 0): PoseCell[] | ShadowCell[] {
+    const st = this.style, PAL = st.pal;
+    const h = (dir / DIRS) * Math.PI * 2, ch = Math.cos(h), sh = Math.sin(h), sc = SIZES[size] * st.scale, hs = flat ? 0 : this.hs;
     const theta = FRAME_ANGLES[frame];
-    const proj = (p: P3): [number, number] => [(p[0] * ch - p[1] * sh) * sc, (p[0] * sh + p[1] * ch) * sc * ASPECT - p[2] * sc * hs];
-    const B = body(mode);
-    const wings = [wing(-1, mode, theta), wing(1, mode, theta)];
+    // Bank: roll about the body's long axis (the inside wing dips, the outside one rises).
+    const roll = bank * 0.21, cr = Math.cos(roll), sr = Math.sin(roll);
+    const proj = (p0: P3): [number, number] => {
+      const p: P3 = roll ? [p0[0], p0[1] * cr - p0[2] * sr, p0[1] * sr + p0[2] * cr] : p0;
+      return [(p[0] * ch - p[1] * sh) * sc, (p[0] * sh + p[1] * ch) * sc * ASPECT - p[2] * sc * hs];
+    };
+    const B = body(mode, st);
+    const wings = [wing(-1, mode, theta, st), wing(1, mode, theta, st)];
     // Projected shapes, in drawing priority (later wins).
     const polys: Array<{ xs: Float32Array; ys: Float32Array; part: Part }> = [];
     for (const wg of wings) {
@@ -263,7 +304,7 @@ export class DragonPoses {
         case Part.Bone: case Part.Arm: {
           // Finger bones and the leading edge: dark strokes, as in the silhouette of a bat wing.
           gl = c.part === Part.Arm && full ? SOLID : c.line ? lineGlyph(c.line.dx, c.line.dy) : QUAD[c.mask];
-          fg = c.part === Part.Arm ? shade(PAL.boneLit, light) : shade(PAL.bone, 1);
+          fg = c.part === Part.Arm ? shade(PAL.boneLit, light * (st.rim ? 1.45 : 1)) : shade(PAL.bone, st.rim ? 1.25 : 1);
           bg = shade(mixc(PAL.membrane, PAL.bone, 0.35), 0.8 * light);
           alpha = full ? 1 : 0;
           break;

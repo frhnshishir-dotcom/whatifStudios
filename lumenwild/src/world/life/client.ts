@@ -21,6 +21,7 @@ import type { Item } from '../rpg/items';
 import { SHOPS, CREATURE_COMBAT } from '../rpg/content';
 import { attackCooldown, count, weaponOf } from '../rpg/hero';
 import { Hud, type Tag } from '../rpg/hud';
+import { styleFor } from './dragonStyles';
 
 /**
  * The living world in the browser: the player avatar (WASD to walk, Shift to run, E to interact, F to watch the
@@ -443,7 +444,7 @@ export class LivingWorld {
       if (!pp) {
         const dragon = new Dragon(e.world, e.objects, e.water ? e.water.view : null, e.env as never, e.world.seed);
         dragon.e.name = d.name; dragon.e.autonomous = false; dragon.e.effects = false;
-        const layer = new DragonRenderer(dragon);
+        const layer = new DragonRenderer(dragon, styleFor(d.id));
         const layers = e.composer.layers, k = layers.indexOf(e.atmosphere);
         layers.splice(k < 0 ? layers.length : k, 0, layer);
         pp = { d: dragon, layer, last: [wx, wy] };

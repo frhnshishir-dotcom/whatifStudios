@@ -2,7 +2,7 @@ import type { SceneLayer } from '../render/Composer';
 import type { CellBuffer } from '../render/CellBuffer';
 import type { Camera } from '../world/Camera';
 import type { Dragon } from './Dragon';
-import { DragonPoses, DIRS, FRAME_ANGLES, Mode, PAL, ASPECT, SIZES, lineGlyph, type PoseCell } from './DragonPoses';
+import { DragonPoses, DIRS, FRAME_ANGLES, Mode, ASPECT, SIZES, CLASSIC, lineGlyph, type PoseCell, type DragonStyle, type Palette } from './DragonPoses';
 import { NECK_BASE, TAIL_BASE } from './DragonAnimation';
 import { DRAGON } from './DragonConfig';
 import { g } from '../render/glyphs';
@@ -31,7 +31,11 @@ function darken(c: number, k: number): number {
 export class DragonRenderer implements SceneLayer {
   readonly name = 'dragon';
   readonly dragon: Dragon;
-  readonly poses = new DragonPoses();
+  readonly poses: DragonPoses;
+  private readonly pal: Palette;
+  /** Smoothed bank (-2..2 levels) from the turn rate, for styles that bank. */
+  private bankS = 0;
+  private lastT = -1;
   visible = true;
   /** Apparent size level (0 = full size), with hysteresis so it doesn't flicker at thresholds. */
   sizeLevel = 0;
@@ -41,7 +45,7 @@ export class DragonRenderer implements SceneLayer {
   private worldY = 0;
   private pick = -1;
 
-  constructor(dragon: Dragon) { this.dragon = dragon; }
+  constructor(dragon: Dragon, style: DragonStyle = CLASSIC) { this.dragon = dragon; this.poses = new DragonPoses(style); this.pal = style.pal; }
 
   /** Apparent scale for an altitude above ground (smaller when higher). */
   static levelFor(alt: number, prev: number): number {
@@ -59,7 +63,7 @@ export class DragonRenderer implements SceneLayer {
     const x0 = Math.floor(cam.x), y0 = Math.floor(cam.y), hs = cam.heightScale;
     const gz = s.ground(e.x, e.y), alt = Math.max(0, e.z - gz);
     this.sizeLevel = DragonRenderer.levelFor(alt, this.sizeLevel);
-    const size = this.sizeLevel, sc = SIZES[size];
+    const size = this.sizeLevel, sc = SIZES[size] * this.poses.style.scale, PAL = this.pal;
     const st = e.state;
     const mode = st === 'SLEEPING' || st === 'RESTING' ? Mode.Lying : !e.airborne ? Mode.Standing : st === 'LANDING' ? Mode.Landing
       : e.wingAmp < 0.12 ? Mode.Glide : Mode.Flight;
@@ -105,7 +109,12 @@ export class DragonRenderer implements SceneLayer {
     drawn += this.put(Math.floor(ax), Math.floor(ay), TIP, shadeP(PAL.membraneLit, 1.3), 0, 0, 0);
 
     // Body and wings: the cached pose for this heading, wing frame and size (built on first use).
-    const pose: PoseCell[] = this.poses.get(dir, mode, frame, size);
+    // Bank into turns: lean toward the turn's inside, eased so it rolls in and out smoothly.
+    const dt = this.lastT < 0 ? 0 : Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
+    const wantBank = e.airborne && (mode === Mode.Flight || mode === Mode.Glide) ? Math.max(-2, Math.min(2, e.angVel * 2.2)) : 0;
+    this.bankS += (wantBank - this.bankS) * Math.min(1, dt * 3);
+    const pose: PoseCell[] = this.poses.get(dir, mode, frame, size, this.bankS);
     const pc = Math.floor(col(e.x)), pr = Math.floor(row(e.y, e.z));
     // The dorsal ridge glows faintly (a hint of magic, and visible at night).
     for (const c of pose) drawn += this.put(pc + c.dx, pr + c.dy, c.g, c.fg, c.bg, c.alpha, c.part === 4 ? 150 : 0);
@@ -155,7 +164,7 @@ export class DragonRenderer implements SceneLayer {
       const top = py < ay + vy * u - r * 0.35;
       const gl = thin ? lineGlyph(vx, vy) : top && lit > 1 ? SHEEN : SOLID;
       const fade = k >= 0 ? 1 - (0.15 * k) / Math.max(1, n) : 1;
-      const fg = shadeP(top ? PAL.scaleLit : PAL.scale, lit * fade * (top ? 0.8 : 1));
+      const PAL = this.pal, fg = shadeP(top ? PAL.scaleLit : PAL.scale, lit * fade * (top ? 0.8 : 1));
       drawn += this.put(x, y, gl, fg, shadeP(PAL.scale, lit * 0.8), thin ? 0 : 1, 0);
       void t;
     }
@@ -164,7 +173,7 @@ export class DragonRenderer implements SceneLayer {
 
   /** Head: wedge snout, jaw, swept horns and amber eyes, oriented along angle a. */
   private head(cx: number, cy: number, a: number, sc: number, asleep: boolean): number {
-    const ca = Math.cos(a), sa = Math.sin(a);
+    const ca = Math.cos(a), sa = Math.sin(a), PAL = this.pal;
     const P = (x: number, y: number): [number, number] => [cx + (x * ca - y * sa) * sc, cy + (x * sa + y * ca) * sc * ASPECT];
     const poly = [P(1.8, 0), P(1.0, 0.55), P(-0.2, 0.75), P(-0.8, 0.45), P(-0.8, -0.45), P(-0.2, -0.75), P(1.0, -0.55)];
     let drawn = 0;
