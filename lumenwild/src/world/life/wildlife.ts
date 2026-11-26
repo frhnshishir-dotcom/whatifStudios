@@ -230,7 +230,7 @@ export class Wildlife {
     c.stT += dt;
     if (t >= c.next || c.st === 'idle') this.decide(c, ctx);
     // Tired animals slow down; so do wounded ones (a hunter can run down a badly hurt deer or wolf).
-    const run = def.run * (c.stamina > 0.15 ? 1 : 0.45) * (0.5 + 0.5 * Math.min(1, c.hp / CREATURE_COMBAT[c.sp].hp));
+    const run = def.run * (c.stamina > 0.15 ? 1 : 0.45) * (0.3 + 0.7 * Math.min(1, c.hp / CREATURE_COMBAT[c.sp].hp));
     switch (c.st) {
       case 'flee': {
         const away = Math.atan2(c.y - c.ty, c.x - c.tx);

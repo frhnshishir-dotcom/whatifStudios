@@ -1,5 +1,34 @@
 # Lumenwild changelog
 
+## Phase 5: playable RPG systems (2026-11-26)
+- **Character:** levels, attribute points (Strength, Agility, Vitality), health and stamina, 12 skills that improve
+  with use, statistics; saved with the continent and on the server.
+- **Combat** (Space attack, Q dodge, H eat) with the existing creature AI:
+  - creature health and a fight state; wolves and bears fight back, packs join in, wolves hunt at night;
+  - timid animals flee, and wounded ones slow down;
+  - criticals, armour, dodge invulnerability;
+  - death and respawn in the home village; cave and ruin guardians; creatures respawn.
+- **Items:** 46, with rarity and rolled properties; 6 equipment slots and a 24-slot pack; loot bags with kill
+  ownership; use, equip, drop, sell, trade.
+- **Gathering and crafting:** trees, rocks, mushrooms and finds; 23 recipes at forge, workbench, hearth and
+  herbalist stations.
+- **Economy:** villager shops (11 trades), pricing by value, demand and trading skill; player-to-player trade.
+- **Quests** from villagers: bounty, gather, craft, explore, dragon sighting, delivery. Discovery rewards and quest
+  progress are saved.
+- **Multiplayer** (protocol 2):
+  - the server runs the rules; commands and routed events; character sync;
+  - creature and player health in snapshots; loot sync;
+  - client interpolation; move validation against walls and water, with corrections;
+  - sessions keep characters while players are away; flood limit;
+  - load test with 16 bots.
+- **Dragons:** five distinct identities (palette and size), refined articulated wings, banking. The Valley's dragon
+  is unchanged (golden images match).
+- **HUD:** health, stamina and XP bars, damage numbers, E prompt, health bars, name tags. **Panel tabs:** Hero,
+  Pack, Quests, Craft, Shop, Trade. Game keys no longer trigger editor tools; F no longer toggles fullscreen during
+  play.
+- Docs: `docs/world/RPG.md`, `rpg-*.jpg`. Tests: `tests/rpg.test.ts`, `tests/load.test.ts`, the multiplayer combat
+  and trade test, `e2e/m19-rpg.spec.ts`. Totals: 202 unit and 65 browser tests passing.
+
 ## Phase 4: living world and multiplayer foundation (2026-11-26)
 - **Traveller:** walk (WASD), run (Shift, uses stamina) and interact (E); F watches the nearest dragon. The panel shows
   the pack, who is nearby, the E prompt, the dragons and a journal.

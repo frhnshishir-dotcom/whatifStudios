@@ -17,7 +17,8 @@ npm run server       # local world server for online play (ws://localhost:8787),
 ```
 
 The living world (traveller, wildlife, villagers, dragons, exploration) and the multiplayer foundation are described
-in `docs/world/LIVING_WORLD.md`.
+in `docs/world/LIVING_WORLD.md`; the RPG systems (character, combat, items, crafting, shops, quests, online play) in
+`docs/world/RPG.md`.
 
 Needs Node 20.19+ or 22.12+.
 

@@ -494,14 +494,23 @@ export class LivingWorld {
   interaction(): Interaction | null {
     const p = this.player, s = this.session, e = this.engine, S = s.win.S, [ox, oy] = s.win.origin;
     if (p.hero.dead >= 0) return null;
-    let vb: Villager | null = null, vd = 2.5;
-    for (const v of this.sim.villages.people.values()) { if (!v.out) continue; const d = Math.hypot(v.x - p.x, v.y - p.y); if (d < vd) { vd = d; vb = v; } }
+    // Standing on loot: pick it up (before anyone nearby).
+    let lb: GroundLoot | null = null, ld = 2.4;
+    for (const g of this.sim.rpg.loot.values()) { const d = Math.hypot(g.x - p.x, g.y - p.y); if (d < ld) { ld = d; lb = g; } }
+    if (lb && ld < 1.5) return { label: `Pick up: ${lb.label}`, cmd: { t: 'pickup', id: lb.id } };
+    // In a crowd, the one waiting for you ("?") comes first, then those with work ("!"), then shops, then the nearest.
+    let vb: Villager | null = null, vs = Infinity;
+    for (const v of this.sim.villages.people.values()) {
+      if (!v.out) continue;
+      const d = Math.hypot(v.x - p.x, v.y - p.y);
+      if (d > 2.5) continue;
+      const m = this.markers.get(v.id), score = d - (m === '?' ? 3 : m === '!' ? 1.5 : m === '◆' ? 0.5 : 0);
+      if (score < vs) { vs = score; vb = v; }
+    }
     if (vb) {
       const m = this.markers.get(vb.id), what = m === '!' ? ' (has work)' : m === '?' ? ' (quest)' : SHOPS[vb.tag] ? ' (shop)' : '';
       return { label: `Talk to ${vb.name}${what}`, cmd: { t: 'talk', vid: vb.id } };
     }
-    let lb: GroundLoot | null = null, ld = 2.4;
-    for (const g of this.sim.rpg.loot.values()) { const d = Math.hypot(g.x - p.x, g.y - p.y); if (d < ld) { ld = d; lb = g; } }
     if (lb) return { label: `Pick up: ${lb.label}`, cmd: { t: 'pickup', id: lb.id } };
     const [wx, wy] = s.win.toWindow(p.x, p.y);
     const near = e.objects.inRect(Math.floor(wx) - 6, Math.floor(wy) - 6, Math.floor(wx) + 6, Math.floor(wy) + 6, []);
