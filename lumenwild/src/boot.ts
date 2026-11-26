@@ -15,6 +15,7 @@ import { RegionCache, WorldWindow } from './world/stream';
 import { ContinentSession } from './world/session';
 import type { ContinentEdits } from './world/edits';
 import { LivingWorld } from './world/life/client';
+import { NetClient } from './world/net/NetClient';
 import type { MapPt } from './world/schema';
 
 /** Load the bundled fonts for every glyph the atlas needs (unicode-range subsets load on demand). */
@@ -51,7 +52,7 @@ export const RIVER_RATE = 5;
  * Continent mode: the world blueprint, seamless terrain and a 3 x 3 region window streamed around the view, starting
  * at Lumenfall Village (or `at`, map units). The valley scenes are untouched.
  */
-export function createContinentEngine(opts: { worker?: boolean; at?: MapPt; edits?: ContinentEdits; life?: boolean } = {}): { engine: Engine; session: ContinentSession; life: LivingWorld | null } {
+export function createContinentEngine(opts: { worker?: boolean; at?: MapPt; edits?: ContinentEdits; life?: boolean; server?: string; name?: string } = {}): { engine: Engine; session: ContinentSession; life: LivingWorld | null } {
   const share = canShare() && opts.worker !== false;
   const bp = buildBlueprint(WORLD);
   const terrain = new ContinentTerrain(bp);
@@ -75,6 +76,7 @@ export function createContinentEngine(opts: { worker?: boolean; at?: MapPt; edit
   // The living world: the traveller, wildlife, villagers and dragons (off for streaming-only tests).
   const life = opts.life === false ? null : new LivingWorld(engine, session);
   session.life = life;
+  if (life && opts.server) life.net = new NetClient(life, opts.server, opts.name);
   return { engine, session, life };
 }
 
@@ -82,7 +84,7 @@ export function createContinentEngine(opts: { worker?: boolean; at?: MapPt; edit
  * scene: 'world' (generated vale), 'terrain' (bare heightmap, M1 test), 'watertest' (deterministic water test) or
  * 'continent' (the streamed continent).
  */
-export function createEngine(seed: number, scene = 'world', opts: { worker?: boolean; at?: MapPt } = {}): Engine {
+export function createEngine(seed: number, scene = 'world', opts: { worker?: boolean; at?: MapPt; server?: string; name?: string } = {}): Engine {
   if (scene === 'continent') return createContinentEngine(opts).engine;
   const share = canShare() && opts.worker !== false;
   if (scene === 'world') {

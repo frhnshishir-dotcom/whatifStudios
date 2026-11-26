@@ -12,7 +12,12 @@ npm run dev          # http://localhost:5180
 npm run build && npm run preview   # production build at http://localhost:4180
 npm test             # unit tests (Vitest)
 npm run e2e          # browser tests (Playwright; first time on a new machine: npx playwright install chromium)
+npm run server       # local world server for online play (ws://localhost:8787), then open
+                     # http://localhost:5180/?scene=continent&server=ws://localhost:8787&name=Ada
 ```
+
+The living world (traveller, wildlife, villagers, dragons, exploration) and the multiplayer foundation are described
+in `docs/world/LIVING_WORLD.md`.
 
 Needs Node 20.19+ or 22.12+.
 

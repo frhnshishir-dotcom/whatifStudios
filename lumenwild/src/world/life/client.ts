@@ -3,7 +3,7 @@ import type { SceneLayer } from '../../engine/render/Composer';
 import type { CellBuffer } from '../../engine/render/CellBuffer';
 import type { Camera } from '../../engine/world/Camera';
 import { g } from '../../engine/render/glyphs';
-import { hex, pack, type RGB } from '../../engine/core/color';
+import { hex, pack, unpack, type RGB } from '../../engine/core/color';
 import { Dragon } from '../../engine/dragon/Dragon';
 import { DragonRenderer } from '../../engine/dragon/DragonRenderer';
 import { animate } from '../../engine/dragon/DragonAnimation';
@@ -15,6 +15,7 @@ import { LifeSim, type Player, type PlayerInput } from './LifeSim';
 import type { Creature } from './wildlife';
 import type { Villager } from './villagers';
 import type { DragonAgent, DState } from './dragons';
+import type { NetClient } from '../net/NetClient';
 
 /**
  * The living world in the browser: the player avatar (WASD to walk, Shift to run, E to interact, F to watch the
@@ -68,8 +69,9 @@ const C = (s: string) => hex(s);
 const P = (c: RGB, k = 1) => pack(c[0] * k, c[1] * k, c[2] * k);
 /** Colours by species, villager job group and player. */
 const COL: Record<string, RGB> = {
-  deer: C('#a8743c'), deerHead: C('#d9b37a'), wolf: C('#8d9199'), bear: C('#5a3a22'), fox: C('#e0742a'), foxTip: C('#f4efe6'),
-  bird0: C('#e8e2d0'), bird1: C('#4a3e36'), bird2: C('#c94a3a'), dead: C('#7a2222'), alert: C('#ffb347'), sleep: C('#b8c6ff'),
+  deer: C('#b07a3e'), deerLeg: C('#6e4a26'), deerHead: C('#e2bd84'), wolf: C('#a3a7ae'), wolfLeg: C('#5e6168'), wolfHead: C('#d4d6da'),
+  bear: C('#7a4e2c'), bearLeg: C('#4a2e1a'), bearHead: C('#b08a5a'), fox: C('#ff7a2a'), foxLeg: C('#8a3a14'), foxTip: C('#fff4e6'),
+  bird0: C('#f4eedc'), bird1: C('#2e2620'), bird2: C('#e0503c'), dead: C('#7a2222'), alert: C('#ffb347'), sleep: C('#b8c6ff'),
   skin: C('#e8c39e'), player: C('#5cc8ff'), playerHead: C('#ffe27a'), say: C('#ffffff'),
 };
 const ROLE: Record<string, RGB> = {
@@ -78,38 +80,66 @@ const ROLE: Record<string, RGB> = {
 };
 const TOOL: Record<string, [string, RGB]> = { hoe: ['/', C('#c9a35a')], fish: ['⌒', C('#cfe0ff')], forge: ['✶', C('#ff8a3a')], trade: ['◆', C('#f2c94c')], chop: ['\\', C('#c9a35a')], mine: ['^', C('#9aa')], gather: ['❀', C('#9fe07a')] };
 
-interface Cell { dx: number; up: number; ch: string; fg: RGB; bg?: RGB }
+interface Cell { dx: number; up: number; ch: string; fg: RGB }
+
+/** Left-right mirror of block and line glyphs (sprites are drawn facing east). */
+const MIRROR: Record<string, string> = { '▟': '▙', '▙': '▟', '▗': '▖', '▖': '▗', '▜': '▛', '▛': '▜', '▘': '▝', '▝': '▘', '▌': '▐', '▐': '▌', '╱': '╲', '╲': '╱', '◖': '◗', '◗': '◖' };
+
+/**
+ * A creature sprite: rows from the ground up, each a string of glyphs (facing east) with a matching string of colour
+ * keys (b body, d legs/dark, h head/light, t tail tip). Mirrored when the animal faces west; anchored on its front.
+ */
+function sprite(out: Cell[], rows: Array<[string, string]>, f: number, pal: Record<string, RGB>): void {
+  for (let up = 0; up < rows.length; up++) {
+    const ch = [...rows[up][0]], key = rows[up][1], n = ch.length;
+    for (let i = 0; i < n; i++) {
+      if (ch[i] === ' ') continue;
+      out.push({ dx: f > 0 ? i - (n - 1) : (n - 1) - i, up, ch: f > 0 ? ch[i] : MIRROR[ch[i]] ?? ch[i], fg: pal[key[i]] });
+    }
+  }
+}
+
+const PAL = {
+  deer: { b: COL.deer, d: COL.deerLeg, h: COL.deerHead },
+  wolf: { b: COL.wolf, d: COL.wolfLeg, h: COL.wolfHead },
+  bear: { b: COL.bear, d: COL.bearLeg, h: COL.bearHead },
+  fox: { b: COL.fox, d: COL.foxLeg, h: COL.fox, t: COL.foxTip },
+};
 
 function creatureCells(c: Creature, t: number): Cell[] {
-  const f = Math.cos(c.h) >= 0 ? 1 : -1, back = f > 0 ? 0 : 1, front = f > 0 ? 1 : 0;
+  const f = Math.cos(c.h) >= 0 ? 1 : -1;
   if (!c.alive) return [{ dx: 0, up: 0, ch: '▬', fg: COL.dead }];
   const out: Cell[] = [];
-  const asleep = c.st === 'sleep' || c.st === 'rest';
+  const asleep = c.st === 'sleep' || c.st === 'rest', moving = c.st === 'flee' || c.st === 'hunt' || c.st === 'charge' || c.st === 'wander' || c.st === 'follow';
+  const stride = moving && Math.sin(t * (c.st === 'flee' || c.st === 'hunt' || c.st === 'charge' ? 16 : 7) + c.look * 9) > 0;
+  const legs = (a: number, b: number, w: number) => { const r = [...' '.repeat(w)]; r[a] = stride ? '╱' : '│'; r[b] = stride ? '╲' : '│'; return r.join(''); };
   switch (c.sp) {
     case 'deer':
-      if (asleep) out.push({ dx: 0, up: 0, ch: '▬', fg: COL.deer }, { dx: 1, up: 0, ch: '▬', fg: COL.deer });
-      else out.push({ dx: back, up: 0, ch: '▄', fg: COL.deer }, { dx: front, up: 0, ch: '▄', fg: COL.deer }, { dx: front, up: 1, ch: c.st === 'graze' ? '▖' : c.male ? 'Ψ' : '^', fg: COL.deerHead });
+      if (asleep) sprite(out, [['▗▄▟', 'bbb'], ['  ▴', '  h']], f, PAL.deer);
+      else if (c.st === 'graze' || c.st === 'drink') sprite(out, [[legs(0, 2, 3) + '•', 'd d h'], ['▗▄▜ ', 'bbb ']], f, PAL.deer);
+      else sprite(out, [[legs(0, 2, 3), 'd d'], ['▗▄▟', 'bbb'], ['  ' + (c.male ? 'Ψ' : '▴'), '  h']], f, PAL.deer);
       break;
     case 'wolf':
-      out.push({ dx: back, up: 0, ch: asleep ? '▬' : '▄', fg: COL.wolf }, { dx: front, up: 0, ch: asleep ? '▬' : '▄', fg: COL.wolf });
-      if (!asleep) out.push({ dx: front, up: 1, ch: '▴', fg: COL.wolf }, { dx: back - f, up: 0, ch: '~', fg: COL.wolf });
+      if (asleep) sprite(out, [['▗▄▄▖', 'bbbb']], f, PAL.wolf);
+      else sprite(out, [[' ' + legs(0, 2, 3), ' d d'], ['╱▄▄▟', 'bbbb'], ['   ▴', '   h']], f, PAL.wolf);
       break;
     case 'bear':
-      out.push({ dx: back, up: 0, ch: '▓', fg: COL.bear, bg: P(COL.bear, 0.6) as unknown as RGB }, { dx: front, up: 0, ch: '▓', fg: COL.bear });
-      if (!asleep) out.push({ dx: back, up: 1, ch: '▄', fg: COL.bear }, { dx: front, up: 1, ch: '●', fg: COL.bear });
+      if (asleep) sprite(out, [['▟██▖', 'bbbh']], f, PAL.bear);
+      else sprite(out, [[stride ? '▐ ▌ ' : '▐ ▐ ', 'd d '], ['▟██●', 'bbbh']], f, PAL.bear);
       break;
     case 'fox':
-      out.push({ dx: 0, up: 0, ch: asleep ? '◖' : '▄', fg: COL.fox });
-      if (!asleep) out.push({ dx: 0, up: 1, ch: '▴', fg: COL.fox }, { dx: -f, up: 0, ch: '~', fg: COL.foxTip });
+      if (asleep) sprite(out, [['◖▄▖', 'tbb']], f, PAL.fox);
+      else sprite(out, [['╱▄▟', 'tbb'], ['  ▴', '  h']], f, PAL.fox);
       break;
     case 'bird': {
       const col = c.look < 0.5 ? COL.bird0 : c.look < 0.85 ? COL.bird1 : COL.bird2;
-      out.push({ dx: 0, up: 0, ch: c.alt > 0.5 ? (Math.sin(t * 9 + c.look * 20) > 0 ? 'v' : '^') : '·', fg: col });
+      out.push({ dx: 0, up: 0, ch: c.alt > 0.5 ? (Math.sin(t * 9 + c.look * 20) > 0 ? 'v' : '⌒') : '•', fg: col });
       break;
     }
   }
-  if (c.alert > 0) out.push({ dx: 0, up: c.sp === 'bird' ? 1 : 2, ch: '!', fg: COL.alert });
-  else if (c.st === 'sleep' && c.sp !== 'bird') out.push({ dx: 1, up: 1, ch: '°', fg: COL.sleep });
+  const top = c.sp === 'bird' ? 1 : c.sp === 'bear' ? 2 : 3;
+  if (c.alert > 0) out.push({ dx: 0, up: top, ch: '!', fg: COL.alert });
+  else if (c.st === 'sleep' && c.sp !== 'bird') out.push({ dx: 0, up: top - 1, ch: '°', fg: COL.sleep });
   return out;
 }
 
@@ -121,9 +151,10 @@ function villagerCells(v: Villager, t: number): Cell[] {
   return out;
 }
 
+const OTHER = C('#ff9f4a'), OTHER_HEAD = C('#ffffff');
 function playerCells(p: Player, t: number): Cell[] {
-  const step = p.v > 0.1 && Math.sin(t * (p.running ? 14 : 9)) > 0;
-  return [{ dx: 0, up: 0, ch: step ? '△' : '▲', fg: COL.player }, { dx: 0, up: 1, ch: '@', fg: COL.playerHead }];
+  const step = p.v > 0.1 && Math.sin(t * (p.running ? 14 : 9)) > 0, me = p.id === 'local';
+  return [{ dx: 0, up: 0, ch: step ? '△' : '▲', fg: me ? COL.player : OTHER }, { dx: 0, up: 1, ch: '@', fg: me ? COL.playerHead : OTHER_HEAD }];
 }
 
 /** Draws creatures, villagers and players over the terrain (occluded by nearer terrain like objects are). */
@@ -135,7 +166,7 @@ export class LifeLayer implements SceneLayer {
     const lw = this.lw, s = lw.session, e = lw.engine, w = e.world, S = s.win.S, ox = s.win.origin[0] * S, oy = s.win.origin[1] * S;
     const x0 = Math.floor(cam.x), y0 = Math.floor(cam.y), hs = cam.heightScale, cols = buf.cols, rows = buf.rows;
     let drawn = 0;
-    const draw = (x: number, y: number, alt: number, cells: Cell[]) => {
+    const draw = (x: number, y: number, alt: number, cells: Cell[], backing = false) => {
       const wx = Math.floor(x - ox), wy = Math.floor(y - oy);
       if (wx < x0 - 4 || wx > x0 + cols + 4 || wy < y0 - 8 || wy > y0 + rows + 60) return;
       const z = (lw.q.height(x, y) - s.win.datum) + alt;
@@ -146,7 +177,7 @@ export class LifeLayer implements SceneLayer {
         if (alt < 1 && buf.depth[k] > wy + 0.85) continue;
         buf.glyph[k] = g(c.ch);
         buf.fg[k] = P(c.fg);
-        if (c.bg) buf.bg[k] = c.bg as unknown as number;
+        if (backing) { const [r, g2, b] = unpack(buf.bg[k]); buf.bg[k] = pack(r * 0.62, g2 * 0.62, b * 0.62); }
         buf.depth[k] = wy + 0.75;
         buf.kind[k] = 5;
         buf.pick[k] = wy * w.w + wx;
@@ -154,7 +185,7 @@ export class LifeLayer implements SceneLayer {
       }
     };
     const sim = lw.sim;
-    for (const c of sim.wildlife.creatures.values()) if (c.tier === 0 && c.st !== 'dead') draw(c.x, c.y, c.alt, creatureCells(c, t));
+    for (const c of sim.wildlife.creatures.values()) if (c.tier === 0 && c.st !== 'dead') draw(c.x, c.y, c.alt, creatureCells(c, t), c.alt < 1);
     for (const v of sim.villages.people.values()) if (v.out) draw(v.x, v.y, 0, villagerCells(v, t));
     for (const p of sim.players.values()) draw(p.x, p.y, 0, playerCells(p, t));
     this.drawn = drawn;
@@ -186,6 +217,8 @@ export class LivingWorld {
   readonly stats = { frameMs: 0, simMs: 0, puppets: 0 };
   /** External input (tests, scripted demos): overrides the keyboard while set. */
   input: PlayerInput | null = null;
+  /** Online play: the world server's connection (the server simulates the living world). */
+  net: NetClient | null = null;
 
   constructor(readonly engine: Engine, readonly session: ContinentSession) {
     this.q = new WindowQuery(engine, session);
@@ -238,7 +271,8 @@ export class LivingWorld {
       p.x = c[0]; p.y = c[1];
     } else if (!e.clock.paused) this.sim.movePlayer(p, this.keyInput(), dt);
     const ts = performance.now();
-    this.sim.update(simDt, { hour: e.env.time, rain: e.env.rain });
+    if (this.net) this.net.frame(dt);
+    else this.sim.update(simDt, { hour: e.env.time, rain: e.env.rain });
     this.stats.simMs = performance.now() - ts;
     // Camera: keep the followed thing in the middle (the window streams after it).
     const target = this.follow === 'player' ? p : this.follow ? this.sim.dragons.dragons.find((d) => d.id === this.follow) : null;
@@ -337,6 +371,7 @@ export class LivingWorld {
       const what = o.variant === 'chest' ? 'treasure chest' : o.variant === 'herbs' ? 'herbs' : o.variant === 'ore' ? 'ore' : 'relic';
       return { label: `Take the ${what}`, run: () => {
         e.objects.remove(o.id);
+        if (this.net) { this.net.take(o.variant, o.x + s.win.origin[0] * s.win.S, o.y + s.win.origin[1] * s.win.S); return `Reaching for the ${what}…`; }
         const gain: Record<string, [string, number]> = { chest: ['coins', 20 + Math.floor(Math.random() * 30)], herbs: ['herbs', 1], ore: ['ore', 1], relic: ['relics', 1] };
         const [item, n] = gain[o.variant] ?? ['relics', 1];
         p.inv[item] = (p.inv[item] ?? 0) + n;

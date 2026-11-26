@@ -1,5 +1,43 @@
 # Lumenwild changelog
 
+## Phase 4: living world and multiplayer foundation (2026-11-26)
+- **Traveller:** walk (WASD), run (Shift, uses stamina) and interact (E); F watches the nearest dragon. The panel shows
+  the pack, who is nearby, the E prompt, the dragons and a journal.
+- **Wildlife** (deer, wolves, bears, foxes, birds):
+  - habitats and deterministic spawning;
+  - needs (hunger, thirst, energy, stamina), grazing, drinking, sleeping;
+  - herds and packs;
+  - predators hunting prey, fleeing, territorial charges;
+  - simulation by distance: detailed at 10 Hz, coarse at 1 Hz, dormant beyond.
+
+  The sprites are 2–4 cell silhouettes on darkened ground, readable among grass and flowers.
+- **Villagers** in all six villages:
+  - generated from the buildings, each with a home, a job and a workplace;
+  - a daily schedule along the lanes: work, gatherings and chats, shelter from rain;
+  - flight from dragons and predators.
+- **Five autonomous dragons:**
+  - steered 3D flight with terrain clearance, and at least 450 m above ground near villages;
+  - take off, patrol, land, rest and sleep;
+  - drink, hunt real wildlife, defend the nest, circle travellers, migrate along the blueprint routes;
+  - drawn with the existing dragon renderer.
+- **Exploration:** watchtowers that reveal 3 km of the map, ruins, caves, standing stones, and finds (chests, herbs, ore,
+  relics). The living world (players, explored map, wildlife, dragons, journal) is saved in the continent save.
+- **Multiplayer foundation (local, no cost):**
+  - `npm run server` starts an authoritative Node world server (WebSocket, no new dependencies) running the same
+    simulation;
+  - 5 Hz snapshots of what is near each client;
+  - session tokens with reconnection;
+  - speed validation and first-come finds;
+  - shared region edits;
+  - JSON persistence.
+
+  Join with `?server=ws://localhost:8787&name=X`. Tested with three Node clients and two browser clients on one
+  server.
+- Not yet: player progression, combat, crafting, economy. Not measured on the target laptop.
+- The Valley is unchanged. So are the biome transitions (baa9516), continent saves and regional edits.
+- Docs: `docs/world/LIVING_WORLD.md` and the `living-*.jpg` screenshots. Tests: `tests/life.test.ts` (11),
+  `tests/multiplayer.test.ts`, `e2e/m17-multiplayer.spec.ts`, `e2e/m18-living-world.spec.ts`.
+
 ## Phase 3b: villages and road bridges at 1 m (2026-11-25)
 - Six villages are built from `world/settlements/settlements.json` (each with its `culture`), using the draft village
   engine's cultures and programmes:

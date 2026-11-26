@@ -102,6 +102,11 @@ export class LifeSim {
     if (this.log.length > 60) this.log.shift();
   }
 
+  /** Make the people of the villages near these players (each village once; the same people on every machine). */
+  populateVillages(focus: Array<{ x: number; y: number }>): void {
+    for (const v of this.villageInfo) if (focus.some((p) => Math.hypot(p.x - v.x, p.y - v.y) < 2500)) this.villages.populate(this.terrain.village(v.id)!, this.q, this.clock);
+  }
+
   /** Move a player by input for dt seconds (walk, run with stamina, wade slowly, blocked by deep water and walls). */
   movePlayer(p: Player, inp: PlayerInput, dt: number): void {
     const want = Math.hypot(inp.dx, inp.dy) > 0.01;
@@ -126,7 +131,7 @@ export class LifeSim {
     if (this.clock.t - this.lastPopulate > 2) {
       this.lastPopulate = this.clock.t;
       this.wildlife.populate(focus, this.wctx);
-      for (const v of this.villageInfo) if (focus.some((p) => Math.hypot(p.x - v.x, p.y - v.y) < 2500)) this.villages.populate(this.terrain.village(v.id)!, this.q, this.clock);
+      this.populateVillages(focus);
     }
     this.acc += dt;
     const TICK = 0.1;
