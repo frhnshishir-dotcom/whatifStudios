@@ -3,6 +3,8 @@ import { getEngine } from '../engineRef';
 import { useUI } from '../store';
 import type { ContinentSession } from '../../world/session';
 import type { LivingWorld } from '../../world/life/client';
+import { RpgPanel } from './RpgPanel';
+import { itemName } from '../../world/rpg/items';
 
 const COMPASS = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
 const bearing = (dx: number, dy: number) => COMPASS[((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8];
@@ -13,12 +15,12 @@ function LifeSection({ lw }: { lw: LivingWorld }) {
   const near = sim.around(p.x, p.y, 120);
   const count = (k: string) => near.filter((a) => a.alive && (a.kind === 'creature' ? a.tag === k : a.kind === k)).length;
   const kinds = ['villager', 'deer', 'wolf', 'bear', 'fox', 'bird'].map((k) => [k, count(k)] as const).filter(([, n]) => n > 0);
-  const inv = Object.entries(p.inv).filter(([, n]) => n > 0);
+  const inv = p.hero.inv.map((it) => (it.n > 1 ? `${it.n} ${itemName(it).toLowerCase()}` : itemName(it)));
   return (
     <div data-testid="life-panel" style={{ marginTop: 8 }}>
       <dl className="kv">
         <dt>Stamina</dt><dd><span style={{ display: 'inline-block', width: 80, height: 6, background: '#333', verticalAlign: 'middle' }}><span style={{ display: 'block', width: `${Math.round(p.stamina * 100)}%`, height: 6, background: p.running ? '#ffb347' : '#5cc8ff' }} /></span>{p.running ? ' running' : ''}</dd>
-        <dt>Pack</dt><dd data-testid="life-inventory">{inv.length ? inv.map(([k, n]) => `${n} ${k}`).join(', ') : 'empty'}</dd>
+        <dt>Pack</dt><dd data-testid="life-inventory">{p.hero.coins} coins{inv.length ? `, ${inv.join(', ')}` : ''}</dd>
         <dt>Nearby</dt><dd data-testid="life-nearby">{kinds.length ? kinds.map(([k, n]) => `${n} ${k}${n > 1 ? 's' : ''}`).join(', ') : 'nobody'}</dd>
       </dl>
       {it && <p className="small" data-testid="life-prompt"><b>E</b> {it.label}</p>}
@@ -40,7 +42,7 @@ function LifeSection({ lw }: { lw: LivingWorld }) {
         <summary className="small">Journal</summary>
         <ul className="small muted" data-testid="life-journal" style={{ margin: '4px 0', paddingLeft: 16 }}>{sim.log.slice(-6).reverse().map((l, k) => <li key={k}>{l.text}</li>)}</ul>
       </details>
-      <p className="muted small" style={{ marginTop: 4 }}>WASD walk · Shift run · E interact · F watch the nearest dragon</p>
+      <p className="muted small" style={{ marginTop: 4 }}>WASD walk · Shift run · Space attack · Q dodge · H eat · E interact · F watch a dragon · I pack · C hero · J quests · K craft</p>
     </div>
   );
 }
@@ -88,7 +90,7 @@ export function ContinentPanel() {
         </div>
       </div>
       {t && <p className="muted small" data-testid="travel-progress" style={{ marginTop: 6 }}>To {session.travelTo}: {((t.length - t.progress) / 1000).toFixed(1)} km left, {fmtTime((t.length - t.progress) / t.speed)}</p>}
-      {session.life && <LifeSection lw={session.life as unknown as LivingWorld} />}
+      {session.life && <RpgPanel lw={session.life as unknown as LivingWorld} world={<LifeSection lw={session.life as unknown as LivingWorld} />} />}
       <p className="muted small" style={{ marginTop: 6 }} data-testid="stream-stats">
         Window 768 × 768 m · {session.stats.shifts} moves (last {session.stats.lastShiftMs.toFixed(0)} ms) · {session.cache.size} regions cached · slowest region {session.cache.stats.maxMs.toFixed(0)} ms
       </p>

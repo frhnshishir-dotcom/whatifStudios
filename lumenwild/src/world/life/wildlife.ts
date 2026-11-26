@@ -1,4 +1,5 @@
 import { type Agent, type LifeClock, type TerrainQuery, SpatialHash, rngOf, hashOf, inHours, walkToward } from './core';
+import { CREATURE_COMBAT } from '../rpg/content';
 
 /**
  * Autonomous wildlife: deer, wolves, bears, foxes and birds. Each creature has a persistent identity (spawned
@@ -10,7 +11,7 @@ import { type Agent, type LifeClock, type TerrainQuery, SpatialHash, rngOf, hash
  */
 
 export type Species = 'deer' | 'wolf' | 'bear' | 'fox' | 'bird';
-export type CState = 'idle' | 'wander' | 'graze' | 'drink' | 'rest' | 'sleep' | 'flee' | 'hunt' | 'eat' | 'charge' | 'follow' | 'fly' | 'dead';
+export type CState = 'idle' | 'wander' | 'graze' | 'drink' | 'rest' | 'sleep' | 'flee' | 'hunt' | 'eat' | 'charge' | 'follow' | 'fly' | 'fight' | 'dead';
 
 interface SpeciesDef {
   walk: number; run: number;
@@ -58,6 +59,8 @@ export interface Creature extends Agent {
   tier: number;
   /** Remembered drinking spot. */
   water: [number, number] | null;
+  /** Health, the player it is fighting, and when it may bite again (clock t). */
+  hp: number; foe: string | null; atkT: number;
 }
 
 /** Expected groups per 512 m cell, by region. */
@@ -90,6 +93,9 @@ export interface WildlifeContext {
   villages: Array<{ x: number; y: number; r: number }>;
   /** Something died (for logs, dragons, tests). */
   onKill?(prey: Creature, by: string): void;
+  /** Players by id (fights) and a bite landing on one. */
+  players?: Map<string, Agent>;
+  onBite?(c: Creature, playerId: string): void;
 }
 
 export class Wildlife {
@@ -98,7 +104,40 @@ export class Wildlife {
   readonly stats = { detailed: 0, nearby: 0, dormant: 0, kills: 0, spawnedCells: 0, ms: 0 };
   private scratch: Agent[] = [];
   private tick = 0;
+  /** Region id at a point (set by the host). */
+  regionOf: ((x: number, y: number) => string) | null = null;
   constructor(private seed: number) {}
+
+  /** Hurt by a player: the timid run; wolves and bears turn on the attacker (the pack joins in). */
+  provoke(c: Creature, by: Agent, clock: LifeClock): void {
+    const cc = CREATURE_COMBAT[c.sp];
+    c.alert = 2;
+    if (cc.dmg > 0 && c.hp > cc.hp * cc.fleeAt) {
+      this.engage(c, by.id, clock);
+      if (c.sp === 'wolf') for (const m of this.creatures.values()) if (m.group === c.group && m.alive && m !== c && Math.hypot(m.x - c.x, m.y - c.y) < 60) this.engage(m, by.id, clock);
+    } else { c.st = 'flee'; c.stT = 0; c.tx = by.x; c.ty = by.y; c.next = clock.t + 3; c.foe = null; }
+  }
+
+  private engage(c: Creature, foe: string, clock: LifeClock): void {
+    if (c.st !== 'fight') { c.st = 'fight'; c.stT = 0; c.atkT = Math.max(c.atkT, clock.t + 0.4); }
+    c.foe = foe; c.alert = 2; c.next = clock.t + 1;
+  }
+
+  /** Raise (or bring back) a guardian at an old place, already angry at the player who disturbed it. */
+  raiseGuardian(id: string, sp: Species, x: number, y: number, foe: Agent, clock: LifeClock): void {
+    let c = this.creatures.get(id);
+    if (!c) {
+      c = { id, kind: 'creature', sp, tag: sp, x, y, alt: 0, alive: true, h: 0, st: 'idle', stT: 0, next: 0, tx: x, ty: y, target: null, hunger: 0.3, thirst: 0.2, energy: 1, stamina: 1,
+        homeX: x, homeY: y, group: id.replace(/-\d+$/, ''), leader: id.endsWith('-0'), male: true, look: 0.5, alert: 0, diedAt: -1, tier: 0, water: null, hp: CREATURE_COMBAT[sp].hp, foe: null, atkT: 0 };
+      this.creatures.set(id, c);
+    } else if (!c.alive) this.revive(c);
+    this.engage(c, foe.id, clock);
+  }
+
+  /** Back to life at home, full health. */
+  revive(c: Creature): void {
+    c.alive = true; c.st = 'idle'; c.diedAt = -1; c.hp = CREATURE_COMBAT[c.sp].hp; c.foe = null; c.x = c.homeX; c.y = c.homeY; c.tx = c.x; c.ty = c.y; c.alert = 0; c.hunger = 0.3;
+  }
 
   /** Make sure the cells around each focus point have their creatures. */
   populate(focus: Array<{ x: number; y: number }>, ctx: WildlifeContext): void {
@@ -139,7 +178,7 @@ export class Wildlife {
           this.creatures.set(id, {
             id, kind: 'creature', sp, tag: sp, x, y, alt: 0, alive: true, h: r() * Math.PI * 2, st: 'idle', stT: 0, next: 0, tx: x, ty: y, target: null,
             hunger: 0.2 + r() * 0.4, thirst: 0.1 + r() * 0.4, energy: 0.6 + r() * 0.4, stamina: 1, homeX: hx, homeY: hy, group, leader: k === 0,
-            male: r() < 0.5, look: r(), alert: 0, diedAt: -1, tier: 2, water: null,
+            male: r() < 0.5, look: r(), alert: 0, diedAt: -1, tier: 2, water: null, hp: CREATURE_COMBAT[sp].hp, foe: null, atkT: 0,
           });
         }
       }
@@ -190,7 +229,8 @@ export class Wildlife {
     this.needs(c, dt);
     c.stT += dt;
     if (t >= c.next || c.st === 'idle') this.decide(c, ctx);
-    const run = def.run * (c.stamina > 0.15 ? 1 : 0.45);
+    // Tired animals slow down; so do wounded ones (a hunter can run down a badly hurt deer or wolf).
+    const run = def.run * (c.stamina > 0.15 ? 1 : 0.45) * (0.5 + 0.5 * Math.min(1, c.hp / CREATURE_COMBAT[c.sp].hp));
     switch (c.st) {
       case 'flee': {
         const away = Math.atan2(c.y - c.ty, c.x - c.tx);
@@ -215,6 +255,16 @@ export class Wildlife {
         if (Math.hypot(c.tx - c.x, c.ty - c.y) > 1.5) walkToward(c, c.tx, c.ty, def.walk * 2, dt, q);
         else c.hunger = Math.max(0, c.hunger - dt / 25);
         if (c.stT > 35 || c.hunger <= 0) this.set(c, 'rest', ctx);
+        break;
+      }
+      case 'fight': {
+        const cc = CREATURE_COMBAT[c.sp], foe = c.foe ? ctx.players?.get(c.foe) : null;
+        if (!foe || !foe.alive || Math.hypot(foe.x - c.x, foe.y - c.y) > 50) { c.foe = null; this.set(c, 'wander', ctx); c.tx = c.homeX; c.ty = c.homeY; break; }
+        if (c.hp < cc.hp * cc.fleeAt) { c.foe = null; c.tx = foe.x; c.ty = foe.y; this.set(c, 'flee', ctx); break; }
+        const d = Math.hypot(foe.x - c.x, foe.y - c.y);
+        if (d > cc.reach * 0.8) walkToward(c, foe.x, foe.y, run * 0.85, dt, q);
+        c.h = Math.atan2(foe.y - c.y, foe.x - c.x);
+        if (d <= cc.reach + 0.5 && t >= c.atkT) { c.atkT = t + cc.cd * (0.9 + hashOf(c.id, Math.floor(t)) * 0.2); ctx.onBite?.(c, foe.id); }
         break;
       }
       case 'charge': {
@@ -269,7 +319,7 @@ export class Wildlife {
       const d = Math.hypot(a.x - c.x, a.y - c.y), lim = (a.kind === 'dragon' ? def.flee * 2.5 : def.flee) * (asleep ? 0.5 : 1);
       if (d < lim && d < td) { threat = a; td = d; }
     }
-    if (threat) {
+    if (threat && c.st !== 'fight') {
       // Territorial animals stand their ground against intruders they do not fear enough.
       c.tx = threat.x; c.ty = threat.y; c.alert = 1.5;
       this.set(c, 'flee', ctx);
@@ -277,6 +327,15 @@ export class Wildlife {
       return;
     }
     if (c.st === 'flee' && c.stT < 3) return;
+    if (c.st === 'fight' && c.foe) return;
+    // Wolves on the prowl at night, or hungry, go for a lone traveller who comes close (the pack with them).
+    if (c.sp === 'wolf' && (!inHours(h, 5.5, 19.5) || c.hunger > 0.75)) {
+      for (const a of near) if (a.kind === 'player' && a.alive && Math.hypot(a.x - c.x, a.y - c.y) < 18) {
+        this.engage(c, a.id, ctx.clock);
+        for (const m of this.creatures.values()) if (m.group === c.group && m.alive && m !== c && Math.hypot(m.x - c.x, m.y - c.y) < 60) this.engage(m, a.id, ctx.clock);
+        return;
+      }
+    }
     if (c.st === 'eat' || (c.st === 'charge' && c.stT < 6) || (c.st === 'drink' && c.water)) return;
     if (c.st === 'hunt' && c.target && c.stT < 40) return;
     // 2. Territory: bears charge intruders near them; wolves confront intruders near the den.
@@ -285,7 +344,10 @@ export class Wildlife {
       for (const a of near) {
         if (!a.alive || a.kind === 'dragon') continue;
         const intruder = a.kind === 'player' || a.kind === 'villager' || (a.kind === 'creature' && (a.tag === 'wolf' || a.tag === 'bear') && a.tag !== c.sp);
-        if (intruder && Math.hypot(a.x - centreX, a.y - centreY) < def.territory) { c.tx = a.x; c.ty = a.y; c.alert = 2.5; this.set(c, 'charge', ctx); return; }
+        if (intruder && Math.hypot(a.x - centreX, a.y - centreY) < def.territory) {
+          if (a.kind === 'player') { this.engage(c, a.id, ctx.clock); return; } // players get a real fight
+          c.tx = a.x; c.ty = a.y; c.alert = 2.5; this.set(c, 'charge', ctx); return;
+        }
       }
     }
     // 3. Sleep outside active hours or when exhausted (birds roost, others bed down).
@@ -385,7 +447,7 @@ export class Wildlife {
       const [, x, y, alive, hu, th, en, died] = row as number[];
       if ([x, y, hu, th, en].some((v) => !Number.isFinite(v))) continue;
       c.x = x; c.y = y; c.alive = alive === 1; c.hunger = hu; c.thirst = th; c.energy = en; c.diedAt = Number.isFinite(died) ? died : -1;
-      c.st = c.alive ? 'idle' : 'dead'; c.tx = x; c.ty = y;
+      c.st = c.alive ? 'idle' : 'dead'; c.tx = x; c.ty = y; c.hp = CREATURE_COMBAT[c.sp].hp; c.foe = null;
     }
     if (missing) warn.push(`${missing} saved creatures no longer exist in this world version.`);
     return warn;

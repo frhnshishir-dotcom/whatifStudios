@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { CREATURE_COMBAT } from '../src/world/rpg/content';
+import { count } from '../src/world/rpg/hero';
 import { WORLD } from '../src/world/data';
 import { buildBlueprint, type Blueprint } from '../src/world/blueprint';
 import { ContinentTerrain } from '../src/world/terrain';
@@ -27,7 +29,7 @@ function simAt(hour = 10): LifeSim {
 let n = 0;
 function add(s: LifeSim, sp: Species, x: number, y: number, extra: Partial<Creature> = {}): Creature {
   const id = `${sp}-test-${n++}`;
-  const c: Creature = { id, kind: 'creature', sp, tag: sp, x, y, alt: 0, alive: true, h: 0, st: 'idle', stT: 0, next: 0, tx: x, ty: y, target: null, hunger: 0.1, thirst: 0.1, energy: 0.9, stamina: 1, homeX: x, homeY: y, group: id, leader: true, male: true, look: 0.3, alert: 0, diedAt: -1, tier: 0, water: null, ...extra };
+  const c: Creature = { id, kind: 'creature', sp, tag: sp, x, y, alt: 0, alive: true, h: 0, st: 'idle', stT: 0, next: 0, tx: x, ty: y, target: null, hunger: 0.1, thirst: 0.1, energy: 0.9, stamina: 1, homeX: x, homeY: y, group: id, leader: true, male: true, look: 0.3, alert: 0, diedAt: -1, tier: 0, water: null, hp: CREATURE_COMBAT[sp].hp, foe: null, atkT: 0, ...extra };
   s.wildlife.creatures.set(id, c);
   return c;
 }
@@ -63,7 +65,7 @@ describe('wildlife', { timeout: 120_000 }, () => {
     expect(thirsty.thirst).toBeLessThan(0.5);
   });
 
-  it('animals sleep outside their active hours, and a bear charges an intruder', () => {
+  it('animals sleep outside their active hours, and a bear turns on a traveller who comes too close', () => {
     const s = simAt(2);
     const deer = add(s, 'deer', 100, 100), fox = add(s, 'fox', 140, 100);
     run(s, 3, 2);
@@ -73,7 +75,8 @@ describe('wildlife', { timeout: 120_000 }, () => {
     const bear = add(s2, 'bear', 0, 100);
     s2.addPlayer('p', 'Tester', 20, 100);
     run(s2, 1.5, 11);
-    expect(bear.st).toBe('charge');
+    expect(bear.st).toBe('fight'); // a real fight with players (villagers it only charges, to scare them off)
+    expect(bear.foe).toBe('p');
     expect(bear.alert).toBeGreaterThan(0);
   });
 
@@ -146,7 +149,7 @@ describe('dragons', { timeout: 120_000 }, () => {
     run(s, 3, 12);
     const victim = [...s.wildlife.creatures.values()][0];
     victim.alive = false; victim.diedAt = s.clock.t;
-    s.players.get('local')!.inv = { coins: 42 };
+    s.players.get('local')!.hero.coins = 42;
     s.revealFrom(56000, 56000, 3000);
     const j = JSON.parse(JSON.stringify(s.toJSON()));
     const s2 = simAt(12);
@@ -155,7 +158,7 @@ describe('dragons', { timeout: 120_000 }, () => {
     expect(s2.load(j)).toEqual([]);
     expect(s2.wildlife.creatures.get(victim.id)!.alive).toBe(false);
     expect(s2.wildlife.creatures.size).toBe(s.wildlife.creatures.size);
-    expect(s2.players.get('local')!.inv.coins).toBe(42);
+    expect(s2.players.get('local')!.hero.coins).toBe(42);
     expect(s2.players.get('local')!.x).toBe(56000);
     expect(s2.dragons.dragons.map((d) => [d.id, Math.round(d.x)])).toEqual(s.dragons.dragons.map((d) => [d.id, Math.round(d.x)]));
     expect(Buffer.from(s2.discovery.fog).equals(Buffer.from(s.discovery.fog))).toBe(true);
@@ -207,6 +210,6 @@ describe('living villages and the traveller (real continent)', { timeout: 300_00
     const it = lw.interaction();
     expect(it?.label).toMatch(/ore/);
     lw.interact();
-    expect(p.inv.ore).toBe(1);
+    expect(count(p.hero, 'ore')).toBe(2);
   });
 });

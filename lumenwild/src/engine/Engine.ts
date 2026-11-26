@@ -123,6 +123,8 @@ export class Engine {
   private composeMs = 0;
   private panning: { x: number; y: number } | null = null;
   private spaceDown = false;
+  /** Continent play uses Space to attack: the engine then leaves it alone (no pause, no pan). */
+  claimSpace = false;
   private spaceDragged = false;
   private hoverCell: [number, number] = [-1, -1];
   private cleanup: Array<() => void> = [];
@@ -555,7 +557,7 @@ export class Engine {
     }, { passive: false });
     on(window, 'keydown', (ev) => {
       if (isTyping(ev)) return;
-      if (ev.code === 'Space') {
+      if (ev.code === 'Space' && !this.claimSpace) {
         ev.preventDefault();
         if (!this.spaceDown) { this.spaceDown = true; this.spaceDragged = false; canvas.style.cursor = 'grab'; }
       }
@@ -568,7 +570,7 @@ export class Engine {
       if (ev.code === 'ArrowDown') pan(0, -1);
     });
     on(window, 'keyup', (ev) => {
-      if (ev.code !== 'Space' || isTyping(ev)) return;
+      if (ev.code !== 'Space' || isTyping(ev) || this.claimSpace) return;
       // Space pressed and released without dragging = pause/resume; Space + drag = pan.
       if (this.spaceDown && !this.spaceDragged) this.setPaused(!this.clock.paused);
       this.spaceDown = false;

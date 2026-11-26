@@ -8,6 +8,8 @@ import { useUI } from './store';
 import { getEngine } from './engineRef';
 import { editorShortcut } from './editorBridge';
 import { TOOL_KEYS } from './components/Toolbar';
+
+const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyF', 'KeyQ', 'KeyH', 'KeyI', 'KeyC', 'KeyJ', 'KeyK', 'Space']);
 import { WorldDialog } from './components/WorldDialog';
 import { ContinentDialog } from './components/ContinentDialog';
 import { getWorldIO } from './persistence';
@@ -39,6 +41,8 @@ export function App() {
       const engine = getEngine();
       if (engine && editorShortcut(ev, engine)) { ev.preventDefault(); return; }
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      // Continent play owns the game keys (move, attack, dodge, eat, interact, watch, panel tabs).
+      if (engine?.claimSpace && GAME_KEYS.has(ev.code)) return;
       const tool = TOOL_KEYS[ev.key.toLowerCase()];
       if (tool) { useUI.getState().setTool(tool); return; }
       if (ev.key === 'h' || ev.key === 'H') togglePanels();

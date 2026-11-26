@@ -6,6 +6,9 @@ import { type Agent, type LifeClock, type TerrainQuery, SpatialHash, walkToward 
 import { Wildlife, type WildlifeContext, type Creature } from './wildlife';
 import { Villages, type Villager } from './villagers';
 import { Dragons, DRAGON_META, type DragonContext, type Territory } from './dragons';
+import { Rpg } from '../rpg/Rpg';
+import { heroToJSON, heroFromJSON, addItem, nextUid, type Hero } from '../rpg/hero';
+import { makeItem } from '../rpg/items';
 
 /**
  * The living world: wildlife, villagers, dragons and players on the continent, stepped together. Everything is in
@@ -19,9 +22,12 @@ export interface Player extends Agent {
   h: number;
   /** Current speed (m/s), stamina 0..1 and whether running. */
   v: number; stamina: number; running: boolean;
-  inv: Record<string, number>;
+  /** The character: level, skills, health, pack, equipment, quests. */
+  hero: Hero;
   /** Distance walked (m), for the journal. */
   walked: number;
+  /** Other players online: their health share from the server's snapshots. */
+  hpFrac?: number;
 }
 
 export interface PlayerInput { dx: number; dy: number; run: boolean }
@@ -37,6 +43,7 @@ export class LifeSim {
   readonly villages = new Villages();
   readonly dragons = new Dragons();
   readonly players = new Map<string, Player>();
+  readonly rpg: Rpg;
   discovery: DiscoveryState;
   /** Recent happenings (newest last), for the journal. */
   readonly log: Array<{ t: number; text: string }> = [];
@@ -60,7 +67,11 @@ export class LifeSim {
       habitats: data.habitats.map((h) => ({ x: h.at[0] * mpu, y: h.at[1] * mpu, r: h.radius * mpu, species: h.species })),
       villages: this.villageInfo,
       onKill: (prey, by) => this.note(`A ${by.split('-')[0]} brought down a ${prey.sp}.`, prey.x, prey.y),
+      players: this.players,
+      onBite: (c, pid) => this.rpg.creatureAttack(c, pid),
     };
+    this.wildlife.regionOf = this.wctx.regionAt;
+    this.rpg = new Rpg(this, seed);
     const territories: Territory[] = [];
     let corridor: DragonContext['corridor'] = null;
     for (const t of data.territories) {
@@ -90,7 +101,7 @@ export class LifeSim {
   }
 
   addPlayer(id: string, name: string, x: number, y: number): Player {
-    const p: Player = { id, kind: 'player', tag: 'player', name, x, y, alt: 0, alive: true, h: 0, v: 0, stamina: 1, running: false, inv: {}, walked: 0 };
+    const p: Player = { id, kind: 'player', tag: 'player', name, x, y, alt: 0, alive: true, h: 0, v: 0, stamina: 1, running: false, hero: this.rpg.createHero(x, y), walked: 0 };
     this.players.set(id, p);
     return p;
   }
@@ -102,6 +113,17 @@ export class LifeSim {
     if (this.log.length > 60) this.log.shift();
   }
 
+  /** A save from before characters: its pack (counts of coins, herbs, ore, relics) becomes items. */
+  legacyPack(p: Player, inv: Record<string, unknown>): void {
+    for (const [k, v] of Object.entries(inv)) {
+      const n = Math.floor(Number(v));
+      if (!(n > 0)) continue;
+      if (k === 'coins') { p.hero.coins += n; continue; }
+      const id = k === 'relics' ? 'relic' : k;
+      try { addItem(p.hero, makeItem(id, n, nextUid(p.hero))); } catch { /* unknown item: dropped */ }
+    }
+  }
+
   /** Make the people of the villages near these players (each village once; the same people on every machine). */
   populateVillages(focus: Array<{ x: number; y: number }>): void {
     for (const v of this.villageInfo) if (focus.some((p) => Math.hypot(p.x - v.x, p.y - v.y) < 2500)) this.villages.populate(this.terrain.village(v.id)!, this.q, this.clock);
@@ -109,6 +131,13 @@ export class LifeSim {
 
   /** Move a player by input for dt seconds (walk, run with stamina, wade slowly, blocked by deep water and walls). */
   movePlayer(p: Player, inp: PlayerInput, dt: number): void {
+    if (p.hero.dead >= 0) { p.v = 0; p.running = false; return; }
+    if (this.clock.t < p.hero.dodgeUntil) {
+      // A dodge roll: a quick dash, whatever the keys say.
+      const h = p.hero.dodgeH, moved = walkToward(p, p.x + Math.cos(h) * 6, p.y + Math.sin(h) * 6, 13, dt, this.q);
+      p.v = moved / Math.max(1e-6, dt); p.walked += moved; p.running = false;
+      return;
+    }
     const want = Math.hypot(inp.dx, inp.dy) > 0.01;
     p.running = want && inp.run && p.stamina > 0.05;
     p.stamina = Math.max(0, Math.min(1, p.stamina + (p.running ? -dt / 22 : dt / 30)));
@@ -153,6 +182,7 @@ export class LifeSim {
     this.dragons.update(dt, this.dctx);
     this.stats.dragonMs = performance.now() - td;
     for (const l of this.dragons.log.splice(0)) this.note(l);
+    this.rpg.update(dt);
     // Discovery: what players see around them (once a second).
     if (this.clock.t - this.lastObserve > 1) {
       this.lastObserve = this.clock.t;
@@ -187,7 +217,8 @@ export class LifeSim {
   toJSON(): Record<string, unknown> {
     return {
       t: this.clock.t,
-      players: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, x: p.x, y: p.y, stamina: p.stamina, inv: p.inv, walked: p.walked })),
+      players: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, x: p.x, y: p.y, stamina: p.stamina, walked: p.walked, hero: heroToJSON(p.hero) })),
+      rpg: this.rpg.toJSON(),
       discovery: serializeDiscovery(this.discovery),
       wildlife: this.wildlife.toJSON(),
       dragons: this.dragons.toJSON(),
@@ -206,10 +237,12 @@ export class LifeSim {
       if (!p) continue;
       if (typeof pj.x === 'number' && typeof pj.y === 'number') { p.x = pj.x; p.y = pj.y; }
       if (typeof pj.stamina === 'number') p.stamina = pj.stamina;
-      if (pj.inv && typeof pj.inv === 'object') p.inv = Object.fromEntries(Object.entries(pj.inv as Record<string, unknown>).filter(([, v]) => typeof v === 'number')) as Record<string, number>;
+      if (pj.hero) p.hero = heroFromJSON(pj.hero, this.rpg.createHero(p.x, p.y));
+      else if (pj.inv && typeof pj.inv === 'object') this.legacyPack(p, pj.inv as Record<string, unknown>);
       if (typeof pj.walked === 'number') p.walked = pj.walked;
     }
     warn.push(...this.wildlife.load(s.wildlife, this.wctx));
+    this.rpg.load(s.rpg);
     warn.push(...this.dragons.load(s.dragons));
     if (Array.isArray(s.log)) for (const l of s.log as Array<{ t: number; text: string }>) if (l && typeof l.text === 'string') this.log.push({ t: +l.t || 0, text: l.text });
     return warn;

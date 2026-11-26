@@ -16,6 +16,11 @@ import type { Creature } from './wildlife';
 import type { Villager } from './villagers';
 import type { DragonAgent, DState } from './dragons';
 import type { NetClient } from '../net/NetClient';
+import { nodeId, type RpgCmd, type RpgEvent, type NodeQuery, type GatherNode, type GroundLoot, type RpgView, type ShopEntry } from '../rpg/Rpg';
+import type { Item } from '../rpg/items';
+import { SHOPS, CREATURE_COMBAT } from '../rpg/content';
+import { attackCooldown, count, weaponOf } from '../rpg/hero';
+import { Hud, type Tag } from '../rpg/hud';
 
 /**
  * The living world in the browser: the player avatar (WASD to walk, Shift to run, E to interact, F to watch the
@@ -73,7 +78,10 @@ const COL: Record<string, RGB> = {
   bear: C('#7a4e2c'), bearLeg: C('#4a2e1a'), bearHead: C('#b08a5a'), fox: C('#ff7a2a'), foxLeg: C('#8a3a14'), foxTip: C('#fff4e6'),
   bird0: C('#f4eedc'), bird1: C('#2e2620'), bird2: C('#e0503c'), dead: C('#7a2222'), alert: C('#ffb347'), sleep: C('#b8c6ff'),
   skin: C('#e8c39e'), player: C('#5cc8ff'), playerHead: C('#ffe27a'), say: C('#ffffff'),
+  hit: C('#ff4a3d'), loot: C('#ffd166'), swing: C('#f4f1e6'), quest: C('#ffd23f'), shop: C('#8fd3ff'), fallen: C('#8a8f96'),
 };
+/** A slash mark for a swing at angle a (perpendicular to the radius). */
+const slash = (a: number) => { const t = (((a + Math.PI / 2) % Math.PI) + Math.PI) % Math.PI; return t < Math.PI / 8 || t > (7 * Math.PI) / 8 ? '─' : t < (3 * Math.PI) / 8 ? '╲' : t < (5 * Math.PI) / 8 ? '│' : '╱'; };
 const ROLE: Record<string, RGB> = {
   hoe: C('#8bbf5a'), tend: C('#c9b27a'), fish: C('#5a8fc9'), gather: C('#6fae6f'), chop: C('#a0703a'), watch: C('#7a8a6a'), mine: C('#7d7d86'),
   trade: C('#d9822b'), serve: C('#c94a5a'), forge: C('#3d3d44'), craft: C('#b08850'), mill: C('#d8d0b8'),
@@ -184,10 +192,23 @@ export class LifeLayer implements SceneLayer {
         drawn++;
       }
     };
-    const sim = lw.sim;
-    for (const c of sim.wildlife.creatures.values()) if (c.tier === 0 && c.st !== 'dead') draw(c.x, c.y, c.alt, creatureCells(c, t), c.alt < 1);
-    for (const v of sim.villages.people.values()) if (v.out) draw(v.x, v.y, 0, villagerCells(v, t));
-    for (const p of sim.players.values()) draw(p.x, p.y, 0, playerCells(p, t));
+    const sim = lw.sim, now = performance.now() / 1000;
+    const flashed = (id: string, cells: Cell[]) => { if ((lw.flash.get(id) ?? 0) > now) for (const c of cells) c.fg = COL.hit; return cells; };
+    for (const g of sim.rpg.loot.values()) draw(g.x, g.y, 0, [{ dx: 0, up: 0, ch: '◈', fg: COL.loot }], true);
+    for (const c of sim.wildlife.creatures.values()) if (c.tier === 0 && c.st !== 'dead') draw(c.x, c.y, c.alt, flashed(c.id, creatureCells(c, t)), c.alt < 1);
+    for (const v of sim.villages.people.values()) {
+      if (!v.out) continue;
+      const cells = villagerCells(v, t), m = lw.markers.get(v.id);
+      if (m && v.sayT <= 0) cells.push({ dx: 0, up: 2, ch: m, fg: m === '◆' ? COL.shop : COL.quest });
+      draw(v.x, v.y, 0, cells);
+    }
+    for (const p of sim.players.values()) {
+      if (p.hero && p.hero.dead >= 0 && p.id === 'local' || p.alive === false) { draw(p.x, p.y, 0, [{ dx: 0, up: 0, ch: '▬', fg: COL.fallen }, { dx: 1, up: 0, ch: '•', fg: COL.fallen }]); continue; }
+      draw(p.x, p.y, 0, flashed(p.id, playerCells(p, t)));
+      // A swing: three slash marks in an arc in front, for a moment.
+      const sw = lw.swings.get(p.id === 'local' ? lw.me : p.id);
+      if (sw && now - sw.t < 0.16) for (const da of [-0.65, 0, 0.65]) { const a = sw.h + da; draw(p.x + Math.cos(a) * 1.7, p.y + Math.sin(a) * 1.7, 1, [{ dx: 0, up: 0, ch: slash(a), fg: COL.swing }]); }
+    }
     this.drawn = drawn;
   }
 }
@@ -200,7 +221,7 @@ const D_STATE: Record<DState, DragonState> = {
 /** One dragon drawn by the existing renderer: a Dragon entity used only for its animation and drawing. */
 interface Puppet { d: Dragon; layer: DragonRenderer; last: [number, number] }
 
-export interface Interaction { label: string; run: () => string }
+export interface Interaction { label: string; cmd: RpgCmd }
 
 export class LivingWorld {
   readonly sim: LifeSim;
@@ -219,6 +240,18 @@ export class LivingWorld {
   input: PlayerInput | null = null;
   /** Online play: the world server's connection (the server simulates the living world). */
   net: NetClient | null = null;
+  /** On-screen bars and numbers (browser only). */
+  hud: Hud | null = null;
+  /** Short-lived effects: creatures flashing when hit, swings to draw (by player id), quest markers by villager. */
+  readonly flash = new Map<string, number>();
+  readonly swings = new Map<string, { h: number; t: number }>();
+  readonly markers = new Map<string, string>();
+  private nextAttack = 0;
+  private markerT = 0;
+  private findsT = 0;
+  private promptT = 0;
+  /** Things the panel shows: the open tab, a shop. */
+  ui = { tab: 'world' as string };
 
   constructor(readonly engine: Engine, readonly session: ContinentSession) {
     this.q = new WindowQuery(engine, session);
@@ -244,17 +277,123 @@ export class LivingWorld {
           this.keys.add(ev.code);
           if (this.follow !== 'player') { this.follow = 'player'; if (!this.q.detailed(this.player.x, this.player.y)) this.session.loadAt(this.engine, this.session.bp.coords.cellToMap([this.player.x, this.player.y])); }
         }
+        if (ev.code === 'Space') { ev.preventDefault(); this.keys.add('Space'); }
+        if (ev.code === 'KeyQ' && !ev.repeat) this.dodge();
+        if (ev.code === 'KeyH' && !ev.repeat) this.command({ t: 'use' });
         if (ev.code === 'KeyE' && !ev.repeat) this.interact();
         if (ev.code === 'KeyF' && !ev.repeat) this.watchNearestDragon();
+        const tab = ({ KeyI: 'pack', KeyC: 'hero', KeyJ: 'quests', KeyK: 'craft' } as Record<string, string>)[ev.code];
+        if (tab && !ev.repeat) this.ui.tab = this.ui.tab === tab ? 'world' : tab;
       };
       const up = (ev: KeyboardEvent) => this.keys.delete(ev.code);
       const blur = () => this.keys.clear();
       window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur);
       this.off.push(() => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); });
+      engine.claimSpace = true;
+    }
+    this.sim.rpg.nodes = new WindowNodes(engine, session);
+  }
+
+  dispose(): void { for (const f of this.off) f(); this.off = []; this.engine.claimSpace = false; this.hud?.dispose(); this.hud = null; }
+
+  /** Panel state from the rules: the quest offered, the open shop and its stock, trade offers. */
+  view(): RpgView { return this.net ? this.net.view : this.sim.rpg.viewFor('local'); }
+  sellPrice(vid: string, it: Item): number { return this.sim.rpg.sellPrice(this.player, vid, it); }
+  buyPrice(e: ShopEntry): number { return this.sim.rpg.buyPrice(this.player, e); }
+  stationsHere() { return this.sim.rpg.stationsNear(this.player.x, this.player.y); }
+
+  /** The id this traveller has in the rules (the server's id when online). */
+  get me(): string { return this.net?.id || 'local'; }
+
+  /** Run a command: here (single player) or on the world server (online). */
+  command(c: RpgCmd): void {
+    if (this.net) { this.net.cmd(c); return; }
+    this.sim.rpg.command('local', c);
+    this.processEvents();
+    useUnsaved();
+  }
+
+  /** Swing at whatever is in front, turning toward the nearest creature in reach. */
+  attack(): void {
+    const p = this.player, t = this.sim.clock.t;
+    if (p.hero.dead >= 0 || (this.net && performance.now() / 1000 < this.nextAttack)) return;
+    const w = weaponOf(p.hero);
+    let h = p.h, bd = w.reach + 1.4;
+    for (const c of this.sim.wildlife.creatures.values()) {
+      if (!c.alive || (c.sp === 'bird' && c.alt > 2)) continue;
+      const d = Math.hypot(c.x - p.x, c.y - p.y) - CREATURE_COMBAT[c.sp].size;
+      if (d < bd) { bd = d; h = Math.atan2(c.y - p.y, c.x - p.x); }
+    }
+    p.h = h;
+    if (this.net) { this.nextAttack = performance.now() / 1000 + attackCooldown(p.hero); this.swings.set(this.me, { h, t: performance.now() / 1000 }); }
+    void t;
+    this.command({ t: 'attack', h });
+  }
+
+  dodge(): void {
+    const k = this.keyInput(), p = this.player;
+    const h = Math.hypot(k.dx, k.dy) > 0.01 ? Math.atan2(k.dy, k.dx) : p.h + Math.PI;
+    if (this.net) { p.hero.dodgeUntil = this.sim.clock.t + 0.35; p.hero.dodgeH = h; }
+    this.command({ t: 'dodge', h });
+  }
+
+  /** Turn rules events into effects, messages and HUD numbers. */
+  processEvents(evs: RpgEvent[] = this.sim.rpg.drain()): void {
+    const me = this.me, now = performance.now() / 1000, hud = this.hud, p = this.player, z = (x: number, y: number) => this.q.height(x, y);
+    for (const ev of evs) {
+      switch (ev.e) {
+        case 'msg': if (ev.who === me) { this.message = ev.text; hud?.say(ev.text); } break;
+        case 'swing': this.swings.set(ev.who === me ? me : ev.who, { h: ev.h, t: now }); break;
+        case 'hit': this.flash.set(ev.target, now + 0.18); hud?.float(ev.x, ev.y, z(ev.x, ev.y) + 1.5, `${ev.dmg}${ev.crit ? '!' : ''}`, ev.crit ? '#ffd166' : ev.who === me ? '#ffffff' : '#ffb38a', ev.crit); break;
+        case 'kill': hud?.float(ev.x, ev.y, z(ev.x, ev.y) + 2, '✶', '#ffd166', true); break;
+        case 'hurt': if (ev.who === me) { hud?.float(p.x, p.y, z(p.x, p.y) + 2, `-${ev.dmg}`, '#ff5a4f'); hud?.hurt(); } this.flash.set(ev.who === me ? 'local' : ev.who, now + 0.18); break;
+        case 'evade': if (ev.who === me) hud?.float(p.x, p.y, z(p.x, p.y) + 2, 'dodged', '#9fe0ff'); break;
+        case 'xp': if (ev.who === me) hud?.float(p.x, p.y, z(p.x, p.y) + 2.5, `+${ev.n} xp`, '#ffd166', false, 1.4); break;
+        case 'level': if (ev.who === me) { hud?.float(p.x, p.y, z(p.x, p.y) + 3, `Level ${ev.level}!`, '#ffd166', true, 2.2); this.message = `Level ${ev.level}! Two attribute points to spend (Hero tab).`; hud?.say(this.message); } break;
+        case 'skill': if (ev.who === me) { const t = `${ev.skill[0].toUpperCase()}${ev.skill.slice(1)} is now ${ev.level}.`; hud?.float(p.x, p.y, z(p.x, p.y) + 3, t, '#9fe07a', false, 1.8); } break;
+        case 'respawn': if (ev.who === me) { p.x = ev.x; p.y = ev.y; this.follow = 'player'; if (!this.q.detailed(p.x, p.y)) this.session.loadAt(this.engine, this.session.bp.coords.cellToMap([p.x, p.y])); } break;
+        case 'quest': if (ev.who === me && ev.status === 'ready') hud?.float(p.x, p.y, z(p.x, p.y) + 3, 'Quest ready!', '#ffd166', true, 2); break;
+        default: break;
+      }
     }
   }
 
-  dispose(): void { for (const f of this.off) f(); this.off = []; }
+  /** Quest markers over villagers near the traveller ("!" has work, "?" waiting for you), once a second. */
+  private updateMarkers(): void {
+    this.markers.clear();
+    const p = this.player, h = p.hero;
+    for (const v of this.sim.villages.people.values()) {
+      if (!v.out || Math.hypot(v.x - p.x, v.y - p.y) > 90) continue;
+      const q = h.quests.find((x) => x.giver === v.id);
+      if (q) { if (q.status === 'ready' || ((q.kind === 'gather' || q.kind === 'craft') && count(h, q.target) >= q.need)) this.markers.set(v.id, '?'); continue; }
+      if (h.quests.some((x) => x.kind === 'deliver' && x.target === v.village)) { this.markers.set(v.id, '?'); continue; }
+      if (h.quests.length < 5 && this.sim.rpg.isGiver(v)) this.markers.set(v.id, '!');
+      else if (SHOPS[v.tag]) this.markers.set(v.id, '◆');
+    }
+  }
+
+  /** Finds taken (here or by others online) disappear from the loaded area. */
+  sweepFinds(): void {
+    const s = this.session, e = this.engine, S = s.win.S, [ox, oy] = s.win.origin, taken = this.sim.rpg.taken;
+    if (!taken.size) return;
+    for (const o of [...e.objects.objects.values()]) if (o.kind === 'cache' && taken.has(nodeId(o.variant, o.x + ox * S, o.y + oy * S))) e.objects.remove(o.id);
+  }
+
+  /** HUD tags: health bars over wounded creatures, names over other players. */
+  private tags(): Tag[] {
+    const out: Tag[] = [], p = this.player;
+    for (const c of this.sim.wildlife.creatures.values()) {
+      if (!c.alive || c.tier !== 0) continue;
+      const max = CREATURE_COMBAT[c.sp].hp;
+      if (c.hp >= max || Math.hypot(c.x - p.x, c.y - p.y) > 60) continue;
+      out.push({ id: c.id, x: c.x, y: c.y, z: this.q.height(c.x, c.y) + c.alt + 2, frac: c.hp / max, text: c.foe ? '!' : '', colour: '#ffb347' });
+    }
+    for (const o of this.sim.players.values()) {
+      if (o.id === 'local' || Math.hypot(o.x - p.x, o.y - p.y) > 80) continue;
+      out.push({ id: `p:${o.id}`, x: o.x, y: o.y, z: this.q.height(o.x, o.y) + 2.5, text: o.name, colour: '#ffb38a', frac: o.hpFrac });
+    }
+    return out;
+  }
 
   private keyInput(): PlayerInput {
     if (this.input) return this.input;
@@ -270,10 +409,18 @@ export class LivingWorld {
       const [mx, my] = s.travel.position(), c = s.bp.coords.mapToCell([mx, my]);
       p.x = c[0]; p.y = c[1];
     } else if (!e.clock.paused) this.sim.movePlayer(p, this.keyInput(), dt);
+    if (this.keys.has('Space') && !e.clock.paused && !s.travel) this.attack();
     const ts = performance.now();
     if (this.net) this.net.frame(dt);
     else this.sim.update(simDt, { hour: e.env.time, rain: e.env.rain });
+    this.processEvents();
     this.stats.simMs = performance.now() - ts;
+    const now = performance.now() / 1000;
+    if (now - this.markerT > 1) { this.markerT = now; this.updateMarkers(); }
+    if (now - this.findsT > 1) { this.findsT = now; this.sweepFinds(); }
+    if (this.hud && now - this.promptT > 0.12) { this.promptT = now; this.hud.setPrompt(this.interaction()?.label ?? ''); }
+    if (!this.hud && e.renderer && typeof document !== 'undefined' && e.renderer.canvas.isConnected) this.hud = new Hud(e, s);
+    this.hud?.update(p.hero, p.stamina, this.tags(), p.hero.dead >= 0 ? this.sim.clock.t - p.hero.dead : -1);
     // Camera: keep the followed thing in the middle (the window streams after it).
     const target = this.follow === 'player' ? p : this.follow ? this.sim.dragons.dragons.find((d) => d.id === this.follow) : null;
     if (target && !s.travel) {
@@ -342,58 +489,65 @@ export class LivingWorld {
     if (!this.q.detailed(t.x, t.y)) this.session.loadAt(this.engine, this.session.bp.coords.cellToMap([t.x, t.y]));
   }
 
-  /** What E would do here (nearest interactable within 2.5 m), or null. */
+  /** What E would do here: talk, pick up loot, take a find, explore an old place, gather (nearest first), or null. */
   interaction(): Interaction | null {
-    const p = this.player, s = this.session, e = this.engine, mpu = s.bp.coords.metresPerUnit;
-    const [wx, wy] = s.win.toWindow(p.x, p.y);
-    // Villagers first.
+    const p = this.player, s = this.session, e = this.engine, S = s.win.S, [ox, oy] = s.win.origin;
+    if (p.hero.dead >= 0) return null;
     let vb: Villager | null = null, vd = 2.5;
     for (const v of this.sim.villages.people.values()) { if (!v.out) continue; const d = Math.hypot(v.x - p.x, v.y - p.y); if (d < vd) { vd = d; vb = v; } }
-    if (vb) { const v = vb; return { label: `Talk to ${v.name}`, run: () => this.sim.villages.greet(v) }; }
+    if (vb) {
+      const m = this.markers.get(vb.id), what = m === '!' ? ' (has work)' : m === '?' ? ' (quest)' : SHOPS[vb.tag] ? ' (shop)' : '';
+      return { label: `Talk to ${vb.name}${what}`, cmd: { t: 'talk', vid: vb.id } };
+    }
+    let lb: GroundLoot | null = null, ld = 2.4;
+    for (const g of this.sim.rpg.loot.values()) { const d = Math.hypot(g.x - p.x, g.y - p.y); if (d < ld) { ld = d; lb = g; } }
+    if (lb) return { label: `Pick up: ${lb.label}`, cmd: { t: 'pickup', id: lb.id } };
+    const [wx, wy] = s.win.toWindow(p.x, p.y);
     const near = e.objects.inRect(Math.floor(wx) - 6, Math.floor(wy) - 6, Math.floor(wx) + 6, Math.floor(wy) + 6, []);
     let best: (typeof near)[number] | null = null, bd = 3.2;
     for (const o of near) {
-      if (!['cache', 'tower', 'ruin', 'cave', 'stone'].includes(o.kind)) continue;
+      const gather = o.kind === 'tree' || o.kind === 'rock' || o.kind === 'mushroom';
+      if (!gather && !['cache', 'tower', 'ruin', 'cave', 'stone'].includes(o.kind)) continue;
       const fp = e.objects.footprint(o);
-      const d = Math.min(...fp.map(([fx, fy]) => Math.hypot(fx + 0.5 - wx, fy + 0.5 - wy)));
+      const d = Math.min(...fp.map(([fx, fy]) => Math.hypot(fx + 0.5 - wx, fy + 0.5 - wy))) + (gather ? 0.8 : 0); // finds and places first
       if (d < bd) { bd = d; best = o; }
     }
     if (!best) return null;
-    const o = best, place = s.terrain.places().find((q) => Math.hypot(q.x - (o.x + s.win.origin[0] * s.win.S), q.y - (o.y + s.win.origin[1] * s.win.S)) < 12);
-    const discover = () => {
-      if (!place) return '';
-      const was = this.sim.discovery.discovered.has(place.id);
-      this.sim.discovery.discovered.add(place.id);
-      this.sim.revealFrom(place.x, place.y, 300);
-      return was ? '' : ` Discovered: ${place.name}.`;
-    };
+    const o = best, cx = o.x + ox * S, cy = o.y + oy * S;
     if (o.kind === 'cache') {
       const what = o.variant === 'chest' ? 'treasure chest' : o.variant === 'herbs' ? 'herbs' : o.variant === 'ore' ? 'ore' : 'relic';
-      return { label: `Take the ${what}`, run: () => {
-        e.objects.remove(o.id);
-        if (this.net) { this.net.take(o.variant, o.x + s.win.origin[0] * s.win.S, o.y + s.win.origin[1] * s.win.S); return `Reaching for the ${what}…`; }
-        const gain: Record<string, [string, number]> = { chest: ['coins', 20 + Math.floor(Math.random() * 30)], herbs: ['herbs', 1], ore: ['ore', 1], relic: ['relics', 1] };
-        const [item, n] = gain[o.variant] ?? ['relics', 1];
-        p.inv[item] = (p.inv[item] ?? 0) + n;
-        useUnsaved();
-        return `Took ${n} ${item}.`;
-      } };
+      return { label: `Take the ${what}`, cmd: { t: 'gather', node: nodeId(o.variant, cx, cy) } };
     }
-    if (o.kind === 'tower') return { label: `Climb ${place?.name ?? 'the tower'}`, run: () => {
-      const n = this.sim.revealFrom(o.x + s.win.origin[0] * s.win.S, o.y + s.win.origin[1] * s.win.S, 3000);
-      const d = discover();
-      useUnsaved();
-      return `From the top you can see for kilometres (${n} map cells revealed).${d}`;
-    } };
-    const label = o.kind === 'cave' ? 'Explore the cave' : o.kind === 'ruin' ? 'Search the ruin' : 'Read the old stone';
-    void mpu;
-    return { label, run: () => { const d = discover(); useUnsaved(); return (o.kind === 'cave' ? 'Cold air and old bones in the dark.' : o.kind === 'ruin' ? 'Moss-covered stones of an older age.' : 'Worn runes, still faintly glowing.') + d; } };
+    if (o.kind === 'tree' || o.kind === 'rock' || o.kind === 'mushroom') {
+      return { label: o.kind === 'tree' ? 'Cut wood' : o.kind === 'rock' ? 'Break rock' : 'Pick mushrooms', cmd: { t: 'gather', node: nodeId(o.kind, cx, cy) } };
+    }
+    const place = s.terrain.places().find((q) => Math.hypot(q.x - cx, q.y - cy) < 12);
+    if (!place) return null;
+    const label = o.kind === 'tower' ? `Climb ${place.name}` : o.kind === 'cave' ? `Explore ${place.name}` : o.kind === 'ruin' ? `Search ${place.name}` : `Read ${place.name}`;
+    return { label, cmd: { t: 'explore', place: place.id } };
   }
 
   interact(): void {
     const it = this.interaction();
-    this.message = it ? it.run() : 'Nothing to do here.';
-    if (it) this.sim.note(this.message);
+    if (!it) { this.message = 'Nothing to do here.'; return; }
+    this.command(it.cmd);
+    if (it.cmd.t === 'talk' && SHOPS[this.sim.villages.people.get(it.cmd.vid)?.tag ?? '']) this.ui.tab = 'shop';
+    if (it.cmd.t === 'gather' && !this.net) this.sweepFinds();
+  }
+}
+
+/** World objects in the loaded window by node id (`kind:x,y`, continent cells), for validating gathering. */
+class WindowNodes implements NodeQuery {
+  constructor(private engine: Engine, private s: ContinentSession) {}
+  node(id: string): GatherNode | null {
+    const m = /^([a-z]+):(-?\d+),(-?\d+)$/.exec(id);
+    if (!m) return null;
+    const S = this.s.win.S, [ox, oy] = this.s.win.origin, x = +m[2] - ox * S, y = +m[3] - oy * S;
+    for (const o of this.engine.objects.inRect(x - 1, y - 1, x + 1, y + 1, [])) {
+      if (o.x !== x || o.y !== y) continue;
+      if (o.kind === m[1] || (o.kind === 'cache' && o.variant === m[1])) return { kind: o.kind, variant: o.variant, x: +m[2], y: +m[3] };
+    }
+    return null;
   }
 }
 
