@@ -29,7 +29,10 @@ export const WK_NONE = 0, WK_SEA = 1, WK_LAKE = 2, WK_RIVER = 3, WK_MARSH = 4;
  * A generated object (region-local cell). `props` holds non-default properties; a `z` there is an absolute height
  * (m) and becomes relative to the window's datum when the object is placed.
  */
-export interface RegionObject { kind: 'tree' | 'rock' | 'mushroom' | 'building' | 'span' | 'mill'; x: number; y: number; variant: string; props?: Record<string, number> }
+export interface RegionObject { kind: 'tree' | 'rock' | 'mushroom' | 'building' | 'span' | 'mill' | 'tower' | 'ruin' | 'cache' | 'cave' | 'stone'; x: number; y: number; variant: string; props?: Record<string, number> }
+
+/** A discoverable place built at a landmark (continent metres): what stands there and its landmark id. */
+export interface PlaceSite { id: string; name: string; kind: 'tower' | 'ruin' | 'cave' | 'marker'; x: number; y: number; variant: string }
 
 /** A road bridge where a road crosses a river (continent metres; deck height absolute). */
 export interface BridgeSite { road: string; river: string; x: number; y: number; dir: 0 | 1; length: number; z: number; cx: number; cy: number }
@@ -77,6 +80,8 @@ export class ContinentTerrain {
   private paths: Array<{ cls: string; pts: Float64Array }> = [];
   /** Road bridges (where each road's path crosses a river). */
   readonly bridges: BridgeSite[] = [];
+  /** Watchtowers, ruins, caves and markers at the landmarks (on dry ground near each). */
+  private placeList: PlaceSite[] | null = null;
   /** Village plans, made on first use (pure: the same in a worker and on the main thread). */
   private plans = new Map<string, VillagePlan>();
   private salt: number;
@@ -145,6 +150,7 @@ export class ContinentTerrain {
       this.paths.push({ cls: r.cls, pts: Float64Array.from(out) });
       for (const b of r.bridges) { const site = this.bridgeSite(out, b.at[0] * this.mpu, b.at[1] * this.mpu, r.id, b.river); if (site) this.bridges.push(site); }
     }
+    this.places(); // once, here rather than inside the first region generated
   }
 
   /** Inside a river channel (continent metres)? */
@@ -210,6 +216,25 @@ export class ContinentTerrain {
         return false;
       },
     };
+  }
+
+  /** Discoverable places at the landmarks: towers, ruins (and submerged ruins on their shore), caves and dens, markers. */
+  places(): PlaceSite[] {
+    if (this.placeList) return this.placeList;
+    const site = this.siteQuery(), out: PlaceSite[] = [];
+    for (const l of this.bp.data.landmarks) {
+      const kind: PlaceSite['kind'] | null = l.kind === 'tower' ? 'tower' : /ruin|castle|cathedral|temple|fortress/.test(l.kind) || l.kind === 'castle' ? 'ruin' : l.kind === 'cave' || l.kind === 'den' ? 'cave' : l.kind === 'bridge' || l.kind === 'lake' || l.kind === 'road marker' ? null : 'marker';
+      if (!kind) continue;
+      let x = l.at[0] * this.mpu, y = l.at[1] * this.mpu;
+      // Nearest dry spot within 400 m.
+      search: for (let r = 0; r <= 400; r += 20) for (let k = 0; k < (r ? 16 : 1); k++) {
+        const a = (k / 16) * Math.PI * 2, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+        if (!site.wet(px, py, 6)) { x = Math.round(px); y = Math.round(py); break search; }
+      }
+      const variant = kind === 'tower' ? (l.id.startsWith('sun') ? 'sun' : 'river') : kind === 'ruin' ? (l.kind === 'castle' ? 'castle' : /temple|cathedral|sanctuary/.test(l.id) ? 'temple' : 'wall') : kind === 'cave' ? 'lair' : 'rune';
+      out.push({ id: l.id, name: l.name, kind, x, y, variant });
+    }
+    return (this.placeList = out);
   }
 
   /** The village plans whose area meets a rectangle (continent metres). */
@@ -299,6 +324,29 @@ export class ContinentTerrain {
     for (const br of this.bridges) {
       if (br.x < ox || br.y < oy || br.x >= ox + S || br.y >= oy + S) continue;
       out.objects.push({ kind: 'span', x: br.x - ox, y: br.y - oy, variant: 'timber', props: { length: br.length, dir: br.dir, z: br.z } });
+    }
+    // Places at landmarks, each with a chest beside it (ruins and caves have two).
+    const dry = (i: number, j: number) => i >= 0 && j >= 0 && i < S && j < S && kind[(j + 1) * M + i + 1] === WK_NONE;
+    for (const p of this.places()) {
+      if (p.x < ox || p.y < oy || p.x >= ox + S || p.y >= oy + S) continue;
+      const i = p.x - ox, j = p.y - oy;
+      if (p.kind === 'tower') out.objects.push({ kind: 'tower', x: i, y: j, variant: p.variant });
+      else if (p.kind === 'ruin') { out.objects.push({ kind: 'ruin', x: i, y: j, variant: p.variant }); if (dry(i + 9, j + 4)) out.objects.push({ kind: 'ruin', x: i + 9, y: j + 4, variant: 'wall' }); }
+      else if (p.kind === 'cave') out.objects.push({ kind: 'cave', x: i, y: j, variant: 'lair' });
+      else out.objects.push({ kind: 'stone', x: i, y: j, variant: 'rune' });
+      const chests = p.kind === 'ruin' || p.kind === 'cave' ? [[3, 6], [-4, 5]] : [[5, 4]];
+      for (const [dx, dy] of chests) if (dry(i + dx, j + dy)) out.objects.push({ kind: 'cache', x: i + dx, y: j + dy, variant: p.kind === 'marker' ? 'relic' : 'chest' });
+    }
+    // Herbs in woods and meadows, ore on rocky ground: a few finds per region, away from villages and water.
+    const r = (k: number) => hash2(rx(out) * 7919 + k, ry(out) * 104729 + k, this.salt + 400);
+    const ids = this.bp.data.regions.map((q) => q.id);
+    for (let k = 0; k < 6; k++) {
+      const i = 4 + Math.floor(r(k * 3) * (S - 8)), j = 4 + Math.floor(r(k * 3 + 1) * (S - 8)), c = j * S + i;
+      if (!dry(i, j) || out.mat[c] === Mat.Path || out.mat[c] === Mat.Dirt && out.cover[c] === Cover.None) continue;
+      const id = ids[out.biome[c]], rocky = out.mat[c] === Mat.Stone || out.mat[c] === Mat.Scree;
+      const variant = rocky || id === 'dragon-peaks' || id === 'hollow-lands' ? (r(k * 3 + 2) < 0.6 ? 'ore' : null) : id === 'elderwood' || id === 'heartlands' || id === 'whispering-marshes' || id === 'golden-plains' ? (r(k * 3 + 2) < 0.7 ? 'herbs' : null) : null;
+      if (!variant || this.villagesNear(out.ox + i - 60, out.oy + j - 60, out.ox + i + 60, out.oy + j + 60).some((v) => Math.hypot(v.cx - out.ox - i, v.cy - out.oy - j) < v.radius + 30)) continue;
+      out.objects.push({ kind: 'cache', x: i, y: j, variant });
     }
   }
 
@@ -667,6 +715,7 @@ export class ContinentTerrain {
     const G = 5;
     const bridges = this.bridges.filter((b) => b.x - 6 < out.ox + S && b.x + (b.dir ? 3 : b.length) + 6 > out.ox && b.y - 6 < out.oy + S && b.y + (b.dir ? b.length : 3) + 6 > out.oy)
       .map((b) => ({ x0: b.x - 4, y0: b.y - 4, x1: b.x + (b.dir ? 3 : b.length) + 3, y1: b.y + (b.dir ? b.length : 3) + 3 }));
+    const places = this.places().filter((p) => p.x > out.ox - 20 && p.x < out.ox + S + 20 && p.y > out.oy - 20 && p.y < out.oy + S + 20);
     const ok = (i: number, j: number) => {
       const k = j * S + i, km = (j + 1) * M + i + 1;
       if (i < 1 || j < 1 || i >= S - 1 || j >= S - 1 || out.waterKind[k] !== WK_NONE || wd[k] < 2) return false;
@@ -674,6 +723,7 @@ export class ContinentTerrain {
       // Keep bridge decks and their approaches clear (rocks and trees can reach a few cells from their anchor).
       const gx = out.ox + i, gy = out.oy + j;
       for (const b of bridges) if (gx >= b.x0 && gx <= b.x1 && gy >= b.y0 && gy <= b.y1) return false;
+      for (const p of places) if (Math.abs(gx - p.x - 3) < 14 && Math.abs(gy - p.y - 2) < 12) return false;
       return Math.hypot(E[km + 1] - E[km - 1], E[km + M] - E[km - M]) / 2 < 0.6;
     };
     const shares = new Float64Array(R);
@@ -718,6 +768,8 @@ export class ContinentTerrain {
     }
   }
 }
+
+const rx = (r: RegionData) => r.rx, ry = (r: RegionData) => r.ry;
 
 /** Distance from a point to a river segment, with the interpolated surface and half-width there. */
 function segDist(s: Seg, x: number, y: number): { d: number; s: number; h: number } {

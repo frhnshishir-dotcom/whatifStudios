@@ -4,6 +4,7 @@ import { validateSave, type Validation } from '../persist/format';
 import type { ContinentSession } from '../world/session';
 import { WORLD } from '../world/data';
 import { buildContinentSave, validateContinentSave, type ContinentSave } from '../world/continentSave';
+import { setUnsavedHook } from '../world/life/client';
 import { renderMinimap } from '../engine/render/minimap';
 import { useUI } from './store';
 
@@ -27,6 +28,7 @@ export class WorldIO {
 
   async init(): Promise<void> {
     if (this.continent) {
+      setUnsavedHook(() => useUI.getState().markUnsaved());
       this.cstore = await SlotStore.open<ContinentSave>(globalThis as never, CONTINENT_SLOTS);
       useUI.setState({ storageKind: this.cstore.kind });
     } else {
@@ -88,7 +90,8 @@ export class WorldIO {
   /** The continent as it stands: position, zoom, weather and time, and every region's changes. */
   continentSnapshot(): ContinentSave {
     const e = this.engine, s = this.continent!, [fx, fy] = s.focusCell(e);
-    return buildContinentSave({ name: e.world.name, seed: e.world.seed, data: WORLD, at: s.mapOf(fx, fy), zoom: e.cam.zoomIndex, env: e.env.state(), edits: s.collectEdits(e) });
+    const life = (s.life as unknown as { sim?: { toJSON(): unknown } } | null)?.sim;
+    return buildContinentSave({ name: e.world.name, seed: e.world.seed, data: WORLD, at: s.mapOf(fx, fy), zoom: e.cam.zoomIndex, env: e.env.state(), edits: s.collectEdits(e), life: life?.toJSON() });
   }
 
   private async saveContinent(slotId: string | null, opts: { quiet?: boolean }): Promise<SlotMeta | null> {
@@ -116,6 +119,8 @@ export class WorldIO {
     const v = validateContinentSave(data, WORLD, s.win.S);
     if (!v.ok || !v.save || !v.edits) return { ok: false, errors: v.errors, warnings: v.warnings };
     s.loadAt(e, v.save.at, v.edits);
+    const life = (s.life as unknown as { sim?: { load(j: unknown): string[] } } | null)?.sim;
+    if (life && v.save.life) v.warnings.push(...life.load(v.save.life));
     e.env.set(v.save.env); e.env.settle();
     e.cam.zoomIndex = v.save.camera.zoom;
     if (e.renderer) { const r = e.renderer.canvas.getBoundingClientRect(); e.resize(r.width, r.height, window.devicePixelRatio || 1); }

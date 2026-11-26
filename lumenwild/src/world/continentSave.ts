@@ -9,7 +9,7 @@ import { ContinentEdits, type RegionEditJSON } from './edits';
 export const CONTINENT_FORMAT = 'lumenwild-continent';
 export const CONTINENT_SAVE_VERSION = 1;
 /** Bumped whenever generation changes what a region contains (stored changes are measured against it). */
-export const GENERATOR_VERSION = 'terrain-2c+villages-1+edits-1';
+export const GENERATOR_VERSION = 'terrain-2c+villages-1+places-1+edits-1';
 
 export interface ContinentSave {
   format: typeof CONTINENT_FORMAT;
@@ -27,6 +27,8 @@ export interface ContinentSave {
   edits: Record<string, RegionEditJSON>;
   /** For the slot list and checks. */
   stats: { regions: number; cells: number; objects: number };
+  /** The living world: clock, players (position, inventory), explored map, wildlife and dragons. */
+  life?: unknown;
 }
 
 /** FNV-1a hash (hex) of the world files and the generator version. */
@@ -37,13 +39,13 @@ export function worldFingerprint(data: WorldData): string {
   return h.toString(16).padStart(8, '0');
 }
 
-export function buildContinentSave(p: { name: string; seed: number; data: WorldData; at: MapPt; zoom: number; env: EnvState; edits: ContinentEdits }): ContinentSave {
+export function buildContinentSave(p: { name: string; seed: number; data: WorldData; at: MapPt; zoom: number; env: EnvState; edits: ContinentEdits; life?: unknown }): ContinentSave {
   let objects = 0;
   for (const e of p.edits.regions.values()) objects += e.added.length + e.removed.length;
   return {
     format: CONTINENT_FORMAT, version: CONTINENT_SAVE_VERSION, name: p.name, seed: p.seed, savedAt: new Date().toISOString(),
     fingerprint: worldFingerprint(p.data), at: [p.at[0], p.at[1]], camera: { zoom: p.zoom }, env: { ...p.env },
-    edits: p.edits.toJSON(), stats: { regions: p.edits.size, cells: p.edits.cellCount(), objects },
+    edits: p.edits.toJSON(), stats: { regions: p.edits.size, cells: p.edits.cellCount(), objects }, life: p.life,
   };
 }
 
@@ -85,6 +87,7 @@ export function validateContinentSave(input: unknown, data: WorldData, regionCel
     seed: typeof s.seed === 'number' ? s.seed : data.world.seed, savedAt: typeof s.savedAt === 'string' ? s.savedAt : new Date(0).toISOString(),
     fingerprint: String(s.fingerprint ?? ''), at: at!, camera: { zoom: Math.round(num((s.camera as { zoom?: unknown } | undefined)?.zoom, 0, 13, 4)) }, env,
     edits: (s.edits ?? {}) as Record<string, RegionEditJSON>, stats: { regions: edits.size, cells: edits.cellCount(), objects: 0 },
+    life: s.life && typeof s.life === 'object' ? s.life : undefined,
   };
   return { ok: true, errors, warnings, save, edits };
 }

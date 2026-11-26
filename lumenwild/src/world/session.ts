@@ -26,6 +26,8 @@ export class ContinentSession {
   travelTo = '';
   /** What the player changed, region by region (kept while regions are unloaded; saved with the game). */
   edits = new ContinentEdits();
+  /** The living world (player, wildlife, villagers, dragons), stepped first each frame. */
+  life: { frame(dt: number): void } | null = null;
 
   constructor(bp: Blueprint, terrain: ContinentTerrain, cache: RegionCache, win: WorldWindow) {
     this.bp = bp; this.terrain = terrain; this.cache = cache; this.win = win;
@@ -197,6 +199,7 @@ export class ContinentSession {
 
   /** Per frame: follow the journey (if any), then move the window when the focus has left the central region. */
   update(engine: Engine, dt = 1 / 60): void {
+    this.life?.frame(dt);
     if (this.travel) {
       const p = this.travel.advance(engine.clock.paused ? 0 : dt);
       const [x, y] = this.windowCellOf(p), W = this.win.W;

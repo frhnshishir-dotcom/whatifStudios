@@ -6,7 +6,7 @@ import { hash2 } from '../core/rng';
 // to the anchor cell: (dx, dy) on the ground grid, `up` rows above the ground surface, packed fg/bg (bg 0 =
 // transparent) and an animation code applied at draw time (sway, glow pulse, lit windows, mill wheel...).
 
-export const OBJ_KINDS = ['tree', 'rock', 'mushroom', 'bridge', 'cottage', 'mill', 'stone', 'cave', 'building', 'span'] as const;
+export const OBJ_KINDS = ['tree', 'rock', 'mushroom', 'bridge', 'cottage', 'mill', 'stone', 'cave', 'building', 'span', 'tower', 'ruin', 'cache'] as const;
 export type ObjKind = (typeof OBJ_KINDS)[number];
 
 export interface WorldObject {
@@ -498,6 +498,46 @@ function spanSprite(o: WorldObject): SpriteCell[] {
   return cells;
 }
 
+// ------------------------------------------------------------------ exploration: watchtowers, ruins, caches
+const TOWER_STONE = C('#9a968a'), TOWER_DARK = C('#4e4b44'), MOSSY = C('#5f7a48');
+
+/** A tall stone watchtower (3 x 3): tapering shaft, a lit window, battlements and a banner. */
+function towerSprite(o: WorldObject): SpriteCell[] {
+  const cells: SpriteCell[] = [], dy = 2;
+  const put = (dx: number, up: number, ch: string, fg: RGB, bg: RGB | null, anim = 0) => cells.push({ dx, dy, up, g: g(ch), fg: P(fg), bg: bg ? P(bg) : 0, anim });
+  for (let up = 0; up < 8; up++) for (let dx = 0; dx < 3; dx++) {
+    const win = dx === 1 && (up === 3 || up === 6), door = dx === 1 && up === 0;
+    put(dx, up, door ? '▌' : win ? '▫' : up % 2 ? '▓' : '█', door ? C('#5a3e28') : win ? WINDOW : shade(TOWER_STONE, dx === 2 ? 0.8 : 1), door ? TIMBER : win ? C('#3a2c18') : shade(TOWER_DARK, dx === 0 ? 1.1 : 0.9), win ? Anim.Window : 0);
+  }
+  for (let dx = -1; dx <= 3; dx++) put(dx, 8, dx % 2 ? '▀' : '█', TOWER_STONE, TOWER_DARK);
+  put(1, 9, '│', C('#5a3e28'), null); put(2, 10, '▸', o.variant === 'sun' ? C('#e7c35a') : C('#c84a3a'), null);
+  return cells;
+}
+
+/** Broken walls and columns, mossy; the variant sets the size (wall, temple, castle). */
+function ruinSprite(o: WorldObject): SpriteCell[] {
+  const cells: SpriteCell[] = [], w = o.variant === 'castle' ? 7 : o.variant === 'temple' ? 5 : 4, seed = o.x * 31 + o.y * 17;
+  for (let dx = 0; dx < w; dx++) {
+    const hgt = 1 + Math.floor(hash2(seed, dx, 3) * (o.variant === 'castle' ? 5 : 3));
+    for (let up = 0; up < hgt; up++) {
+      const moss = hash2(seed, dx * 7 + up, 5) < 0.3;
+      cells.push({ dx, dy: 1, up, g: g(up === hgt - 1 ? (hash2(seed, dx, 9) < 0.5 ? '▄' : '▖') : hash2(seed, dx + up, 2) < 0.4 ? '▓' : '█'), fg: P(moss ? MOSSY : TOWER_STONE, 0.9 + up * 0.04), bg: P(TOWER_DARK, 0.85), anim: 0 });
+    }
+    if (o.variant === 'temple' && dx % 2 === 0) cells.push({ dx, dy: 0, up: 0, g: g('▪'), fg: P(TOWER_STONE, 0.8), bg: 0, anim: 0 });
+  }
+  return cells;
+}
+
+/** Something to find: a chest, herbs, ore or a relic (small; relics glow). */
+function cacheSprite(o: WorldObject): SpriteCell[] {
+  switch (o.variant) {
+    case 'chest': return [{ dx: 0, dy: 0, up: 0, g: g('▬'), fg: P(C('#8a5a2a')), bg: P(C('#3a2412')), anim: 0 }, { dx: 0, dy: 0, up: 1, g: g('◆'), fg: P(C('#f2c94c')), bg: 0, anim: Anim.Glow }];
+    case 'herbs': return [{ dx: 0, dy: 0, up: 0, g: g(hash2(o.x, o.y, 1) < 0.5 ? '❀' : '☘'), fg: P(C('#9fe07a')), bg: 0, anim: Anim.Sway }];
+    case 'ore': return [{ dx: 0, dy: 0, up: 0, g: g('◆'), fg: P(C('#9fc4e8')), bg: P(C('#3a3d44')), anim: Anim.Glow }];
+    default: return [{ dx: 0, dy: 0, up: 0, g: g('✦'), fg: P(C('#c8a0ff')), bg: 0, anim: Anim.Glow }];
+  }
+}
+
 const rect = (w: number, h: number): Array<[number, number]> => {
   const out: Array<[number, number]> = [];
   for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push([dx, dy]);
@@ -566,6 +606,20 @@ export const OBJECT_DEFS: Record<ObjKind, ObjectDef> = {
     defaults: { t: 0, w: 5, d: 3, floors: 1 }, solid: true,
     footprint: (o) => rect(Math.max(1, Math.round(o.props.w ?? 5)), Math.max(1, Math.round(o.props.d ?? 3))), sprite: buildingSprite,
     light: (o) => (['well', 'market-stall', 'fire-pit', 'moonwell', 'lantern-deck'].includes(BUILDING_TYPES[Math.round(o.props.t ?? 0)] ?? '') ? null : { r: 7, color: C('#ffc46a'), intensity: 0.9, up: 1 }),
+  },
+  tower: {
+    label: 'Watchtower', variants: ['river', 'sun'], props: [], defaults: {}, solid: true,
+    footprint: () => rect(3, 3), sprite: towerSprite,
+    light: () => ({ r: 8, color: C('#ffc46a'), intensity: 0.9, up: 6 }),
+  },
+  ruin: {
+    label: 'Ruin', variants: ['wall', 'temple', 'castle'], props: [], defaults: {}, solid: true,
+    footprint: (o) => rect(o.variant === 'castle' ? 7 : o.variant === 'temple' ? 5 : 4, 2), sprite: ruinSprite,
+  },
+  cache: {
+    label: 'Find', variants: ['chest', 'herbs', 'ore', 'relic'], props: [], defaults: {}, solid: false,
+    footprint: () => [[0, 0]], sprite: cacheSprite,
+    light: (o) => (o.variant === 'chest' || o.variant === 'relic' ? { r: 3, color: o.variant === 'chest' ? C('#f2c94c') : C('#c8a0ff'), intensity: 0.5, up: 0 } : null),
   },
   span: {
     label: 'Road bridge', variants: ['timber'],

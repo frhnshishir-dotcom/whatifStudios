@@ -28,7 +28,7 @@ describe('region streaming', { timeout: 120_000 }, () => {
   });
 
   it('the engine follows the view: seamless camera, bounded memory, quick moves, re-shaded strips', () => {
-    const { engine, session } = createContinentEngine({ worker: false });
+    const { engine, session } = createContinentEngine({ worker: false, life: false }) // drives the camera itself;
     engine.cam.setViewport(1440, 900);
     engine.focus(...engine.home!);
     const continentX = () => engine.cam.x + session.win.origin[0] * session.win.S;
