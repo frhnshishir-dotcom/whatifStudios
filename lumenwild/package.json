@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test --trace off",
     "server:build": "vite build --ssr server/main.ts --outDir dist-server --emptyOutDir",
-    "server": "npm run server:build && node dist-server/main.js"
+    "server": "npm run server:build && node dist-server/main.js",
+    "loadtest": "vitest run tests/load.test.ts --silent=false"
   },
   "engines": {
     "node": ">=20.19"

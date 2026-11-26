@@ -41,6 +41,12 @@ test('two browser clients share one server world', async ({ browser }) => {
   const A1 = await me(a);
   expect(A1.x - A0.x).toBeGreaterThan(5);
   await expect.poll(async () => { const B = await me(b); const ada = B.others.find((o) => o.id === A1.id); return ada ? Math.abs(ada.x - A1.x) : 1e9; }, { timeout: 10_000 }).toBeLessThan(1.5);
+  // Ada swings (Space): the server decides, and Bram, beside her, sees the swing; he sees her name over her head.
+  await a.keyboard.down('Space'); await a.waitForTimeout(700); await a.keyboard.up('Space');
+  await expect.poll(() => b.evaluate((id) => !!(window as any).__lumenwild.getEngine().streamer.life.swings.get(id), A1.id), { timeout: 10_000 }).toBe(true);
+  await expect(b.getByTestId('hud')).toContainText('Ada', { timeout: 10_000 });
+  // Characters come from the server: Bram's own hero (level, pack) arrived.
+  expect(await b.evaluate(() => (window as any).__lumenwild.getEngine().streamer.life.net.stats.heroSyncs)).toBeGreaterThan(0);
   // The same dragons (positions from the same server; snapshots may be one tick apart).
   const [Da, Db]: Array<Array<[string, number, number]>> = [(await me(a)).dragons, (await me(b)).dragons];
   expect(Da.map((d) => d[0])).toEqual(Db.map((d) => d[0]));
