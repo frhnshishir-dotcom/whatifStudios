@@ -254,6 +254,23 @@ export class LivingWorld {
   /** Things the panel shows: the open tab, a shop. */
   ui = { tab: 'world' as string };
 
+  // ---------------------------------------------------------------- the interface's link
+  // The interface reads the character, the rules' view and the world from this object and sends commands through
+  // `command()`. It is told when to look again: `revision` rises (and listeners are called) whenever something it
+  // shows may have changed. That is after rules events (offline, or from the server), after a command applied here,
+  // and on the server's character, welcome and error messages. Health and stamina change every frame, so displays of
+  // those also refresh on a timer.
+  /** Raised whenever something the interface shows may have changed. */
+  revision = 0;
+  /** The latest rules events (numbered, newest last, at most 60): notices, the target frame. */
+  readonly recent: Array<{ seq: number; at: number; ev: RpgEvent }> = [];
+  private seq = 0;
+  private listeners = new Set<() => void>();
+  /** Be told of changes (a stable function, as React's useSyncExternalStore wants). Returns the unsubscribe. */
+  readonly subscribe = (f: () => void): (() => void) => { this.listeners.add(f); return () => { this.listeners.delete(f); }; };
+  /** Something the interface shows may have changed: raise the revision and tell the listeners. */
+  changed(): void { this.revision++; for (const f of [...this.listeners]) f(); }
+
   constructor(readonly engine: Engine, readonly session: ContinentSession) {
     this.q = new WindowQuery(engine, session);
     this.sim = new LifeSim(session.bp, session.terrain, this.q);
@@ -284,7 +301,7 @@ export class LivingWorld {
         if (ev.code === 'KeyE' && !ev.repeat) this.interact();
         if (ev.code === 'KeyF' && !ev.repeat) this.watchNearestDragon();
         const tab = ({ KeyI: 'pack', KeyC: 'hero', KeyJ: 'quests', KeyK: 'craft' } as Record<string, string>)[ev.code];
-        if (tab && !ev.repeat) this.ui.tab = this.ui.tab === tab ? 'world' : tab;
+        if (tab && !ev.repeat) { this.ui.tab = this.ui.tab === tab ? 'world' : tab; this.changed(); }
       };
       const up = (ev: KeyboardEvent) => this.keys.delete(ev.code);
       const blur = () => this.keys.clear();
@@ -312,6 +329,7 @@ export class LivingWorld {
     this.sim.rpg.command('local', c);
     this.processEvents();
     useUnsaved();
+    this.changed(); // also when the command emitted nothing (equipping, for one)
   }
 
   /** Swing at whatever is in front, turning toward the nearest creature in reach. */
@@ -357,6 +375,10 @@ export class LivingWorld {
         default: break;
       }
     }
+    if (!evs.length) return;
+    for (const ev of evs) this.recent.push({ seq: ++this.seq, at: now, ev });
+    if (this.recent.length > 60) this.recent.splice(0, this.recent.length - 60);
+    this.changed();
   }
 
   /** Quest markers over villagers near the traveller ("!" has work, "?" waiting for you), once a second. */
@@ -539,7 +561,7 @@ export class LivingWorld {
 
   interact(): void {
     const it = this.interaction();
-    if (!it) { this.message = 'Nothing to do here.'; return; }
+    if (!it) { this.message = 'Nothing to do here.'; this.changed(); return; }
     this.command(it.cmd);
     if (it.cmd.t === 'talk' && SHOPS[this.sim.villages.people.get(it.cmd.vid)?.tag ?? '']) this.ui.tab = 'shop';
     if (it.cmd.t === 'gather' && !this.net) this.sweepFinds();

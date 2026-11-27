@@ -108,6 +108,10 @@ export class NetClient {
         break;
       case 'pong': break;
     }
+    // The interface looks again after the server's word on the character, the join, errors, players coming and
+    // going, refusals and corrections. Snapshots (health, positions) are read by its timers; events are handled
+    // with the frame's other events (LivingWorld.processEvents).
+    if (m.type !== 'snap' && m.type !== 'ev' && m.type !== 'pong') lw.changed();
   }
 
   /** Glide toward the latest position over one snapshot interval. */

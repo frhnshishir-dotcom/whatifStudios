@@ -4,6 +4,7 @@ import type { RpgCmd } from '../../world/rpg/Rpg';
 import { ITEMS, RARITY, SLOTS, itemName, itemStats, type Item } from '../../world/rpg/items';
 import { RECIPES, SKILLS, STATION_NAMES } from '../../world/rpg/content';
 import { ATTR_NAMES, maxHp, xpToNext, sLevel, skillXpFor, attackDamage, attackCooldown, armourOf, critChance, count, type Attr } from '../../world/rpg/hero';
+import { useLife } from '../rpg/useLife';
 
 /**
  * The traveller's RPG panel: Hero (level, attributes, skills, statistics), Pack (equipment and items), Quests,
@@ -18,6 +19,7 @@ const Btn = ({ onClick, children, disabled, testid }: { onClick: () => void; chi
 const Name = ({ it }: { it: Item }) => <span style={{ color: RARITY[it.r].colour }}>{itemName(it)}{it.n > 1 ? ` ×${it.n}` : ''}</span>;
 
 export function RpgPanel({ lw, world }: { lw: LivingWorld; world: ReactNode }) {
+  useLife(); // re-render as soon as the character or the rules' view changes
   const [, bump] = useState(0);
   const refresh = () => bump((n) => n + 1);
   const cmd = (c: RpgCmd) => { lw.command(c); refresh(); };
