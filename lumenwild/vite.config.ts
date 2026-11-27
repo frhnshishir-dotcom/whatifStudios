@@ -19,8 +19,7 @@ export default defineConfig({
     // Timed acceptance runs go alone (vitest.accept.config.ts, `npm run test:accept`).
     exclude: [...configDefaults.exclude, 'tests/acceptance/**'],
     environment: 'node',
-    // CI runners are slower than a laptop; tests that need longer set their own timeouts.
-    testTimeout: 30_000,
+    // Vitest's default 5 s per test. Tests that legitimately take longer set their own timeout, with the reason.
     // Servers in tests generate regions on worker threads, as the real server does (see tests/setup/buildWorker.ts).
     globalSetup: ['./tests/setup/buildWorker.ts'],
   },

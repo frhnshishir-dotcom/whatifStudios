@@ -536,6 +536,10 @@ export class Wildlife {
   private coarseStep(c: Creature, dt: number, ctx: WildlifeContext): void {
     this.needs(c, dt);
     c.stT += dt;
+    // A fight with a player is not ended here. On the server, a player's own ground can be coarse for a moment
+    // (its region is still being made by a worker); the fight resumes when it is exact, and the detailed step ends
+    // it if the player has gone (dead, or more than 50 m away). In the browser fights are always in the loaded area.
+    if (c.st === 'fight' && c.foe) { c.alt = 0; return; }
     const def = SPECIES[c.sp];
     if (!inHours(ctx.clock.hour, def.active[0], def.active[1])) { c.st = 'sleep'; c.alt = 0; c.energy = Math.min(1, c.energy + dt / 240); return; }
     if (c.hunger > 0.6) c.hunger = Math.max(0.2, c.hunger - dt / 60); // foraging off-screen

@@ -35,8 +35,11 @@ describe('the coarse water test (256 m river buckets)', () => {
       // Points across and around the banks of random segments, including cell corners (all margins callers use).
       const s = segs[Math.floor(rnd() * segs.length)], t = rnd(), a = rnd() * Math.PI * 2, d = rnd() * (Math.max(s.ha, s.hb) + 24);
       const x = s.ax + (s.bx - s.ax) * t + Math.cos(a) * d, y = s.ay + (s.by - s.ay) * t + Math.sin(a) * d;
+      // The exhaustive search once per point: the segments that wet it at the largest margin (a superset of those
+      // at smaller margins), then each margin is checked against that short list.
+      const near = segs.filter((q) => wetBy(q, x, y, 16));
       for (const m of [0, 4, 6, 7, 14, 16]) {
-        const truth = segs.some((q) => wetBy(q, x, y, m));
+        const truth = near.some((q) => wetBy(q, x, y, m));
         checked++;
         if (truth) { wet++; expect(site.wet(x, y, m)).toBe(true); }
       }
@@ -111,6 +114,34 @@ describe('the server region store', { timeout: 120_000 }, () => {
     expect(store.stats.workerStarts).toBeGreaterThan(starts);
     expect(store.get(Math.floor(square(4).x / S), Math.floor(square(4).y / S))).toBeDefined();
     await store.close();
+  });
+
+  it('a fight that starts before a player\'s ground is exact goes on once it is', async () => {
+    // CI run 6: a bear raised beside a player who had just joined lost its fight. Its region was still being made
+    // by a worker (the creature was simulated coarsely), and the coarse step turned the fight into wandering.
+    const server = new WorldServer({ port: 0, dataFile: null });
+    const port = await server.listen();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    await new Promise((r) => { ws.onopen = r; });
+    let id = '';
+    const evs: string[] = [];
+    ws.onmessage = (e) => { const m = JSON.parse(String(e.data)); if (m.type === 'welcome') id = m.id; if (m.type === 'ev') for (const v of m.evs) evs.push(v.e); };
+    ws.send(JSON.stringify({ type: 'hello', name: 'Ada', v: 2 }));
+    for (let k = 0; k < 100 && !id; k++) await new Promise((r) => setTimeout(r, 20));
+    const A = server.sim.players.get(id)!;
+    A.hero.hp = 1;
+    server.sim.wildlife.raiseGuardian('early-bear', 'bear', A.x + 1.5, A.y, A, server.sim.clock);
+    const bear = server.sim.wildlife.creatures.get('early-bear')!;
+    expect(server.q.detailed(bear.x, bear.y)).toBe(false); // the scenario: the ground is not exact yet
+    const t0 = Date.now();
+    while (!evs.includes('died') && Date.now() - t0 < 20_000) {
+      if (bear.tier === 1) expect(bear.st).toBe('fight'); // coarse for now, still fighting
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(evs).toContain('died');
+    expect(server.q.detailed(bear.x, bear.y)).toBe(true);
+    ws.close();
+    await server.stop();
   });
 
   it('a world server never generates a region on its update loop', async () => {

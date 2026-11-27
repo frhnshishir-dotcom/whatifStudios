@@ -14,7 +14,12 @@ function makeEngine(seed: number): Engine {
   return e;
 }
 
-describe('save format', () => {
+// Every test in this group generates one to three full 256 x 256 Valley worlds: about 1.15 s each here, 70 % of it the
+// water warm-up, which is part of the protected Valley generation (it sets the ripples the golden images show), so it
+// is not shortened for tests. Measured for "worlds keep their dragon" (three worlds): 3.6-4.2 s alone (10 runs),
+// 3.7 s within the suite here, 5.4 s within the suite on the GitHub runner (CI run 2, over Vitest's 5 s default).
+// 15 s is about three times the slowest measurement. The rest of the suite keeps the 5 s default.
+describe('save format', { timeout: 15_000 }, () => {
   it('base64 round-trips every length and byte value', () => {
     for (const n of [0, 1, 2, 3, 4, 5, 255, 256, 1000, 3001]) {
       const a = new Uint8Array(n);
