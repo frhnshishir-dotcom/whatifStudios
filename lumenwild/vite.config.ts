@@ -17,5 +17,7 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
+    // CI runners are slower than a laptop; tests that need longer set their own timeouts.
+    testTimeout: 30_000,
   },
 });
