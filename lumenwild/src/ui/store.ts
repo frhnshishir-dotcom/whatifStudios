@@ -64,6 +64,10 @@ interface UIState {
   /** The editing tool to restore when returning to the sandbox (Play keeps the harmless select tool). */
   sandboxTool: ToolId;
   setLayout: (l: UIState['layout']) => void;
+  /** Play: the RPG window open over the world, if any. */
+  rpgWindow: 'character' | 'inventory' | 'journal' | 'craft' | null;
+  setRpgWindow: (w: UIState['rpgWindow']) => void;
+  toggleRpgWindow: (w: NonNullable<UIState['rpgWindow']>) => void;
   setSaveState: (s: UIState['saveState']) => void;
   markUnsaved: () => void;
 }
@@ -118,6 +122,9 @@ export const useUI = create<UIState>()((set) => ({
   mode: typeof location !== 'undefined' && new URLSearchParams(location.search).get('scene') === 'continent' ? 'continent' : 'valley',
   layout: typeof location !== 'undefined' && new URLSearchParams(location.search).get('scene') === 'continent' && new URLSearchParams(location.search).get('layout') !== 'sandbox' ? 'play' : 'sandbox',
   sandboxTool: 'select',
+  rpgWindow: null,
+  setRpgWindow: (rpgWindow) => set({ rpgWindow }),
+  toggleRpgWindow: (w) => set((s) => ({ rpgWindow: s.rpgWindow === w ? null : w })),
   setLayout: (layout) => set((s) => {
     if (s.mode !== 'continent' || layout === s.layout) return {};
     return layout === 'play' ? { layout, sandboxTool: s.tool, tool: 'select', inspectorOpen: false } : { layout, tool: s.sandboxTool };

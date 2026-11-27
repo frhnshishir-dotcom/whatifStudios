@@ -15,6 +15,7 @@ import { ContinentDialog } from './components/ContinentDialog';
 import { getWorldIO } from './persistence';
 import { PlayBar } from './rpg/PlayBar';
 import { RpgHud } from './rpg/RpgHud';
+import { RpgWindows } from './rpg/Windows';
 
 function Toast() {
   const toast = useUI((s) => s.toast);
@@ -50,8 +51,14 @@ export function App() {
         return;
       }
       const engine = getEngine();
-      // Play: no editing shortcuts or tool keys (the game owns its keys; the tools are in the Sandbox).
-      if (ui.mode === 'continent' && ui.layout === 'play') return;
+      // Play: the RPG windows (I, C, J, K; Esc closes); no editing shortcuts or tool keys (the tools are in the Sandbox).
+      if (ui.mode === 'continent' && ui.layout === 'play') {
+        if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat) return;
+        const w = ({ KeyI: 'inventory', KeyC: 'character', KeyJ: 'journal', KeyK: 'craft' } as const)[ev.code as 'KeyI'];
+        if (w) ui.toggleRpgWindow(w);
+        else if (ev.key === 'Escape' && ui.rpgWindow) ui.setRpgWindow(null);
+        return;
+      }
       if (engine && editorShortcut(ev, engine)) { ev.preventDefault(); return; }
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       // Continent play owns the game keys (move, attack, dodge, eat, interact, watch, panel tabs).
@@ -74,7 +81,7 @@ export function App() {
     <div className={`app${play ? ' play' : ''}${!play && panelsHidden ? ' panels-hidden' : ''}${!play && inspectorOpen ? ' inspector-open' : ''}`} data-layout={mode === 'continent' ? layout : 'valley'}>
       {play ? <PlayBar /> : !panelsHidden && <TopBar />}
       {!play && !panelsHidden && <Toolbar />}
-      <main className="stage"><CanvasView /><Toast />{mode === 'continent' && <RpgHud layout={layout} />}</main>
+      <main className="stage"><CanvasView /><Toast />{mode === 'continent' && <RpgHud layout={layout} />}{play && <RpgWindows />}</main>
       {!play && !panelsHidden && <Inspector />}
       {!play && !panelsHidden && <BottomBar />}
       <WorldDialog />

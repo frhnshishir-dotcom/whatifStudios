@@ -240,6 +240,8 @@ export class LifeSim {
       const p = this.players.get(String(pj.id)) ?? [...this.players.values()][0];
       if (!p) continue;
       if (typeof pj.x === 'number' && typeof pj.y === 'number') { p.x = pj.x; p.y = pj.y; }
+      // The name has always been saved (players[].name); now it also comes back.
+      if (typeof pj.name === 'string' && pj.name.trim()) p.name = pj.name.trim().slice(0, 24);
       if (typeof pj.stamina === 'number') p.stamina = pj.stamina;
       if (pj.hero) p.hero = heroFromJSON(pj.hero, this.rpg.createHero(p.x, p.y));
       else if (pj.inv && typeof pj.inv === 'object') this.legacyPack(p, pj.inv as Record<string, unknown>);

@@ -322,6 +322,19 @@ export class LivingWorld {
   /** The id this traveller has in the rules (the server's id when online). */
   get me(): string { return this.net?.id || 'local'; }
 
+  /**
+   * Name the traveller (single player; online the name is the one given when joining). 1-24 letters, digits, spaces,
+   * apostrophes, hyphens or dots. Saved with the continent (players[].name). Returns whether it was taken.
+   */
+  rename(name: string): boolean {
+    const n = name.trim().replace(/\s+/g, ' ');
+    if (this.net || !/^[\p{L}\p{N}][\p{L}\p{N} '.-]{0,23}$/u.test(n)) return false;
+    this.player.name = n;
+    useUnsaved();
+    this.changed();
+    return true;
+  }
+
   /** Run a command: here (single player) or on the world server (online). */
   command(c: RpgCmd): void {
     if (this.net) { this.net.cmd(c); return; }

@@ -3,6 +3,8 @@ import { useLife } from './useLife';
 import { NoticeReader, TargetPicker, questProgress, speciesName, type Notice } from './hudModel';
 import { maxHp, xpToNext } from '../../world/rpg/hero';
 import type { LivingWorld } from '../../world/life/client';
+import { useUI } from '../store';
+import { RpgDock } from './Windows';
 import './rpg.css';
 
 /**
@@ -32,7 +34,7 @@ function CharacterPlate({ lw }: { lw: LivingWorld }) {
       <div className="rpg-plate-body">
         <div className="rpg-plate-name">
           <span data-testid="hud-name">{p.name}</span>
-          {h.points > 0 && <span className="rpg-points" title={`${h.points} attribute point${h.points > 1 ? 's' : ''} to spend`} data-testid="hud-points">+{h.points}</span>}
+          {h.points > 0 && <button className="rpg-points" onClick={(e) => { useUI.getState().setRpgWindow('character'); e.currentTarget.blur(); }} title={`${h.points} attribute point${h.points > 1 ? 's' : ''} to spend: Character (C)`} data-testid="hud-points">+{h.points}</button>}
         </div>
         <Bar kind="hp" frac={h.hp / mh} label={`${hp} / ${mh}`} testid="hud-hp" aria={`Health ${hp} of ${mh}`} />
         <Bar kind="st" frac={p.stamina} aria={`Stamina ${Math.round(p.stamina * 100)} percent`} />
@@ -157,16 +159,15 @@ export function RpgHud({ layout }: { layout: 'play' | 'sandbox' }) {
         <div className="rpg-levelup" role="status" data-testid="level-banner">
           <span className="kicker">Level up</span>
           <strong>Level {banner.current.level}</strong>
-          {lw.player.hero.points > 0 && <span>{lw.player.hero.points} attribute points to spend</span>}
+          {lw.player.hero.points > 0 && <span>{lw.player.hero.points} attribute points to spend · Character (C)</span>}
         </div>
       )}
       {play && <QuestTracker lw={lw} />}
       <Notices list={notices.current} />
       <CharacterPlate lw={lw} />
       <Prompt lw={lw} />
-      {touch ? <TouchControls lw={lw} /> : play && (
-        <div className="rpg-keys" aria-hidden="true"><span><kbd>Space</kbd>Attack</span><span><kbd>Q</kbd>Dodge</span><span><kbd>H</kbd>Eat</span><span><kbd>E</kbd>Interact</span></div>
-      )}
+      {touch && <TouchControls lw={lw} />}
+      {play && <RpgDock touch={touch} />}
     </div>
   );
 }

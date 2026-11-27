@@ -38,6 +38,20 @@ const PATHS: Record<string, string> = {
   expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5m11-5v5h-5',
   upload: 'M12 16V4m-5 5l5-5 5 5M4 20h16',
   download: 'M12 4v12m-5-5l5 5 5-5M4 20h16',
+  // The RPG interface: windows and item kinds.
+  person: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9c0-4 3-6 7-6s7 2 7 6',
+  bag: 'M6 8h12l1 12H5zM9 8V6a3 3 0 0 1 6 0v2',
+  book: 'M4 5c3-1 5-1 8 1 3-2 5-2 8-1v14c-3-1-5-1-8 1-3-2-5-2-8-1zM12 6v14',
+  hammer: 'M14 4l6 6-3 3-6-6zM12 9l-8 8 3 3 8-8',
+  sword: 'M19 3l2 2-11 11-3-3zM7 13l-3 3 1.5 1.5L4 19l1 1 1.5-1.5L8 20l3-3',
+  shield: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z',
+  bread: 'M5 11a4 4 0 0 1 4-5h6a4 4 0 0 1 4 5v7H5zM9 10v3m3-3v3m3-3v3',
+  flask: 'M10 3h4M11 3v6l-5 9a2 2 0 0 0 2 3h8a2 2 0 0 0 2-3l-5-9V3M8 15h8',
+  ore: 'M4 15l5-8 6 2 5 6-7 5z',
+  gem: 'M6 4h12l3 5-9 11L3 9zM3 9h18M9 4l3 16 3-16',
+  scroll: 'M7 4h11v13a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-1h11v1a3 3 0 0 0 3 3M7 4a2 2 0 0 0-2 2v10',
+  fang: 'M6 4c0 7 2 13 6 16 4-3 6-9 6-16-2 2-4 3-6 3S8 6 6 4z',
+  close: 'M6 6l12 12M18 6L6 18',
 };
 
 export function Icon({ name, size = 16 }: { name: string; size?: number }) {
