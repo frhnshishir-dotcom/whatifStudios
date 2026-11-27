@@ -1,5 +1,6 @@
 import { ITEMS, RARITY, SLOTS, itemProps, validItem, makeItem, type Item, type Slot, type Prop } from './items';
 import { SKILLS, type Skill, type QuestKind } from './content';
+import { HERO_VERSION, migrateHero } from '../migrations';
 
 /**
  * A player's character: level and experience, attributes, health, skills that grow with use, inventory and
@@ -209,14 +210,18 @@ export function unequip(h: Hero, slot: Slot): string | null {
 const SAVED: Array<keyof Hero> = ['level', 'xp', 'points', 'attrs', 'hp', 'skills', 'inv', 'equip', 'coins', 'quests', 'done', 'found', 'home', 'homeName', 'stats', 'uid'];
 
 export function heroToJSON(h: Hero): Record<string, unknown> {
-  return Object.fromEntries(SAVED.map((k) => [k, h[k]]));
+  return { v: HERO_VERSION, ...Object.fromEntries(SAVED.map((k) => [k, h[k]])) };
 }
 
 /** Restore a hero from a save (tolerant: anything unreadable keeps the fresh hero's value). */
 export function heroFromJSON(j: unknown, fallback: Hero): Hero {
   const h = fallback;
   if (!j || typeof j !== 'object') return h;
-  const s = j as Record<string, unknown>;
+  // Older characters are migrated forward; a character from a newer build is never half-loaded (callers check
+  // versions before loading anything, so reaching this is a bug).
+  const m = migrateHero(j);
+  if (!m.ok) throw new Error(m.error);
+  const s = m.data;
   const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
   h.level = Math.max(1, Math.min(MAX_LEVEL, Math.floor(num(s.level, 1))));
   h.xp = Math.max(0, num(s.xp, 0)); h.points = Math.max(0, Math.floor(num(s.points, 0)));

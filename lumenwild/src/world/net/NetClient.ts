@@ -101,6 +101,11 @@ export class NetClient {
       case 'joined': lw.sim.note(`${m.name} joined the world.`); break;
       case 'left': lw.sim.note(`${m.name} left.`); lw.sim.players.delete(m.id); break;
       case 'error': this.message = m.reason; lw.message = m.reason; this.closedByUs = true; break;
+      case 'rejected':
+        // Not applied on the server: say why, and stop re-sending that region until it changes again.
+        lw.message = `Not saved to the shared world: ${m.reason}.`;
+        if (m.what === 'edit') { const all = s.collectEdits(e), [rx, ry] = m.key.split(',').map(Number), ed = all.get(rx, ry); this.lastSent.set(m.key, ed ? JSON.stringify(editToJSON(ed)) : ''); }
+        break;
       case 'pong': break;
     }
   }

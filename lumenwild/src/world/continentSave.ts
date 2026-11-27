@@ -1,3 +1,4 @@
+import { checkLife } from './migrations';
 import type { EnvState } from '../engine/env/Environment';
 import type { MapPt, WorldData } from './schema';
 import { ContinentEdits, type RegionEditJSON } from './edits';
@@ -70,6 +71,8 @@ export function validateContinentSave(input: unknown, data: WorldData, regionCel
   }
   if (typeof s.version !== 'number' || s.version < 1) errors.push('Missing or invalid "version".');
   else if (s.version > CONTINENT_SAVE_VERSION) errors.push(`Saved by a newer version (${s.version}); this app reads version ${CONTINENT_SAVE_VERSION}.`);
+  // The living world and its characters have their own versions: a newer one is refused, never half-loaded.
+  errors.push(...checkLife(s.life));
   const max = data.coordinates.map.max;
   const at = Array.isArray(s.at) && s.at.length === 2 && s.at.every((v) => typeof v === 'number' && Number.isFinite(v)) ? ([Math.min(max - 1, Math.max(0, s.at[0])), Math.min(max - 1, Math.max(0, s.at[1]))] as MapPt) : null;
   if (!at) errors.push('Missing or invalid position ("at").');

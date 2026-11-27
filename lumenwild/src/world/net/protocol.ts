@@ -19,6 +19,7 @@ import type { RpgCmd, RpgEvent, RpgView } from '../rpg/Rpg';
  *   correct {x, y}                     the server did not accept a move (or moved the player: respawn)
  *   taken   {ids}                      finds taken since the last message
  *   edit    {key, edit, by}            another player's changes
+ *   rejected {what, key, reason}      the server refused something (an edit: out of reach, protected, not yours)
  *   joined / left {id, name} · pong {t} · error {reason}
  */
 
@@ -55,4 +56,5 @@ export type ServerMsg =
   | { type: 'joined'; id: string; name: string }
   | { type: 'left'; id: string; name: string }
   | { type: 'pong'; t: number }
+  | { type: 'rejected'; what: string; key: string; reason: string }
   | { type: 'error'; reason: string };

@@ -44,7 +44,9 @@ async function join(url: string, name: string, token?: string): Promise<Client> 
 describe('multiplayer foundation (local authoritative server)', { timeout: 180_000 }, () => {
   it('three independent clients share one world; edits, finds, reconnection and a server restart', async () => {
     const dataFile = pathJoin(mkdtempSync(pathJoin(tmpdir(), 'lumenwild-')), 'world.json');
-    let server = new WorldServer({ port: 0, dataFile });
+    // Edits below are made in Lumenfall's region, which a normal server protects (tests/transport.test.ts):
+    // this is a development server that allows them, so relaying and persistence of edits can be tested here.
+    let server = new WorldServer({ port: 0, dataFile, allowVillageEdits: true });
     let port = await server.listen();
     const url = () => `ws://127.0.0.1:${port}`;
     const a = await join(url(), 'Ada'), b = await join(url(), 'Bram'), c = await join(url(), 'Cora');
@@ -121,7 +123,7 @@ describe('multiplayer foundation (local authoritative server)', { timeout: 180_0
     // Restart the server (state written to the file): Ada resumes with her pack, the edit and the taken find survive.
     a.close(); b2.close(); c.close();
     await server.stop();
-    server = new WorldServer({ port: 0, dataFile });
+    server = new WorldServer({ port: 0, dataFile, allowVillageEdits: true });
     port = await server.listen();
     const a2 = await join(url(), 'Ada', a.token);
     const wel = a2.msgs.find((m) => m.type === 'welcome') ?? (await a2.waitFor('snap'), null);

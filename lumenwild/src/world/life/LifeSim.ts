@@ -9,6 +9,7 @@ import { Dragons, DRAGON_META, type DragonContext, type Territory } from './drag
 import { Rpg } from '../rpg/Rpg';
 import { heroToJSON, heroFromJSON, addItem, nextUid, type Hero } from '../rpg/hero';
 import { makeItem } from '../rpg/items';
+import { LIFE_VERSION, migrateLife } from '../migrations';
 
 /**
  * The living world: wildlife, villagers, dragons and players on the continent, stepped together. Everything is in
@@ -216,6 +217,7 @@ export class LifeSim {
   // ------------------------------------------------------------------ persistence
   toJSON(): Record<string, unknown> {
     return {
+      v: LIFE_VERSION,
       t: this.clock.t,
       players: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, x: p.x, y: p.y, stamina: p.stamina, walked: p.walked, hero: heroToJSON(p.hero) })),
       rpg: this.rpg.toJSON(),
@@ -229,7 +231,9 @@ export class LifeSim {
   load(j: unknown): string[] {
     const warn: string[] = [];
     if (!j || typeof j !== 'object') return warn;
-    const s = j as Record<string, unknown>;
+    const m = migrateLife(j);
+    if (!m.ok) throw new Error(m.error); // checked before loading (validateContinentSave, the server's load)
+    const s = m.data;
     if (typeof s.t === 'number' && Number.isFinite(s.t)) this.clock.t = s.t;
     try { if (s.discovery) this.discovery = deserializeDiscovery(s.discovery as never); } catch { warn.push('The explored map could not be read; exploration starts over.'); }
     if (Array.isArray(s.players)) for (const pj of s.players as Array<Record<string, unknown>>) {

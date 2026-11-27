@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { copyFileSync, existsSync } from 'node:fs';
+import { readSave, readBackup, listBackups, writeSave, writeSaveAsync, SaveLoadError, type BackupOptions } from './saveFile';
 import { WORLD } from '../src/world/data';
 import { buildBlueprint, regionAt, type Blueprint } from '../src/world/blueprint';
 import { ContinentTerrain, WK_NONE, type RegionData } from '../src/world/terrain';
@@ -13,7 +13,18 @@ import { OBJECT_DEFS } from '../src/engine/objects/defs';
 import { heroToJSON, heroFromJSON, maxHp } from '../src/world/rpg/hero';
 import { CREATURE_COMBAT } from '../src/world/rpg/content';
 import type { NodeQuery, GatherNode, RpgEvent } from '../src/world/rpg/Rpg';
-import { acceptWebSockets, type WSConn } from './ws';
+import { acceptWebSockets, localOrigins, DEFAULT_LIMITS, type WSConn, type WSLimits } from './ws';
+import { RegionGuard } from './permissions';
+
+/** Token bucket: `rate` per second, up to `burst` at once. */
+class Bucket {
+  private tokens: number; private last = Date.now();
+  constructor(private rate: number, private burst: number) { this.tokens = burst; }
+  take(): boolean { const now = Date.now(); this.tokens = Math.min(this.burst, this.tokens + ((now - this.last) / 1000) * this.rate); this.last = now; if (this.tokens < 1) return false; this.tokens -= 1; return true; }
+}
+/** Messages per second (and burst) per connection, by type. Clients send 10 moves a second. */
+const RATES: Record<string, [number, number]> = { hello: [0.5, 3], move: [30, 40], cmd: [30, 30], edit: [2, 4], ping: [5, 10] };
+const MAX_VIOLATIONS = 200;
 
 /**
  * The authoritative world server (runs locally; no cloud). It owns the shared state: players and their sessions,
@@ -100,7 +111,17 @@ function masksOf(r: RegionData): { solid: Uint8Array; deck: Uint8Array } {
   return { solid, deck };
 }
 
-export interface ServerOptions { port?: number; dataFile?: string | null; saveEverySec?: number; dayLength?: number; log?: (s: string) => void }
+export interface ServerOptions {
+  port?: number; dataFile?: string | null; saveEverySec?: number; dayLength?: number; log?: (s: string) => void;
+  /** Start from a backup instead of the save: 'latest' or a backup file (the save is kept as .replaced-<time>). */
+  restore?: string;
+  backups?: BackupOptions;
+  /** Web page origins allowed to connect (default: localhost and 127.0.0.1 on any port). */
+  origins?: string[];
+  /** Development: let players edit villages, landmarks and bridges. */
+  allowVillageEdits?: boolean;
+  wsLimits?: WSLimits;
+}
 
 export class WorldServer {
   readonly bp: Blueprint;
@@ -109,9 +130,12 @@ export class WorldServer {
   readonly sim: LifeSim;
   readonly sessions = new Map<string, Session>();
   readonly edits = new Map<string, RegionEditJSON>();
-  readonly stats = { tickMs: 0, maxTickMs: 0, ticks: 0, snaps: 0, clients: 0, bytesOut: 0, rejectedMoves: 0, commands: 0, events: 0 };
+  readonly stats = { tickMs: 0, maxTickMs: 0, ticks: 0, snaps: 0, clients: 0, bytesOut: 0, rejectedMoves: 0, commands: 0, events: 0, saves: 0, saveErrors: 0, saveMs: 0, dropped: 0, violations: 0, rejectedEdits: 0 };
   /** Finds taken (the rules' set), and how many of them have been announced. */
   get taken(): Set<string> { return this.sim.rpg.taken; }
+  /** Who may edit which region. */
+  readonly guard: RegionGuard;
+  private conns = new Set<WSConn>();
   private takenSent = 0;
   hour = 9;
   private http: Server | null = null;
@@ -126,38 +150,55 @@ export class WorldServer {
     this.q = new GenQuery(this.terrain, this.bp);
     this.sim = new LifeSim(this.bp, this.terrain, this.q);
     this.sim.rpg.authoritative = true;
+    this.guard = new RegionGuard(this.terrain, !!opts.allowVillageEdits);
     this.sim.rpg.nodes = this.q;
     this.sim.start(null);
-    if (opts.dataFile && existsSync(opts.dataFile)) this.load(opts.dataFile);
+    // An unreadable save throws SaveLoadError here: the server never starts a new world over an existing one.
+    if (opts.dataFile) this.load(opts.dataFile, opts.restore);
   }
 
   /** Listen (port 0 = any free port). Resolves with the port. */
   listen(): Promise<number> {
     const http = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'text/plain' }); res.end(`Lumenwild world server: ${this.stats.clients} clients\n`); });
     this.http = http;
-    acceptWebSockets(http, (c) => this.connect(c));
+    const origins = this.opts.origins;
+    acceptWebSockets(http, (c) => this.connect(c), { allowOrigin: origins?.length ? (o) => origins.includes(o) || localOrigins(o) : localOrigins, limits: this.opts.wsLimits ?? DEFAULT_LIMITS });
+    this.timers.push(setInterval(() => { const now = Date.now(); for (const c of this.conns) c.heartbeat(now); }, 5000));
     this.timers.push(setInterval(() => this.tick(0.1), 100));
     this.timers.push(setInterval(() => this.snapshots(), 200));
-    if (this.opts.dataFile) this.timers.push(setInterval(() => this.save(), (this.opts.saveEverySec ?? 30) * 1000));
+    if (this.opts.dataFile) this.timers.push(setInterval(() => { void this.saveInBackground(); }, (this.opts.saveEverySec ?? 30) * 1000));
     return new Promise((res) => http.listen(this.opts.port ?? 8787, () => res((http.address() as { port: number }).port)));
   }
 
   async stop(): Promise<void> {
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
-    for (const s of this.sessions.values()) s.conn?.close();
+    for (const s of this.sessions.values()) s.conn?.close(1001, 'server');
+    for (const c of this.conns) c.close(1001, 'server'); // including connections that never said hello
+    await this.inFlight; // never two writers on the temporary file
     if (this.opts.dataFile) this.save();
-    await new Promise<void>((res) => (this.http ? this.http.close(() => res()) : res()));
+    await new Promise<void>((res) => { if (!this.http) return res(); this.http.close(() => res()); this.http.closeAllConnections(); });
   }
 
-  private send(c: WSConn | null, m: ServerMsg): void { if (c?.open) { const t = JSON.stringify(m); this.stats.bytesOut += t.length; c.send(t); } }
+  /** Send to one client; `droppable` messages (snapshots) are skipped while that client is behind. */
+  private send(c: WSConn | null, m: ServerMsg, droppable = false): void { if (c?.open) { const t = JSON.stringify(m); if (c.send(t, droppable)) this.stats.bytesOut += t.length; else this.stats.dropped++; } }
   private broadcast(m: ServerMsg, except?: string): void { for (const s of this.sessions.values()) if (s.id !== except) this.send(s.conn, m); }
 
   private connect(c: WSConn): void {
     let me: Session | null = null;
+    this.conns.add(c);
+    const buckets = Object.fromEntries(Object.entries(RATES).map(([k, [r, b]]) => [k, new Bucket(r, b)]));
+    let violations = 0, violationsT = Date.now();
+    const violate = (why: string) => {
+      this.stats.violations++;
+      if (Date.now() - violationsT > 10_000) { violations = 0; violationsT = Date.now(); }
+      if (++violations > MAX_VIOLATIONS) { this.log(`Closing ${me?.name ?? 'a connection'}: ${why}`); c.close(1008, 'flood'); }
+    };
     c.onmessage = (text) => {
       let m: ClientMsg;
-      try { m = JSON.parse(text) as ClientMsg; } catch { return; }
+      try { m = JSON.parse(text) as ClientMsg; } catch { return violate('unreadable message'); }
+      if (!m || typeof m !== 'object' || typeof m.type !== 'string' || !buckets[m.type]) return violate('unknown message');
+      if (!buckets[m.type].take()) return violate(`too many ${m.type} messages`);
       if (m.type === 'hello') {
         if (m.v !== undefined && m.v !== PROTOCOL) { this.send(c, { type: 'error', reason: `This server speaks protocol ${PROTOCOL}; your game speaks ${m.v}. Reload the page.` }); c.close(); return; }
         me = this.hello(c, m.name, m.token); return;
@@ -167,12 +208,17 @@ export class WorldServer {
       const p = this.sim.players.get(me.id);
       switch (m.type) {
         case 'move': if (p) this.move(me, p, m.x, m.y, m.h, m.run); break;
-        case 'edit': if (typeof m.key === 'string' && /^-?\d+,-?\d+$/.test(m.key)) { if (m.edit) this.edits.set(m.key, m.edit); else this.edits.delete(m.key); this.broadcast({ type: 'edit', key: m.key, edit: m.edit, by: me.id }, me.id); } break;
+        case 'edit': {
+          // Checked: readable, within reach, no protected ground, not someone else's region.
+          const why = p ? this.guard.check(m.key, m.edit ?? null, me.id, p) : 'not in the world';
+          if (why) { this.stats.rejectedEdits++; this.send(c, { type: 'rejected', what: 'edit', key: String(m.key).slice(0, 24), reason: why }); break; }
+          if (m.edit) this.edits.set(m.key, m.edit); else this.edits.delete(m.key);
+          this.guard.record(m.key, me.id, Date.now());
+          this.broadcast({ type: 'edit', key: m.key, edit: m.edit, by: me.id }, me.id);
+          break;
+        }
         case 'cmd': {
-          if (!p || !m.cmd) break;
-          const now = Date.now();
-          if (now - me.cmdT > 1000) { me.cmdT = now; me.cmds = 0; }
-          if (++me.cmds > 30) break; // flood limit
+          if (!p || !m.cmd || typeof m.cmd !== 'object') break;
           this.stats.commands++;
           this.sim.rpg.command(me.id, m.cmd);
           this.flushEvents();
@@ -182,6 +228,7 @@ export class WorldServer {
       }
     };
     c.onclose = () => {
+      this.conns.delete(c);
       if (!me) return;
       me.conn = null; me.lastSeen = Date.now();
       this.stats.clients = [...this.sessions.values()].filter((s) => s.conn).length;
@@ -290,7 +337,7 @@ export class WorldServer {
       for (const c of this.sim.wildlife.creatures.values()) if (Math.hypot(c.x - p.x, c.y - p.y) < 600 && (c.alive || c.st !== 'dead')) creatures.push([c.id, c.sp, round(c.x), round(c.y), +c.alt.toFixed(1), +c.h.toFixed(2), c.st, c.alive ? 1 : 0, +(c.hp / CREATURE_COMBAT[c.sp].hp).toFixed(2), c.foe ? 1 : 0]);
       for (const v of this.sim.villages.people.values()) if (Math.hypot(v.x - p.x, v.y - p.y) < 400) villagers.push([v.id, round(v.x), round(v.y), +v.h.toFixed(2), v.st, v.act, v.out ? 1 : 0]);
       for (const g of this.sim.rpg.loot.values()) if (Math.hypot(g.x - p.x, g.y - p.y) < NEAR) loot.push([g.id, round(g.x), round(g.y), g.label]);
-      this.send(s.conn, { type: 'snap', t, hour: +this.hour.toFixed(3), me: [Math.round(p.hero.hp * 10) / 10, +p.stamina.toFixed(3), p.hero.dead >= 0 ? 1 : 0], players, dragons, creatures, villagers, loot });
+      this.send(s.conn, { type: 'snap', t, hour: +this.hour.toFixed(3), me: [Math.round(p.hero.hp * 10) / 10, +p.stamina.toFixed(3), p.hero.dead >= 0 ? 1 : 0], players, dragons, creatures, villagers, loot }, true);
       // The character, when it changed.
       const view = this.sim.rpg.viewFor(s.id), hero = heroToJSON(p.hero), key = JSON.stringify([hero, view]);
       if (key !== s.heroSent) { s.heroSent = key; this.send(s.conn, { type: 'hero', hero, view }); }
@@ -299,38 +346,65 @@ export class WorldServer {
   }
 
   // ------------------------------------------------------------------ persistence (local JSON file)
-  save(file = this.opts.dataFile): void {
-    if (!file) return;
-    const data = {
+  /** Everything the server persists (the `data` of the save file). */
+  private saveData(): Record<string, unknown> {
+    return {
       version: 2, hour: this.hour, n: this.n,
       sessions: [...this.sessions.values()].map((s) => ({ id: s.id, token: s.token, name: s.name })),
       players: [...this.sessions.values()].map((s) => ({ id: s.id, x: s.player.x, y: s.player.y, walked: s.player.walked, hero: heroToJSON(s.player.hero) })),
-      edits: Object.fromEntries(this.edits), life: this.sim.toJSON(),
+      edits: Object.fromEntries(this.edits), permissions: this.guard.toJSON(), life: this.sim.toJSON(),
     };
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file + '.tmp', JSON.stringify(data));
-    renameSync(file + '.tmp', file);
   }
 
-  private load(file: string): void {
-    try {
-      const d = JSON.parse(readFileSync(file, 'utf8'));
-      this.hour = typeof d.hour === 'number' ? d.hour : this.hour;
-      this.n = d.n ?? 0;
-      const saved = new Map<string, { x: number; y: number; walked?: number; hero?: unknown; inv?: Record<string, unknown> }>((d.players ?? []).map((p: { id: string }) => [p.id, p]));
-      for (const s of d.sessions ?? []) {
-        const sp = saved.get(s.id), player = this.sim.addPlayer(s.id, s.name, sp?.x ?? 50000, sp?.y ?? 51000);
-        this.sim.players.delete(s.id); // in the world again when they reconnect
-        if (sp?.hero) heroFromJSON(sp.hero, player.hero); else if (sp?.inv) this.sim.legacyPack(player, sp.inv);
-        player.walked = sp?.walked ?? 0;
-        this.sessions.set(s.id, { id: s.id, token: s.token, name: s.name, conn: null, lastSeen: Date.now() - 120_000, lastMove: Date.now(), player, heroSent: '', lastCorrect: 0, cmds: 0, cmdT: 0 });
-      }
-      for (const [k, v] of Object.entries(d.edits ?? {})) this.edits.set(k, v as RegionEditJSON);
-      if (d.life) { const live = this.sim.players; const keep = new Map(live); live.clear(); this.sim.load(d.life); for (const [k, v] of keep) live.set(k, v); }
-      for (const t of d.taken ?? []) this.taken.add(t); // version 1 files
-      this.takenSent = this.taken.size;
-      this.log(`Loaded ${this.sessions.size} sessions, ${this.edits.size} edited regions, ${this.taken.size} taken finds from ${file}`);
-    } catch (e) { this.log(`Could not read ${file}: ${(e as Error).message}`); }
+  /** Save now, atomically, with backups (shutdown, tests). */
+  save(file = this.opts.dataFile): void {
+    if (!file) return;
+    const t = performance.now();
+    writeSave(file, this.saveData(), this.opts.backups);
+    this.stats.saveMs = performance.now() - t;
+  }
+
+  private inFlight: Promise<void> | null = null;
+  /** The periodic save: serialised here, written without blocking the server loop; never two at once. */
+  saveInBackground(): Promise<void> {
+    const file = this.opts.dataFile;
+    if (!file) return Promise.resolve();
+    if (this.inFlight) return this.inFlight;
+    const data = this.saveData();
+    this.inFlight = writeSaveAsync(file, data, this.opts.backups)
+      .then(() => { this.stats.saves++; })
+      .catch((e) => { this.stats.saveErrors++; this.log(`Save failed (the previous save is kept): ${(e as Error).message}`); })
+      .finally(() => { this.inFlight = null; });
+    return this.inFlight;
+  }
+
+  private load(file: string, restore?: string): void {
+    let r: { data: Record<string, unknown>; version: number } | null;
+    if (restore) {
+      const backup = restore === 'latest' ? listBackups(file)[0] : restore;
+      if (!backup) throw new SaveLoadError(`--restore-latest: there are no backups of ${file}.`, file, 'no backups', [], null);
+      r = readBackup(backup);
+      if (existsSync(file)) copyFileSync(file, `${file}.replaced-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+      this.log(`Restoring from backup ${backup}`);
+    } else r = readSave(file);
+    if (!r) return; // no save yet: a new world
+    const d = r.data as Record<string, any>;
+    this.hour = typeof d.hour === 'number' ? d.hour : this.hour;
+    this.n = d.n ?? 0;
+    const saved = new Map<string, { x: number; y: number; walked?: number; hero?: unknown; inv?: Record<string, unknown> }>((d.players ?? []).map((p: { id: string }) => [p.id, p]));
+    for (const s of d.sessions ?? []) {
+      const sp = saved.get(s.id), player = this.sim.addPlayer(s.id, s.name, sp?.x ?? 50000, sp?.y ?? 51000);
+      this.sim.players.delete(s.id); // in the world again when they reconnect
+      if (sp?.hero) heroFromJSON(sp.hero, player.hero); else if (sp?.inv) this.sim.legacyPack(player, sp.inv);
+      player.walked = sp?.walked ?? 0;
+      this.sessions.set(s.id, { id: s.id, token: s.token, name: s.name, conn: null, lastSeen: Date.now() - 120_000, lastMove: Date.now(), player, heroSent: '', lastCorrect: 0, cmds: 0, cmdT: 0 });
+    }
+    for (const [k, v] of Object.entries(d.edits ?? {})) this.edits.set(k, v as RegionEditJSON);
+    this.guard.load(d.permissions);
+    if (d.life) { const live = this.sim.players; const keep = new Map(live); live.clear(); this.sim.load(d.life); for (const [k, v] of keep) live.set(k, v); }
+    for (const t of d.taken ?? []) this.taken.add(t); // version 1 files
+    this.takenSent = this.taken.size;
+    this.log(`Loaded ${this.sessions.size} sessions, ${this.edits.size} edited regions, ${this.taken.size} taken finds from ${restore ? 'a backup' : file} (file version ${r.version})`);
   }
 }
 

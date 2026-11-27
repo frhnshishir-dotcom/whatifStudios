@@ -11,7 +11,9 @@ let server: ChildProcess;
 
 test.beforeAll(async () => {
   execSync('npm run server:build', { stdio: 'ignore' });
-  server = spawn(process.execPath, ['dist-server/main.js', '--port', String(PORT), '--data', 'none'], { stdio: 'ignore' });
+  // A development server (--allow-village-edits): the edit below is made beside the spawn on Lumenfall's square, which
+  // a normal server protects (tests/transport.test.ts checks that protection).
+  server = spawn(process.execPath, ['dist-server/main.js', '--port', String(PORT), '--data', 'none', '--allow-village-edits'], { stdio: 'ignore' });
   for (let k = 0; k < 100; k++) { try { const r = await fetch(`http://127.0.0.1:${PORT}/`); if (r.ok) return; } catch { /* starting */ } await new Promise((r) => setTimeout(r, 200)); }
   throw new Error('server did not start');
 });
