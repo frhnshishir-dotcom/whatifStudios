@@ -1,0 +1,71 @@
+/* eslint-disable */
+// Generates save fixtures with THIS checkout's own code (run inside a worktree of an old commit).
+// FIXTURE_OUT: output directory; FIXTURE_TAG: name prefix (the commit).
+import { it } from 'vitest';
+import { writeFileSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import * as boot from '../src/boot';
+
+const OUT = process.env.FIXTURE_OUT!, TAG = process.env.FIXTURE_TAG!;
+const put = (name: string, data: unknown) => { mkdirSync(OUT, { recursive: true }); writeFileSync(join(OUT, `${TAG}-${name}.json.gz`), gzipSync(JSON.stringify(data))); console.log('wrote', name); };
+
+it('valley save', () => {
+  const e: any = (boot as any).createEngine(7, 'world', { worker: false });
+  e.world.name = 'Fixture Valley';
+  e.objects.add({ kind: 'tree', x: 40, y: 40, variant: Object.keys(e.objects).length ? 'oak' : 'oak', props: {} });
+  for (let k = 0; k < 20; k++) e.frame(k * 16.7);
+  put('valley', e.snapshot());
+}, 120_000);
+
+it('continent save', async () => {
+  const cce = (boot as any).createContinentEngine;
+  if (!cce) return;
+  const { engine: e, session: s, life } = cce({ worker: false });
+  e.cam.setViewport(1280, 800);
+  for (let k = 0; k < 30; k++) e.frame(k * 16.7);
+  // An edit: paint a few cells and remove one tree near the start (as a player would with the tools).
+  const [hx, hy] = e.home;
+  for (let k = 0; k < 6; k++) e.world.mat[(hy + 30) * e.world.w + hx + 20 + k] = 4;
+  const tree = [...e.objects.objects.values()].find((o: any) => o.kind === 'tree');
+  if (tree) e.objects.remove(tree.id);
+  if (life) {
+    const p = life.player;
+    if (p.hero) {
+      const H = await import('../src/world/rpg/hero' as any), I = await import('../src/world/rpg/items' as any);
+      const h = p.hero;
+      h.coins = 123; H.gainXp(h, 400); h.points = 1; h.attrs.str += 2;
+      H.addItem(h, I.makeItem('wolf-pelt', 3, H.nextUid(h)));
+      const sword = I.makeItem('iron-sword', 1, H.nextUid(h), null, 2); H.addItem(h, sword); H.equip(h, sword.uid);
+      h.skills.melee = 120; h.stats.kills.wolf = 4; h.found.push('lumenfall');
+      h.quests.push({ id: 'g#0', giver: 'lumenfall-1', giverName: 'Fixture Giver', village: 'lumenfall', kind: 'gather', title: 'Bring 4 herbs', text: 'Fixture', target: 'herbs', targetName: 'Herbs', need: 4, have: 0, reward: { xp: 30, coins: 12 }, status: 'active' });
+    } else p.inv = { coins: 37, herbs: 2, ore: 1, relics: 1 };
+    p.walked = 321;
+  }
+  const C = await import('../src/world/continentSave' as any), D = await import('../src/world/data' as any);
+  const [fx, fy] = s.focusCell(e);
+  const lifeSim = life?.sim;
+  const save = C.buildContinentSave({ name: 'Fixture Continent', seed: e.world.seed, data: D.WORLD, at: s.mapOf(fx, fy), zoom: e.cam.zoomIndex, env: e.env.state(), edits: s.collectEdits(e), ...(lifeSim ? { life: lifeSim.toJSON() } : {}) });
+  put('continent', save);
+}, 240_000);
+
+it('server save', async () => {
+  let W: any;
+  try { W = await import('../server/WorldServer' as any); } catch { return; }
+  const file = join(mkdtempSync(join(tmpdir(), 'fx-')), 'world.json');
+  const server = new W.WorldServer({ port: 0, dataFile: file });
+  const conn = { open: true, send() {}, close() {}, onmessage: null, onclose: null };
+  const sA = server['hello'](conn, 'Ada'), sB = server['hello']({ ...conn }, 'Bram');
+  const A = server.sim.players.get(sA.id);
+  if (A.hero) {
+    const H = await import('../src/world/rpg/hero' as any), I = await import('../src/world/rpg/items' as any);
+    A.hero.coins = 77; H.gainXp(A.hero, 200); H.addItem(A.hero, I.makeItem('fang', 2, H.nextUid(A.hero)));
+    server.sim.rpg.taken.add('chest:50010,51020');
+  } else { A.inv = { coins: 25, herbs: 1 }; server.taken.add('chest:50010,51020'); }
+  A.x += 3; A.walked = 12;
+  server.edits.set('195,199', { idx: 'AAAAAA==', elev: 'AACAPw==', mat: 'Aw==', cover: 'AA==', coverVar: 'AA==', moisture: 'AA==', magic: 'AA==', removed: [], added: [], waterIdx: '', waterDepth: '', sources: [], drains: [] });
+  void sB;
+  server.save(file);
+  put('server', JSON.parse(readFileSync(file, 'utf8')));
+}, 240_000);
