@@ -394,6 +394,7 @@ export class Rpg {
   private talk(p: Player, vid: string): string {
     const v = this.villagerNear(p, vid), h = p.hero, u = this.uiOf(p.id);
     if (!v) return this.msg(p.id, 'They are too far away.');
+    this.sim.villages.hold(v, 25); // they stop to talk (and to trade)
     u.offer = null;
     u.shop = SHOPS[v.tag] ? v.id : null;
     // A delivery for this village?

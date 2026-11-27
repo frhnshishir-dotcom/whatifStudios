@@ -30,7 +30,7 @@ jobs:
           lfs: false # the repository's LFS holds large video and Blender files; fetch only what the tests need
       - name: Fetch the golden images (Git LFS, these files only)
         working-directory: .
-        run: git lfs pull --include="lumenwild/e2e/m8-golden.spec.ts-snapshots/*"
+        run: git lfs pull --include="lumenwild/e2e/m8-golden.spec.ts-snapshots-ci/*"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -46,7 +46,15 @@ jobs:
       - name: Install Chromium for the browser tests
         run: npx playwright install --with-deps chromium
       - name: Browser tests (including the Valley golden images)
+        env:
+          LUMENWILD_GOLDENS: ci # CI's own pixel-exact golden set (e2e/m8-golden.spec.ts-snapshots-ci)
         run: npx playwright test --trace off
+      - name: Print the CI renders of golden images that did not match (base64, for review)
+        if: failure()
+        run: |
+          for f in $(find test-results -name '*-actual.png' -path '*golden*canvas2d*' | sort); do
+            echo "GOLDEN-BEGIN $(basename "$f")"; base64 -w0 "$f"; echo; echo "GOLDEN-END"
+          done
       - name: Keep the browser test results when something fails
         if: failure()
         uses: actions/upload-artifact@v4

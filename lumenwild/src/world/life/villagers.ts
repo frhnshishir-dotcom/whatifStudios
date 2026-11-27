@@ -257,6 +257,12 @@ export class Villages {
     }
   }
 
+  /** Someone is talking to this villager (a player at their shop, or asking about work): they stop where they are for a while. */
+  hold(v: Villager, seconds: number): void {
+    if (!v.out) return;
+    v.st = 'chat'; v.chatWith = null; v.stT = Math.min(v.stT, 7 - seconds); // a chat ends after 7 s; start it earlier
+  }
+
   /** A line for a player who greets this villager. */
   greet(v: Villager): string {
     const job = v.tag.replace('-', ' ');

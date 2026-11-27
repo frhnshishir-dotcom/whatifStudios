@@ -4,6 +4,9 @@ import { defineConfig } from '@playwright/test';
 // preinstalled (PLAYWRIGHT_BROWSERS_PATH); on another machine run `npx playwright install chromium` once.
 export default defineConfig({
   testDir: 'e2e',
+  // Golden images are pixel-exact per environment: glyphs rasterised by another machine's browser differ in
+  // anti-aliasing. CI (LUMENWILD_GOLDENS=ci) has its own approved set; local runs use the original one.
+  ...(process.env.LUMENWILD_GOLDENS === 'ci' ? { snapshotPathTemplate: '{testDir}/{testFileName}-snapshots-ci/{arg}{ext}' } : {}),
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
