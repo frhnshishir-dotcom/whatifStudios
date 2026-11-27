@@ -1,59 +1,41 @@
 import type { Engine } from '../../engine/Engine';
 import type { ContinentSession } from '../session';
-import type { Hero } from './hero';
-import { maxHp, xpToNext } from './hero';
 
 /**
- * The on-screen HUD over the world canvas (plain DOM, not the renderer): health, stamina and experience bars,
- * floating numbers (damage, experience, level-ups), health bars over wounded creatures, names over other players,
- * and the veil when the traveller falls. Pointer events pass through to the canvas.
+ * What the HUD draws anchored to the world (plain DOM over the canvas, not the renderer): floating numbers (damage,
+ * experience, level-ups), health bars and names over creatures and other players, the red flash when hurt, and the
+ * veil when the traveller falls. Pointer events pass through to the canvas.
+ *
+ * The character's bars, the interaction prompt, notices, the target frame and the quest tracker are the React HUD
+ * (src/ui/rpg/RpgHud.tsx), which reads the same character.
  */
 
 interface Float { x: number; y: number; z: number; text: string; colour: string; t0: number; dur: number; big: boolean; el: HTMLDivElement | null }
 export interface Tag { id: string; x: number; y: number; z: number; text?: string; frac?: number; colour?: string }
 
+const SERIF = '"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif';
+const SANS = 'ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+
 export class Hud {
   readonly root: HTMLDivElement;
-  private bars: { hp: HTMLDivElement; hpT: HTMLSpanElement; st: HTMLDivElement; xp: HTMLDivElement; lv: HTMLSpanElement };
   private veil: HTMLDivElement;
-  private toast: HTMLDivElement;
-  private hint: HTMLDivElement;
-  private prompt: HTMLDivElement;
-  private promptText = '';
+  private veilText: HTMLDivElement;
   private floats: Float[] = [];
   private tags = new Map<string, HTMLDivElement>();
   private hurtFlash: HTMLDivElement;
-  private toastT = 0;
 
   constructor(private engine: Engine, private session: ContinentSession) {
     const canvas = engine.renderer!.canvas, parent = canvas.parentElement ?? document.body;
     if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
     const root = document.createElement('div');
     root.dataset.testid = 'hud';
-    root.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;font:12px/1.2 ui-monospace,Menlo,Consolas,monospace;color:#fff;z-index:5';
+    root.style.cssText = `position:absolute;inset:0;pointer-events:none;overflow:hidden;font:12px/1.2 ${SANS};color:#ebe4d1;z-index:5`;
     parent.appendChild(root);
     this.root = root;
-    const panel = div(root, 'position:absolute;left:12px;bottom:12px;padding:6px 8px;background:rgba(10,14,12,.72);border:1px solid rgba(255,255,255,.12);border-radius:6px;min-width:190px');
-    const row = (label: string, colour: string) => {
-      const r = div(panel, 'display:flex;align-items:center;gap:6px;margin:2px 0');
-      const l = document.createElement('span'); l.textContent = label; l.style.cssText = 'width:22px;opacity:.8'; r.appendChild(l);
-      const track = div(r, 'flex:1;height:8px;background:#2a2f2c;border-radius:3px;overflow:hidden');
-      const fill = div(track, `height:100%;width:0;background:${colour};transition:width .12s`);
-      return { r, fill };
-    };
-    const hp = row('HP', '#e0504a'), st = row('ST', '#5cc8ff'), xp = row('XP', '#ffd166');
-    const hpT = document.createElement('span'); hpT.style.cssText = 'width:58px;text-align:right;opacity:.85'; hpT.dataset.testid = 'hud-hp'; hp.r.appendChild(hpT);
-    const lv = document.createElement('span'); lv.style.cssText = 'width:58px;text-align:right;opacity:.85'; lv.dataset.testid = 'hud-level'; xp.r.appendChild(lv);
-    this.bars = { hp: hp.fill, hpT, st: st.fill, xp: xp.fill, lv };
-    this.hint = div(root, 'position:absolute;right:12px;bottom:12px;padding:4px 8px;background:rgba(10,14,12,.6);border-radius:6px;opacity:.85');
-    this.hint.textContent = 'Space attack · Q dodge · H eat · E interact';
-    this.prompt = div(root, 'position:absolute;left:50%;bottom:16px;transform:translateX(-50%);padding:4px 10px;background:rgba(10,14,12,.8);border:1px solid rgba(255,209,102,.5);border-radius:6px;display:none');
-    this.prompt.dataset.testid = 'hud-prompt';
-    this.toast = div(root, 'position:absolute;left:50%;top:14px;transform:translateX(-50%);padding:5px 10px;background:rgba(10,14,12,.78);border-radius:6px;max-width:70%;text-align:center;opacity:0;transition:opacity .3s');
-    this.toast.dataset.testid = 'hud-toast';
-    this.veil = div(root, 'position:absolute;inset:0;background:rgba(60,0,0,.45);display:none;align-items:center;justify-content:center;font-size:22px;text-shadow:0 2px 6px #000');
+    this.hurtFlash = div(root, 'position:absolute;inset:0;box-shadow:inset 0 0 60px rgba(185,71,60,0);transition:box-shadow .25s');
+    this.veil = div(root, 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(40,8,6,.35) 0%,rgba(20,4,3,.78) 70%);');
     this.veil.dataset.testid = 'hud-veil';
-    this.hurtFlash = div(root, 'position:absolute;inset:0;box-shadow:inset 0 0 60px rgba(255,30,30,.0);transition:box-shadow .25s');
+    this.veilText = div(this.veil, `font:600 26px/1.3 ${SERIF};color:#ebe4d1;text-align:center;letter-spacing:.02em;text-shadow:0 2px 12px #000;padding:18px 28px;border-top:1px solid rgba(196,162,101,.45);border-bottom:1px solid rgba(196,162,101,.45)`);
   }
 
   dispose(): void { this.root.remove(); }
@@ -66,39 +48,28 @@ export class Hud {
     return [col * cam.cellW * k, row * cam.cellH * k];
   }
 
-  float(x: number, y: number, z: number, text: string, colour = '#fff', big = false, dur = 1.1): void {
+  float(x: number, y: number, z: number, text: string, colour = '#ebe4d1', big = false, dur = 1.1): void {
     if (this.floats.length > 40) this.floats.shift()?.el?.remove();
     this.floats.push({ x, y, z, text, colour, t0: performance.now() / 1000, dur, big, el: null });
   }
 
-  /** The E prompt ("E Talk to ..."), or nothing. */
-  setPrompt(text: string): void {
-    if (text === this.promptText) return;
-    this.promptText = text;
-    this.prompt.style.display = text ? 'block' : 'none';
-    this.prompt.innerHTML = text ? `<b style="color:#ffd166">E</b> ${text.replace(/</g, '&lt;')}` : '';
-  }
+  hurt(): void { this.hurtFlash.style.boxShadow = 'inset 0 0 80px rgba(185,71,60,.6)'; setTimeout(() => { this.hurtFlash.style.boxShadow = 'inset 0 0 60px rgba(185,71,60,0)'; }, 160); }
 
-  say(text: string): void { this.toast.textContent = text; this.toast.style.opacity = '1'; this.toastT = performance.now() / 1000; }
-  hurt(): void { this.hurtFlash.style.boxShadow = 'inset 0 0 70px rgba(255,30,30,.55)'; setTimeout(() => { this.hurtFlash.style.boxShadow = 'inset 0 0 60px rgba(255,30,30,0)'; }, 160); }
-
-  update(h: Hero, stamina: number, tags: Tag[], deadFor: number): void {
-    const now = performance.now() / 1000, mh = maxHp(h);
-    this.bars.hp.style.width = `${Math.max(0, Math.min(100, (h.hp / mh) * 100))}%`;
-    this.bars.hpT.textContent = `${Math.max(0, Math.ceil(h.hp))}/${mh}`;
-    this.bars.st.style.width = `${Math.round(stamina * 100)}%`;
-    this.bars.xp.style.width = `${Math.min(100, (h.xp / xpToNext(h.level)) * 100)}%`;
-    this.bars.lv.textContent = `Lv ${h.level}`;
-    if (deadFor >= 0) { this.veil.style.display = 'flex'; this.veil.textContent = `You have fallen. Waking in ${h.homeName}…`; }
+  /** Per frame: tags (health bars and names), floating numbers, and the veil while fallen (`deadFor` >= 0 seconds). */
+  update(tags: Tag[], deadFor: number, homeName: string): void {
+    const now = performance.now() / 1000;
+    if (deadFor >= 0) { this.veil.style.display = 'flex'; this.veilText.textContent = `You have fallen.\nWaking in ${homeName}…`; this.veilText.style.whiteSpace = 'pre-line'; }
     else this.veil.style.display = 'none';
-    if (now - this.toastT > 4) this.toast.style.opacity = '0';
     // Floating numbers rise and fade.
     for (let k = this.floats.length - 1; k >= 0; k--) {
       const f = this.floats[k], a = (now - f.t0) / f.dur;
       if (a >= 1) { f.el?.remove(); this.floats.splice(k, 1); continue; }
-      if (!f.el) { f.el = div(this.root, `position:absolute;white-space:nowrap;font-weight:700;text-shadow:0 1px 2px #000,0 0 4px #000;font-size:${f.big ? 18 : 13}px;color:${f.colour}`); f.el.textContent = f.text; f.el.dataset.testid = 'hud-float'; }
-      const [px, py] = this.project(f.x, f.y, f.z);
-      f.el.style.transform = `translate(${px - 10}px, ${py - 28 - a * 26}px)`;
+      if (!f.el) {
+        f.el = div(this.root, `position:absolute;white-space:nowrap;font:${f.big ? `700 20px ${SERIF}` : `700 13px ${SANS}`};letter-spacing:${f.big ? '.02em' : '0'};text-shadow:0 1px 2px #000,0 0 6px rgba(0,0,0,.9);color:${f.colour}`);
+        f.el.textContent = f.text; f.el.dataset.testid = 'hud-float';
+      }
+      const [px, py] = this.project(f.x, f.y, f.z), rise = f.big ? 34 : 26;
+      f.el.style.transform = `translate(${px - 10}px, ${py - 28 - a * rise}px) scale(${f.big ? 1 + 0.15 * Math.sin(Math.min(1, a * 4) * Math.PI) : 1})`;
       f.el.style.opacity = String(1 - a * a);
     }
     // Tags: health bars and names.
@@ -107,14 +78,14 @@ export class Hud {
       seen.add(t.id);
       let el = this.tags.get(t.id);
       if (!el) {
-        el = div(this.root, 'position:absolute;display:flex;flex-direction:column;align-items:center;gap:1px');
-        el.innerHTML = '<span style="font-size:11px;text-shadow:0 1px 2px #000"></span><div style="width:30px;height:4px;background:#2a2f2c;border-radius:2px;overflow:hidden"><div style="height:100%;background:#e0504a"></div></div>';
+        el = div(this.root, 'position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px');
+        el.innerHTML = '<span style="font-size:11px;font-weight:600;text-shadow:0 1px 2px #000,0 0 4px #000"></span><div style="width:34px;height:5px;background:rgba(10,12,10,.85);border:1px solid rgba(196,162,101,.45);border-radius:3px;overflow:hidden"><div style="height:100%;background:linear-gradient(90deg,#b9473c,#e06a5b)"></div></div>';
         this.tags.set(t.id, el);
       }
       const [px, py] = this.project(t.x, t.y, t.z);
-      el.style.transform = `translate(${px - 15}px, ${py - 30}px)`;
+      el.style.transform = `translate(${px - 17}px, ${py - 32}px)`;
       const name = el.firstElementChild as HTMLSpanElement, bar = el.lastElementChild as HTMLDivElement;
-      name.textContent = t.text ?? ''; name.style.color = t.colour ?? '#fff';
+      name.textContent = t.text ?? ''; name.style.color = t.colour ?? '#ebe4d1';
       bar.style.display = t.frac === undefined ? 'none' : 'block';
       if (t.frac !== undefined) (bar.firstElementChild as HTMLDivElement).style.width = `${Math.max(0, t.frac * 100)}%`;
     }

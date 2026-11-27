@@ -14,6 +14,7 @@ import { WorldDialog } from './components/WorldDialog';
 import { ContinentDialog } from './components/ContinentDialog';
 import { getWorldIO } from './persistence';
 import { PlayBar } from './rpg/PlayBar';
+import { RpgHud } from './rpg/RpgHud';
 
 function Toast() {
   const toast = useUI((s) => s.toast);
@@ -73,7 +74,7 @@ export function App() {
     <div className={`app${play ? ' play' : ''}${!play && panelsHidden ? ' panels-hidden' : ''}${!play && inspectorOpen ? ' inspector-open' : ''}`} data-layout={mode === 'continent' ? layout : 'valley'}>
       {play ? <PlayBar /> : !panelsHidden && <TopBar />}
       {!play && !panelsHidden && <Toolbar />}
-      <main className="stage"><CanvasView /><Toast /></main>
+      <main className="stage"><CanvasView /><Toast />{mode === 'continent' && <RpgHud layout={layout} />}</main>
       {!play && !panelsHidden && <Inspector />}
       {!play && !panelsHidden && <BottomBar />}
       <WorldDialog />

@@ -250,7 +250,6 @@ export class LivingWorld {
   private nextAttack = 0;
   private markerT = 0;
   private findsT = 0;
-  private promptT = 0;
   /** Things the panel shows: the open tab, a shop. */
   ui = { tab: 'world' as string };
 
@@ -361,17 +360,17 @@ export class LivingWorld {
     const me = this.me, now = performance.now() / 1000, hud = this.hud, p = this.player, z = (x: number, y: number) => this.q.height(x, y);
     for (const ev of evs) {
       switch (ev.e) {
-        case 'msg': if (ev.who === me) { this.message = ev.text; hud?.say(ev.text); } break;
+        case 'msg': if (ev.who === me) this.message = ev.text; break; // shown by the interface's notices
         case 'swing': this.swings.set(ev.who === me ? me : ev.who, { h: ev.h, t: now }); break;
-        case 'hit': this.flash.set(ev.target, now + 0.18); hud?.float(ev.x, ev.y, z(ev.x, ev.y) + 1.5, `${ev.dmg}${ev.crit ? '!' : ''}`, ev.crit ? '#ffd166' : ev.who === me ? '#ffffff' : '#ffb38a', ev.crit); break;
-        case 'kill': hud?.float(ev.x, ev.y, z(ev.x, ev.y) + 2, '✶', '#ffd166', true); break;
-        case 'hurt': if (ev.who === me) { hud?.float(p.x, p.y, z(p.x, p.y) + 2, `-${ev.dmg}`, '#ff5a4f'); hud?.hurt(); } this.flash.set(ev.who === me ? 'local' : ev.who, now + 0.18); break;
-        case 'evade': if (ev.who === me) hud?.float(p.x, p.y, z(p.x, p.y) + 2, 'dodged', '#9fe0ff'); break;
-        case 'xp': if (ev.who === me) hud?.float(p.x, p.y, z(p.x, p.y) + 2.5, `+${ev.n} xp`, '#ffd166', false, 1.4); break;
-        case 'level': if (ev.who === me) { hud?.float(p.x, p.y, z(p.x, p.y) + 3, `Level ${ev.level}!`, '#ffd166', true, 2.2); this.message = `Level ${ev.level}! Two attribute points to spend (Hero tab).`; hud?.say(this.message); } break;
-        case 'skill': if (ev.who === me) { const t = `${ev.skill[0].toUpperCase()}${ev.skill.slice(1)} is now ${ev.level}.`; hud?.float(p.x, p.y, z(p.x, p.y) + 3, t, '#9fe07a', false, 1.8); } break;
+        case 'hit': this.flash.set(ev.target, now + 0.18); hud?.float(ev.x, ev.y, z(ev.x, ev.y) + 1.5, `${ev.dmg}${ev.crit ? '!' : ''}`, ev.crit ? '#e8c477' : ev.who === me ? '#f3ecdc' : '#d9a37c', ev.crit); break;
+        case 'kill': hud?.float(ev.x, ev.y, z(ev.x, ev.y) + 2, '✶', '#e8c477', true); break;
+        case 'hurt': if (ev.who === me) { hud?.float(p.x, p.y, z(p.x, p.y) + 2, `-${ev.dmg}`, '#e06a5b'); hud?.hurt(); } this.flash.set(ev.who === me ? 'local' : ev.who, now + 0.18); break;
+        case 'evade': if (ev.who === me) hud?.float(p.x, p.y, z(p.x, p.y) + 2, 'dodged', '#8cc6d8'); break;
+        case 'xp': if (ev.who === me) hud?.float(p.x, p.y, z(p.x, p.y) + 2.5, `+${ev.n} xp`, '#d8b45c', false, 1.4); break;
+        case 'level': if (ev.who === me) { hud?.float(p.x, p.y, z(p.x, p.y) + 3, `Level ${ev.level}!`, '#e8c477', true, 2.2); this.message = `Level ${ev.level}! Two attribute points to spend.`; } break; // the interface shows a banner
+        case 'skill': if (ev.who === me) { const t = `${ev.skill[0].toUpperCase()}${ev.skill.slice(1)} is now ${ev.level}.`; hud?.float(p.x, p.y, z(p.x, p.y) + 3, t, '#a8d08d', false, 1.8); } break;
         case 'respawn': if (ev.who === me) { p.x = ev.x; p.y = ev.y; this.follow = 'player'; if (!this.q.detailed(p.x, p.y)) this.session.loadAt(this.engine, this.session.bp.coords.cellToMap([p.x, p.y])); } break;
-        case 'quest': if (ev.who === me && ev.status === 'ready') hud?.float(p.x, p.y, z(p.x, p.y) + 3, 'Quest ready!', '#ffd166', true, 2); break;
+        case 'quest': if (ev.who === me && ev.status === 'ready') hud?.float(p.x, p.y, z(p.x, p.y) + 3, 'Quest ready!', '#e8c477', true, 2); break;
         default: break;
       }
     }
@@ -441,9 +440,8 @@ export class LivingWorld {
     const now = performance.now() / 1000;
     if (now - this.markerT > 1) { this.markerT = now; this.updateMarkers(); }
     if (now - this.findsT > 1) { this.findsT = now; this.sweepFinds(); }
-    if (this.hud && now - this.promptT > 0.12) { this.promptT = now; this.hud.setPrompt(this.interaction()?.label ?? ''); }
     if (!this.hud && e.renderer && typeof document !== 'undefined' && e.renderer.canvas.isConnected) this.hud = new Hud(e, s);
-    this.hud?.update(p.hero, p.stamina, this.tags(), p.hero.dead >= 0 ? this.sim.clock.t - p.hero.dead : -1);
+    this.hud?.update(this.tags(), p.hero.dead >= 0 ? this.sim.clock.t - p.hero.dead : -1, p.hero.homeName);
     // Camera: keep the followed thing in the middle (the window streams after it).
     const target = this.follow === 'player' ? p : this.follow ? this.sim.dragons.dragons.find((d) => d.id === this.follow) : null;
     if (target && !s.travel) {
