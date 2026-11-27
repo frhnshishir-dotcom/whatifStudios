@@ -67,8 +67,16 @@ These are listed in `src/world/net/protocol.ts`. Additions in M1:
 - `tests/multiplayer.test.ts` and `e2e/m17-multiplayer.spec.ts`: sessions, reconnection, combat and trade sync,
   two browsers.
 - `tests/load.test.ts` and `npm run bench:server`: bots.
+- `tests/acceptance/m2-seamless.test.ts` (`npm run test:accept`): 18 players across the six villages.
 
-## Next (M2–M3)
+## Since M2
+
+- Creatures in a snapshot come from the wildlife region index (within 600 m), not a scan of every creature.
+- Rules events go to players within 120 m through a player grid ([WORLD_SIMULATION.md](WORLD_SIMULATION.md)).
+- The terrain behind move checks is made on worker threads. Until a region arrives, moves there are checked against
+  the coarse model.
+
+## Next (M3)
 
 1. Interest management by region, then delta snapshots with sequence numbers (M3).
 2. Adaptive rates by distance.

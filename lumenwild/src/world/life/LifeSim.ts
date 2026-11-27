@@ -87,7 +87,7 @@ export class LifeSim {
       q, clock: this.clock, hash: this.hash, territories, corridor, migrationRoutes: data.flight.migrationRoutes,
       villages: this.villageInfo, clearance: data.flight.clearance, settlementMinAGL: data.flight.settlementMinAGL, noLowFlightRadius: data.flight.noLowFlightRadius * mpu,
       ground: (x, y) => (q.detailed(x, y) ? q.height(x, y) : site.z(x, y)),
-      creatures: this.wildlife.creatures, players: [],
+      creatures: this.wildlife.creatures, creaturesNear: (x, y, r) => this.wildlife.near(x, y, r), players: [],
       kill: (prey, d) => this.note(`${d.name} caught a ${prey.sp}.`, prey.x, prey.y),
     };
   }
@@ -200,7 +200,7 @@ export class LifeSim {
     const h = this.hash;
     h.clear();
     for (const p of focus) h.add(p);
-    for (const c of this.wildlife.creatures.values()) if (c.alive && c.tier < 2) h.add(c);
+    this.wildlife.awake((c) => { if (c.alive && c.tier < 2) h.add(c); }); // dormant regions are skipped (region index)
     for (const v of this.villages.people.values()) if (v.out) h.add(v);
     for (const d of this.dragons.dragons) h.add(d);
   }

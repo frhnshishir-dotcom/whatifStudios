@@ -43,6 +43,8 @@ jobs:
         run: npm run build
       - name: Unit tests
         run: npx vitest run
+      - name: M2 acceptance (18 players across the six villages; timed, so it runs alone)
+        run: npm run test:accept
       - name: Install Chromium for the browser tests
         run: npx playwright install --with-deps chromium
       - name: Browser tests (including the Valley golden images)

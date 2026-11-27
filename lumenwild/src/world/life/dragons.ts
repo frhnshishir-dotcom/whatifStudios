@@ -54,6 +54,8 @@ export interface DragonContext {
   /** A creature caught (wildlife removes it). */
   kill?(c: Creature, by: DragonAgent): void;
   creatures?: Map<string, Creature>;
+  /** Creatures within r of a point (the wildlife's region index); without it, the whole map is scanned. */
+  creaturesNear?(x: number, y: number, r: number): Creature[];
   players: Agent[];
 }
 
@@ -206,7 +208,7 @@ export class Dragons {
   private spotPrey(d: DragonAgent, ctx: DragonContext): Creature | null {
     if (!ctx.creatures) return null;
     let best: Creature | null = null, bd = 260;
-    for (const c of ctx.creatures.values()) {
+    for (const c of ctx.creaturesNear ? ctx.creaturesNear(d.x, d.y, 260) : ctx.creatures.values()) {
       if (!c.alive || c.tier !== 0 || (c.sp !== 'deer' && c.sp !== 'bear' && c.sp !== 'wolf')) continue;
       const dd = Math.hypot(c.x - d.x, c.y - d.y);
       if (dd < bd) { bd = dd; best = c; }

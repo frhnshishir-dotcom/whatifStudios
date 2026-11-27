@@ -63,6 +63,28 @@ export interface Creature extends Agent {
   hp: number; foe: string | null; atkT: number;
 }
 
+/** The creature index's cell: the terrain's 256 m region. */
+const RS = 256;
+const regionKey = (x: number, y: number): number => (Math.floor(x / RS) + 32768) * 65536 + (Math.floor(y / RS) + 32768);
+const NONE: Creature[] = [];
+
+/**
+ * The creatures by id. It tells the wildlife index what was added, so the index stays right however creatures arrive
+ * (spawning, guardians, loading a save, tests placing one). A removal or replacement makes the index rebuild.
+ */
+export class CreatureMap extends Map<string, Creature> {
+  /** Added since the index last looked; null when the index must be rebuilt. */
+  added: Creature[] | null = [];
+  override set(k: string, c: Creature): this {
+    const old = super.get(k);
+    if (old === undefined) this.added?.push(c);
+    else if (old !== c) this.added = null;
+    return super.set(k, c);
+  }
+  override delete(k: string): boolean { if (super.has(k)) this.added = null; return super.delete(k); }
+  override clear(): void { this.added = null; super.clear(); }
+}
+
 /** Expected groups per 512 m cell, by region. */
 const DENSITY: Record<string, Partial<Record<Species, number>>> = {
   heartlands: { deer: 0.6, wolf: 0.03, bear: 0.02, fox: 0.3, bird: 0.7 },
@@ -99,11 +121,20 @@ export interface WildlifeContext {
 }
 
 export class Wildlife {
-  readonly creatures = new Map<string, Creature>();
+  readonly creatures = new CreatureMap();
   readonly spawned = new Set<string>();
-  readonly stats = { detailed: 0, nearby: 0, dormant: 0, kills: 0, spawnedCells: 0, ms: 0 };
+  /** `dormant` counts every creature in a dormant region (the living and the dead), without visiting them. */
+  readonly stats = { detailed: 0, nearby: 0, dormant: 0, kills: 0, spawnedCells: 0, ms: 0, regions: 0, visited: 0 };
   private scratch: Agent[] = [];
   private tick = 0;
+  // The index (M2): creatures by 256 m region and by group. A step visits only the regions near a player or loaded;
+  // dormant regions cost nothing however many creatures they hold. Herd, pack and flock look-ups use the group lists.
+  private byRegion = new Map<number, Creature[]>();
+  private keyOf = new Map<Creature, number>();
+  private groups = new Map<string, Creature[]>();
+  private dormantRegions = new Set<number>();
+  private visit: Creature[] = [];
+  private visitClose: boolean[] = [];
   /** Region id at a point (set by the host). */
   regionOf: ((x: number, y: number) => string) | null = null;
   constructor(private seed: number) {}
@@ -114,7 +145,7 @@ export class Wildlife {
     c.alert = 2;
     if (cc.dmg > 0 && c.hp > cc.hp * cc.fleeAt) {
       this.engage(c, by.id, clock);
-      if (c.sp === 'wolf') for (const m of this.creatures.values()) if (m.group === c.group && m.alive && m !== c && Math.hypot(m.x - c.x, m.y - c.y) < 60) this.engage(m, by.id, clock);
+      if (c.sp === 'wolf') for (const m of this.members(c.group)) if (m.alive && m !== c && Math.hypot(m.x - c.x, m.y - c.y) < 60) this.engage(m, by.id, clock);
     } else { c.st = 'flee'; c.stT = 0; c.tx = by.x; c.ty = by.y; c.next = clock.t + 3; c.foe = null; }
   }
 
@@ -137,6 +168,7 @@ export class Wildlife {
   /** Back to life at home, full health. */
   revive(c: Creature): void {
     c.alive = true; c.st = 'idle'; c.diedAt = -1; c.hp = CREATURE_COMBAT[c.sp].hp; c.foe = null; c.x = c.homeX; c.y = c.homeY; c.tx = c.x; c.ty = c.y; c.alert = 0; c.hunger = 0.3;
+    this.relocate(c);
   }
 
   /** Make sure the cells around each focus point have their creatures. */
@@ -185,15 +217,39 @@ export class Wildlife {
     }
   }
 
-  /** One simulation step for every creature, by tier. `focus`: player positions. */
+  /**
+   * One simulation step, by tier. `focus`: player positions. Tiers are as before M2 (0 inside the loaded area, 1 within
+   * NEARBY_R of a player, 2 dormant), but whole regions are classified first: a region nowhere near a player and not
+   * loaded is skipped without visiting its creatures, and in a region entirely within NEARBY_R the per-creature
+   * distance test is skipped.
+   */
   update(dt: number, focus: Array<{ x: number; y: number }>, ctx: WildlifeContext): void {
     const t0 = performance.now();
+    this.reindex();
     let det = 0, near = 0, dorm = 0;
-    for (const c of this.creatures.values()) {
+    const visit = this.visit, close = this.visitClose, dormantNow = new Set<number>();
+    visit.length = 0; close.length = 0;
+    for (const [k, list] of this.byRegion) {
+      const x0 = (Math.floor(k / 65536) - 32768) * RS, y0 = ((k % 65536) - 32768) * RS;
+      let nearest = Infinity, inside = false;
+      for (const f of focus) {
+        nearest = Math.min(nearest, Math.hypot(Math.max(x0 - f.x, 0, f.x - x0 - RS), Math.max(y0 - f.y, 0, f.y - y0 - RS)));
+        if (Math.hypot(Math.max(Math.abs(f.x - x0), Math.abs(f.x - x0 - RS)), Math.max(Math.abs(f.y - y0), Math.abs(f.y - y0 - RS))) < NEARBY_R) inside = true;
+      }
+      if (nearest >= NEARBY_R && !ctx.q.detailed(x0 + RS / 2, y0 + RS / 2)) {
+        dormantNow.add(k); dorm += list.length;
+        if (!this.dormantRegions.has(k)) for (const c of list) if (c.alive) c.tier = 2;
+        continue;
+      }
+      for (const c of list) { visit.push(c); close.push(inside); }
+    }
+    this.dormantRegions = dormantNow;
+    for (let i = 0; i < visit.length; i++) {
+      const c = visit[i];
       if (!c.alive) { if (c.diedAt >= 0 && ctx.clock.t - c.diedAt > 240) c.st = 'dead'; continue; }
-      let dmin = Infinity;
-      for (const f of focus) dmin = Math.min(dmin, Math.hypot(f.x - c.x, f.y - c.y));
-      const tier = ctx.q.detailed(c.x, c.y) ? 0 : dmin < NEARBY_R ? 1 : 2;
+      let isNear = close[i];
+      if (!isNear) { let dmin = Infinity; for (const f of focus) dmin = Math.min(dmin, Math.hypot(f.x - c.x, f.y - c.y)); isNear = dmin < NEARBY_R; }
+      const tier = ctx.q.detailed(c.x, c.y) ? 0 : isNear ? 1 : 2;
       if (tier === 0) { det++; this.detailedStep(c, dt, ctx); }
       else if (tier === 1) {
         // Nearby but not loaded: about once a second, staggered across creatures.
@@ -203,9 +259,85 @@ export class Wildlife {
       else dorm++;
       c.tier = tier;
     }
+    // Creatures that crossed into another region move to its list (after the step, so none is stepped twice).
+    for (const c of visit) if (this.relocate(c) && this.dormantRegions.has(this.keyOf.get(c)!)) c.tier = 2;
     this.stats.detailed = det; this.stats.nearby = near; this.stats.dormant = dorm;
+    this.stats.regions = this.byRegion.size; this.stats.visited = visit.length;
     this.tick++;
     this.stats.ms = performance.now() - t0;
+  }
+
+  /** Creatures within r of a point, from the region index (no scan of the whole map). */
+  near(x: number, y: number, r: number, out: Creature[] = []): Creature[] {
+    this.reindex();
+    out.length = 0;
+    for (let ry = Math.floor((y - r) / RS); ry <= Math.floor((y + r) / RS); ry++) for (let rx = Math.floor((x - r) / RS); rx <= Math.floor((x + r) / RS); rx++) {
+      const l = this.byRegion.get((rx + 32768) * 65536 + (ry + 32768));
+      if (l) for (const c of l) if (Math.hypot(c.x - x, c.y - y) < r) out.push(c);
+    }
+    return out;
+  }
+
+  /** Every creature outside dormant regions (living or not; callers filter), from the index. */
+  awake(each: (c: Creature) => void): void {
+    this.reindex();
+    for (const [k, l] of this.byRegion) if (!this.dormantRegions.has(k)) for (const c of l) each(c);
+  }
+
+  /** Self-check (tests, diagnostics): every creature listed once, in the region where it is, and in its group. */
+  checkIndex(): string[] {
+    this.reindex();
+    const out: string[] = [], seen = new Set<Creature>();
+    for (const [k, l] of this.byRegion) for (const c of l) {
+      if (seen.has(c)) out.push(`${c.id} listed twice`);
+      seen.add(c);
+      if (regionKey(c.x, c.y) !== k) out.push(`${c.id} listed in the wrong region`);
+      if (this.creatures.get(c.id) !== c) out.push(`${c.id} is not in the map`);
+    }
+    for (const c of this.creatures.values()) {
+      if (!seen.has(c)) out.push(`${c.id} missing from the index`);
+      if (!(this.groups.get(c.group) ?? NONE).includes(c)) out.push(`${c.id} missing from its group`);
+    }
+    return out;
+  }
+
+  /** A group's members, in the order they were added. */
+  private members(group: string): Creature[] { this.reindex(); return this.groups.get(group) ?? NONE; }
+
+  /** Bring the index up to date with the map (cheap when nothing was added). */
+  private reindex(): void {
+    const m = this.creatures;
+    if (m.added === null) {
+      this.byRegion.clear(); this.keyOf.clear(); this.groups.clear();
+      for (const c of m.values()) this.insert(c);
+    } else if (m.added.length) for (const c of m.added) this.insert(c);
+    m.added = [];
+  }
+
+  private insert(c: Creature): void {
+    const k = regionKey(c.x, c.y);
+    this.keyOf.set(c, k);
+    let l = this.byRegion.get(k);
+    if (!l) this.byRegion.set(k, (l = []));
+    l.push(c);
+    let g = this.groups.get(c.group);
+    if (!g) this.groups.set(c.group, (g = []));
+    g.push(c);
+  }
+
+  /** Keep a creature in the right region list after it moved. True if it changed region. */
+  private relocate(c: Creature): boolean {
+    const old = this.keyOf.get(c);
+    if (old === undefined) return false; // not indexed yet: it will be, where it is
+    const k = regionKey(c.x, c.y);
+    if (k === old) return false;
+    const l = this.byRegion.get(old);
+    if (l) { const i = l.indexOf(c); if (i >= 0) l.splice(i, 1); if (!l.length) this.byRegion.delete(old); }
+    this.keyOf.set(c, k);
+    let n = this.byRegion.get(k);
+    if (!n) this.byRegion.set(k, (n = []));
+    n.push(c);
+    return true;
   }
 
   private needs(c: Creature, dt: number): void {
@@ -247,7 +379,7 @@ export class Wildlife {
           prey.alive = false; prey.diedAt = t; prey.st = 'dead'; this.stats.kills++;
           ctx.onKill?.(prey, c.id);
           // The pack shares the kill.
-          for (const m of this.creatures.values()) if (m.group === c.group && m.alive && Math.hypot(m.x - c.x, m.y - c.y) < 80) { m.st = 'eat'; m.stT = 0; m.tx = prey.x; m.ty = prey.y; m.target = prey.id; }
+          for (const m of this.members(c.group)) if (m.alive && Math.hypot(m.x - c.x, m.y - c.y) < 80) { m.st = 'eat'; m.stT = 0; m.tx = prey.x; m.ty = prey.y; m.target = prey.id; }
         }
         break;
       }
@@ -323,7 +455,7 @@ export class Wildlife {
       // Territorial animals stand their ground against intruders they do not fear enough.
       c.tx = threat.x; c.ty = threat.y; c.alert = 1.5;
       this.set(c, 'flee', ctx);
-      if (c.sp === 'bird') for (const m of this.creatures.values()) if (m.group === c.group && m.alive && m.st !== 'flee') { m.st = 'flee'; m.stT = 0; m.tx = threat.x; m.ty = threat.y; m.alert = 1; }
+      if (c.sp === 'bird') for (const m of this.members(c.group)) if (m.alive && m.st !== 'flee') { m.st = 'flee'; m.stT = 0; m.tx = threat.x; m.ty = threat.y; m.alert = 1; }
       return;
     }
     if (c.st === 'flee' && c.stT < 3) return;
@@ -332,7 +464,7 @@ export class Wildlife {
     if (c.sp === 'wolf' && (!inHours(h, 5.5, 19.5) || c.hunger > 0.75)) {
       for (const a of near) if (a.kind === 'player' && a.alive && Math.hypot(a.x - c.x, a.y - c.y) < 18) {
         this.engage(c, a.id, ctx.clock);
-        for (const m of this.creatures.values()) if (m.group === c.group && m.alive && m !== c && Math.hypot(m.x - c.x, m.y - c.y) < 60) this.engage(m, a.id, ctx.clock);
+        for (const m of this.members(c.group)) if (m.alive && m !== c && Math.hypot(m.x - c.x, m.y - c.y) < 60) this.engage(m, a.id, ctx.clock);
         return;
       }
     }
@@ -368,12 +500,12 @@ export class Wildlife {
         const d = Math.hypot(a.x - c.x, a.y - c.y);
         if (d < bd) { bd = d; best = p; }
       }
-      if (best) { c.target = best.id; c.alert = 1; this.set(c, 'hunt', ctx); for (const m of this.creatures.values()) if (m.group === c.group && m !== c && m.alive && m.st !== 'eat') { m.st = 'hunt'; m.stT = 0; m.target = best.id; } return; }
+      if (best) { c.target = best.id; c.alert = 1; this.set(c, 'hunt', ctx); for (const m of this.members(c.group)) if (m !== c && m.alive && m.st !== 'eat') { m.st = 'hunt'; m.stT = 0; m.target = best.id; } return; }
     }
     // 6. Herds, packs and flocks stay together: followers drift toward the leader.
     if (!c.leader) {
       let lead: Creature | undefined;
-      for (const m of this.creatures.values()) if (m.group === c.group && m.leader && m.alive) { lead = m; break; }
+      for (const m of this.members(c.group)) if (m.leader && m.alive) { lead = m; break; }
       if (lead && Math.hypot(lead.x - c.x, lead.y - c.y) > 14) { c.tx = lead.x + (r() - 0.5) * 8; c.ty = lead.y + (r() - 0.5) * 8; this.set(c, c.sp === 'bird' ? 'wander' : 'follow', ctx); return; }
     }
     // 7. Graze, wander (within the home range), or idle.

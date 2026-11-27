@@ -6,15 +6,16 @@ import { WORLD } from '../src/world/data';
 import { buildBlueprint, regionAt, type Blueprint } from '../src/world/blueprint';
 import { ContinentTerrain, WK_NONE, type RegionData } from '../src/world/terrain';
 import { LifeSim, RUN, type Player } from '../src/world/life/LifeSim';
-import type { TerrainQuery } from '../src/world/life/core';
+import { SpatialHash, type Agent, type TerrainQuery } from '../src/world/life/core';
+import type { Creature } from '../src/world/life/wildlife';
 import type { RegionEditJSON } from '../src/world/edits';
 import { PROTOCOL, type ClientMsg, type ServerMsg, type SnapCreature, type SnapDragon, type SnapPlayer, type SnapVillager, type SnapLoot } from '../src/world/net/protocol';
-import { OBJECT_DEFS } from '../src/engine/objects/defs';
 import { heroToJSON, heroFromJSON, maxHp } from '../src/world/rpg/hero';
 import { CREATURE_COMBAT } from '../src/world/rpg/content';
 import type { NodeQuery, GatherNode, RpgEvent } from '../src/world/rpg/Rpg';
 import { acceptWebSockets, localOrigins, DEFAULT_LIMITS, type WSConn, type WSLimits } from './ws';
 import { RegionGuard } from './permissions';
+import { RegionStore, type RegionEntry, type RegionStoreOptions } from './regionStore';
 
 /** Token bucket: `rate` per second, up to `burst` at once. */
 class Bucket {
@@ -47,27 +48,21 @@ const NEAR = 120;
 
 /** Exact terrain from regions generated around players; coarse (smooth ground, rivers, lakes) elsewhere. */
 class GenQuery implements TerrainQuery, NodeQuery {
-  private cache = new Map<string, RegionData>();
-  /** Per region: cells blocked by solid objects, and bridge decks (walkable over water). */
-  private masks = new Map<string, { solid: Uint8Array; deck: Uint8Array }>();
+  /** Generated regions, made by worker threads (see RegionStore): never on the server loop. */
+  readonly store: RegionStore;
   private site;
   private ids: string[];
-  constructor(private ct: ContinentTerrain, private bp: Blueprint) { this.site = ct.siteQuery(); this.ids = bp.data.regions.map((r) => r.id); }
-  /** Generate the 3 x 3 regions around a point (once each; at most 64 kept). */
-  ensureAround(x: number, y: number): void {
-    const rx = Math.floor(x / 256), ry = Math.floor(y / 256);
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const k = `${rx + dx},${ry + dy}`;
-      if (this.cache.has(k)) { const r = this.cache.get(k)!; this.cache.delete(k); this.cache.set(k, r); continue; }
-      const r = this.ct.generateRegion(rx + dx, ry + dy);
-      this.cache.set(k, r);
-      this.masks.set(k, masksOf(r));
-      while (this.cache.size > 64) { const old = this.cache.keys().next().value as string; this.cache.delete(old); this.masks.delete(old); }
-    }
+  constructor(ct: ContinentTerrain, private bp: Blueprint, opts: RegionStoreOptions = {}) {
+    this.site = ct.siteQuery(); this.ids = bp.data.regions.map((r) => r.id);
+    this.store = new RegionStore(ct, opts);
   }
-  private cell(x: number, y: number): { r: RegionData; i: number } | null {
-    const r = this.cache.get(`${Math.floor(x / 256)},${Math.floor(y / 256)}`);
-    return r ? { r, i: (Math.floor(y) - r.oy) * 256 + (Math.floor(x) - r.ox) } : null;
+  /** The regions generated so far. */
+  get cache(): Map<number, RegionEntry> { return this.store.cache; }
+  /** Ask for the 3 x 3 regions around a point (they arrive shortly; answers are coarse until then). */
+  ensureAround(x: number, y: number): void { this.store.request([{ x, y }]); }
+  private cell(x: number, y: number): { e: RegionEntry; r: RegionData; i: number } | null {
+    const e = this.store.get(Math.floor(x / 256), Math.floor(y / 256));
+    return e ? { e, r: e.r, i: (Math.floor(y) - e.r.oy) * 256 + (Math.floor(x) - e.r.ox) } : null;
   }
   detailed(x: number, y: number): boolean { return !!this.cell(x, y); }
   height(x: number, y: number): number { const c = this.cell(x, y); return c ? c.r.elev[c.i] : this.site.z(x, y); }
@@ -76,7 +71,7 @@ class GenQuery implements TerrainQuery, NodeQuery {
   walkable(x: number, y: number): boolean {
     const c = this.cell(x, y);
     if (!c) return !this.site.wet(x, y, 0);
-    const m = this.masks.get(`${c.r.rx},${c.r.ry}`)!;
+    const m = c.e;
     if (m.deck[c.i]) return true;
     if (m.solid[c.i] || c.r.waterKind[c.i] !== WK_NONE) return false;
     const lx = c.i % 256, ly = Math.floor(c.i / 256), e = c.r.elev;
@@ -87,28 +82,12 @@ class GenQuery implements TerrainQuery, NodeQuery {
   node(id: string): GatherNode | null {
     const m = /^([a-z]+):(-?\d+),(-?\d+)$/.exec(id);
     if (!m) return null;
-    const x = +m[2], y = +m[3], r = this.cache.get(`${Math.floor(x / 256)},${Math.floor(y / 256)}`);
+    const x = +m[2], y = +m[3], r = this.store.get(Math.floor(x / 256), Math.floor(y / 256))?.r;
     if (!r) return null;
     for (const o of r.objects) if (o.x + r.ox === x && o.y + r.oy === y && (o.kind === m[1] || (o.kind === 'cache' && o.variant === m[1]))) return { kind: o.kind, variant: o.variant, x, y };
     return null;
   }
   biome(x: number, y: number): string { const c = this.cell(x, y); return c ? this.ids[c.r.biome[c.i]] ?? 'sea' : regionAt(this.bp, x / 100, y / 100); }
-}
-
-/** Solid and deck cells of a generated region, from its objects' footprints. */
-function masksOf(r: RegionData): { solid: Uint8Array; deck: Uint8Array } {
-  const solid = new Uint8Array(256 * 256), deck = new Uint8Array(256 * 256);
-  for (const o of r.objects) {
-    const def = OBJECT_DEFS[o.kind as keyof typeof OBJECT_DEFS];
-    if (!def || (!def.solid && o.kind !== 'span')) continue;
-    const wo = { id: 0, kind: o.kind, x: o.x, y: o.y, variant: o.variant, props: { ...def.defaults, ...(o.props ?? {}) } } as Parameters<typeof def.footprint>[0];
-    for (const [dx, dy] of def.footprint(wo)) {
-      const x = o.x + dx, y = o.y + dy;
-      if (x < 0 || y < 0 || x >= 256 || y >= 256) continue;
-      (o.kind === 'span' ? deck : solid)[y * 256 + x] = 1;
-    }
-  }
-  return { solid, deck };
 }
 
 export interface ServerOptions {
@@ -120,6 +99,8 @@ export interface ServerOptions {
   origins?: string[];
   /** Development: let players edit villages, landmarks and bridges. */
   allowVillageEdits?: boolean;
+  /** Region generation: worker threads, cache bound (see RegionStore). */
+  regions?: RegionStoreOptions;
   wsLimits?: WSLimits;
 }
 
@@ -137,6 +118,9 @@ export class WorldServer {
   readonly guard: RegionGuard;
   private conns = new Set<WSConn>();
   private takenSent = 0;
+  /** Connected players by 128 m cell, rebuilt when events are routed (who is near an event). */
+  private playerGrid = new SpatialHash(128);
+  private nearScratch: Creature[] = [];
   hour = 9;
   private http: Server | null = null;
   private timers: NodeJS.Timeout[] = [];
@@ -147,7 +131,7 @@ export class WorldServer {
     this.log = opts.log ?? (() => {});
     this.bp = buildBlueprint(WORLD);
     this.terrain = new ContinentTerrain(this.bp);
-    this.q = new GenQuery(this.terrain, this.bp);
+    this.q = new GenQuery(this.terrain, this.bp, { log: this.log, ...(opts.regions ?? {}) });
     this.sim = new LifeSim(this.bp, this.terrain, this.q);
     this.sim.rpg.authoritative = true;
     this.guard = new RegionGuard(this.terrain, !!opts.allowVillageEdits);
@@ -178,6 +162,7 @@ export class WorldServer {
     await this.inFlight; // never two writers on the temporary file
     if (this.opts.dataFile) this.save();
     await new Promise<void>((res) => { if (!this.http) return res(); this.http.close(() => res()); this.http.closeAllConnections(); });
+    await this.q.store.close();
   }
 
   /** Send to one client; `droppable` messages (snapshots) are skipped while that client is behind. */
@@ -283,18 +268,21 @@ export class WorldServer {
     const evs = this.sim.rpg.drain();
     if (evs.length) {
       this.stats.events += evs.length;
-      const per = new Map<string, RpgEvent[]>();
+      const per = new Map<string, RpgEvent[]>(), grid = this.playerGrid, found: Agent[] = [];
+      grid.clear();
+      for (const s of this.sessions.values()) if (s.conn) grid.add(s.player);
+      const give = (s: Session | undefined, ev: RpgEvent) => {
+        if (!s?.conn) return;
+        let list = per.get(s.id);
+        if (!list) { list = []; per.set(s.id, list); }
+        if (list[list.length - 1] !== ev) list.push(ev);
+      };
       for (const ev of evs) {
         const actor = this.sim.players.get(ev.who);
         const at = 'x' in ev ? ev : actor;
-        for (const s of this.sessions.values()) {
-          if (!s.conn) continue;
-          const mine = ev.who === s.id;
-          if (PERSONAL.has(ev.e) ? !mine : !(mine || (at && Math.hypot(at.x - s.player.x, at.y - s.player.y) < NEAR))) continue;
-          let list = per.get(s.id);
-          if (!list) { list = []; per.set(s.id, list); }
-          list.push(ev);
-        }
+        // Personal events go to their player; the rest also to every connected player within 120 m (player grid).
+        give(this.sessions.get(ev.who), ev);
+        if (!PERSONAL.has(ev.e) && at) for (const a of grid.near(at.x, at.y, NEAR, found)) if (Math.hypot(at.x - a.x, at.y - a.y) < NEAR) give(this.sessions.get(a.id), ev);
         if (ev.e === 'respawn') { const s = this.sessions.get(ev.who); if (s) { this.q.ensureAround(ev.x, ev.y); this.send(s.conn, { type: 'correct', x: ev.x, y: ev.y }); } }
       }
       for (const [id, list] of per) this.send(this.sessions.get(id)!.conn, { type: 'ev', evs: list });
@@ -317,7 +305,8 @@ export class WorldServer {
       if (!s.conn && now - s.lastSeen > 60_000 && this.sim.players.has(s.id)) this.sim.players.delete(s.id);
       if (s.conn && !this.sim.players.has(s.id)) this.sim.players.set(s.id, s.player);
     }
-    if (this.stats.ticks % 10 === 0) for (const p of this.sim.players.values()) this.q.ensureAround(p.x, p.y);
+    // Once a second: the regions around every player are pinned, and missing ones queued for the workers.
+    if (this.stats.ticks % 10 === 0) this.q.store.pin([...this.sim.players.values()]);
     this.sim.update(dt, { hour: this.hour, rain: 0 });
     this.flushEvents();
     this.stats.ticks++;
@@ -334,7 +323,7 @@ export class WorldServer {
       const p = this.sim.players.get(s.id);
       if (!p) continue;
       const creatures: SnapCreature[] = [], villagers: SnapVillager[] = [], loot: SnapLoot[] = [];
-      for (const c of this.sim.wildlife.creatures.values()) if (Math.hypot(c.x - p.x, c.y - p.y) < 600 && (c.alive || c.st !== 'dead')) creatures.push([c.id, c.sp, round(c.x), round(c.y), +c.alt.toFixed(1), +c.h.toFixed(2), c.st, c.alive ? 1 : 0, +(c.hp / CREATURE_COMBAT[c.sp].hp).toFixed(2), c.foe ? 1 : 0]);
+      for (const c of this.sim.wildlife.near(p.x, p.y, 600, this.nearScratch)) if (c.alive || c.st !== 'dead') creatures.push([c.id, c.sp, round(c.x), round(c.y), +c.alt.toFixed(1), +c.h.toFixed(2), c.st, c.alive ? 1 : 0, +(c.hp / CREATURE_COMBAT[c.sp].hp).toFixed(2), c.foe ? 1 : 0]);
       for (const v of this.sim.villages.people.values()) if (Math.hypot(v.x - p.x, v.y - p.y) < 400) villagers.push([v.id, round(v.x), round(v.y), +v.h.toFixed(2), v.st, v.act, v.out ? 1 : 0]);
       for (const g of this.sim.rpg.loot.values()) if (Math.hypot(g.x - p.x, g.y - p.y) < NEAR) loot.push([g.id, round(g.x), round(g.y), g.label]);
       this.send(s.conn, { type: 'snap', t, hour: +this.hour.toFixed(3), me: [Math.round(p.hero.hp * 10) / 10, +p.stamina.toFixed(3), p.hero.dead >= 0 ? 1 : 0], players, dragons, creatures, villagers, loot }, true);

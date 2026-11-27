@@ -77,6 +77,8 @@ export class ContinentTerrain {
   private styles: Style[];
   private segs: Seg[] = [];
   private bucket = new Map<number, number[]>();
+  /** River segments by 256 m cell, each filed where it can make a point wet (half-width + WET_REACH): the coarse water test. */
+  private wetBucket = new Map<number, number[]>();
   private paths: Array<{ cls: string; pts: Float64Array }> = [];
   /** Road bridges (where each road's path crosses a river). */
   readonly bridges: BridgeSite[] = [];
@@ -127,6 +129,17 @@ export class ContinentTerrain {
             if (!b) this.bucket.set(key, (b = []));
             b.push(id);
           }
+        }
+      }
+    }
+    for (let id = 0; id < this.segs.length; id++) {
+      const sg = this.segs[id], m = Math.max(sg.ha, sg.hb) + WET_REACH;
+      for (let gy = Math.floor((Math.min(sg.ay, sg.by) - m) / 256); gy <= Math.floor((Math.max(sg.ay, sg.by) + m) / 256); gy++) {
+        for (let gx = Math.floor((Math.min(sg.ax, sg.bx) - m) / 256); gx <= Math.floor((Math.max(sg.ax, sg.bx) + m) / 256); gx++) {
+          const key = gy * 100000 + gx;
+          let b = this.wetBucket.get(key);
+          if (!b) this.wetBucket.set(key, (b = []));
+          b.push(id);
         }
       }
     }
@@ -208,7 +221,10 @@ export class ContinentTerrain {
       },
       wet: (x, y, margin) => {
         if (this.macroAt(x, y) < 1) return true;
-        for (const i of this.segsNear(x - margin, y - margin, x + margin, y + margin)) { const d = segDist(this.segs[i], x, y); if (d.d < d.h + margin) return true; }
+        // A segment wets a point only within its half-width + margin of it, so (margin <= WET_REACH) the point's own
+        // 256 m cell lists every segment that can (same answer as the 1 km buckets, far fewer segments to measure).
+        const cand = margin <= WET_REACH ? (this.wetBucket.get(Math.floor(y / 256) * 100000 + Math.floor(x / 256)) ?? []) : this.segsNear(x - margin, y - margin, x + margin, y + margin);
+        for (const i of cand) { const d = segDist(this.segs[i], x, y); if (d.d < d.h + margin) return true; }
         for (const l of lakes) {
           const dx = x - l.at[0] * mpu, dy = y - l.at[1] * mpu, dd = Math.hypot(dx, dy);
           if (dd < (l.radius * 1.2 + 1) * mpu + margin && dd < lakeRadius(this.bp.data, l, Math.atan2(dy, dx)) * mpu + margin) return true;
@@ -364,7 +380,10 @@ export class ContinentTerrain {
   }
 
   /** River segments that can influence a rectangle (metres). */
-  private segsNear(x0: number, y0: number, x1: number, y1: number): number[] {
+  private segsNear(x0: number, y0: number, x1: number, y1: number): readonly number[] {
+    // Within one 1 km cell (most point queries): that cell's list, which holds each segment once, in the same order.
+    const gx0 = Math.floor(x0 / 1000), gy0 = Math.floor(y0 / 1000);
+    if (gx0 === Math.floor(x1 / 1000) && gy0 === Math.floor(y1 / 1000)) return this.bucket.get(gy0 * 100000 + gx0) ?? [];
     const set = new Set<number>();
     for (let gy = Math.floor(y0 / 1000); gy <= Math.floor(y1 / 1000); gy++) for (let gx = Math.floor(x0 / 1000); gx <= Math.floor(x1 / 1000); gx++) {
       for (const s of this.bucket.get(gy * 100000 + gx) ?? []) set.add(s);
@@ -772,6 +791,9 @@ export class ContinentTerrain {
 const rx = (r: RegionData) => r.rx, ry = (r: RegionData) => r.ry;
 
 /** Distance from a point to a river segment, with the interpolated surface and half-width there. */
+/** The largest margin the coarse water test answers from the 256 m buckets (larger ones use the 1 km buckets). */
+const WET_REACH = 16;
+
 function segDist(s: Seg, x: number, y: number): { d: number; s: number; h: number } {
   const dx = s.bx - s.ax, dy = s.by - s.ay, l2 = dx * dx + dy * dy || 1;
   const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (y - s.ay) * dy) / l2));

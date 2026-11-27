@@ -12,9 +12,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test --trace off",
-    "server:build": "vite build --ssr server/main.ts --outDir dist-server --emptyOutDir",
+    "server:build": "node server/build.mjs",
     "server": "npm run server:build && node dist-server/main.js",
     "loadtest": "vitest run tests/load.test.ts --silent=false",
+    "test:accept": "vitest run --config vitest.accept.config.ts --silent=false",
     "bench:server": "node bench/server.mjs",
     "bench:continent": "node bench/continent.mjs"
   },

@@ -68,6 +68,20 @@ Acceptance: with 18 players spread over the six villages, the measured tick p95 
 under 50 ms (today: average 51.6 ms, maximum 2,833 ms). The 16-bot Lumenfall case is no worse than its baseline.
 Behaviour tests stay unchanged.
 
+**Status (2026-11-27): done**, as approved. Details: [WORLD_SIMULATION.md](WORLD_SIMULATION.md); numbers:
+[docs/benchmarks/2026-11-27-m2-after.md](../benchmarks/2026-11-27-m2-after.md).
+
+| Item | Status |
+|---|---|
+| Worker generation; nothing generated on the loop | Done |
+| Demand-sized cache; regions in use are never evicted | Done |
+| Creatures indexed by region and group; dormant regions skipped | Done |
+| Players near a point (event routing) | Done |
+| Acceptance: 18 players across the six villages, with travellers (`npm run test:accept`, also in CI) | Done |
+| On-disk region cache | Not needed: a region takes about 190 ms on a worker and arrives before it is needed. Revisit if laptop numbers say otherwise. |
+| Villagers and loot indexed by region | Not done: both are bounded (villagers live in the six villages; loot is short-lived) and cost about 1 ms per update together. |
+| Interest management in snapshots | Moved to M3, with delta snapshots, as `NETWORKING.md` already planned. |
+
 ## M3: Network efficiency and feel
 
 - **Protocol v3:** delta snapshots, sequence numbers, character sync on change only, adaptive rates by distance.
