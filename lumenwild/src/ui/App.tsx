@@ -13,6 +13,7 @@ const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyF', 'KeyQ
 import { WorldDialog } from './components/WorldDialog';
 import { ContinentDialog } from './components/ContinentDialog';
 import { getWorldIO } from './persistence';
+import { PlayBar } from './rpg/PlayBar';
 
 function Toast() {
   const toast = useUI((s) => s.toast);
@@ -31,6 +32,9 @@ export function App() {
   const panelsHidden = useUI((s) => s.panelsHidden);
   const inspectorOpen = useUI((s) => s.inspectorOpen);
   const togglePanels = useUI((s) => s.togglePanels);
+  const mode = useUI((s) => s.mode);
+  const layout = useUI((s) => s.layout);
+  const play = mode === 'continent' && layout === 'play';
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -38,7 +42,15 @@ export function App() {
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); void getWorldIO()?.quickSave(); return; }
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return;
       if (useUI.getState().dialog) return;
+      const ui = useUI.getState();
+      // The continent: B switches between Play and the Sandbox (only the interface changes; the world carries on).
+      if (ui.mode === 'continent' && ev.code === 'KeyB' && !ev.repeat && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        ui.setLayout(ui.layout === 'play' ? 'sandbox' : 'play');
+        return;
+      }
       const engine = getEngine();
+      // Play: no editing shortcuts or tool keys (the game owns its keys; the tools are in the Sandbox).
+      if (ui.mode === 'continent' && ui.layout === 'play') return;
       if (engine && editorShortcut(ev, engine)) { ev.preventDefault(); return; }
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       // Continent play owns the game keys (move, attack, dodge, eat, interact, watch, panel tabs).
@@ -56,15 +68,17 @@ export function App() {
   }, [togglePanels]);
 
   return (
-    <div className={`app${panelsHidden ? ' panels-hidden' : ''}${inspectorOpen ? ' inspector-open' : ''}`}>
-      {!panelsHidden && <TopBar />}
-      {!panelsHidden && <Toolbar />}
+    // The stage keeps its place among the children in both layouts, so the canvas (and the engine on it) is never
+    // remounted when switching between Play and the Sandbox.
+    <div className={`app${play ? ' play' : ''}${!play && panelsHidden ? ' panels-hidden' : ''}${!play && inspectorOpen ? ' inspector-open' : ''}`} data-layout={mode === 'continent' ? layout : 'valley'}>
+      {play ? <PlayBar /> : !panelsHidden && <TopBar />}
+      {!play && !panelsHidden && <Toolbar />}
       <main className="stage"><CanvasView /><Toast /></main>
-      {!panelsHidden && <Inspector />}
-      {!panelsHidden && <BottomBar />}
+      {!play && !panelsHidden && <Inspector />}
+      {!play && !panelsHidden && <BottomBar />}
       <WorldDialog />
       <ContinentDialog />
-      {panelsHidden && <button className="show-panels" onClick={togglePanels} title="Show panels (H)">Show panels</button>}
+      {!play && panelsHidden && <button className="show-panels" onClick={togglePanels} title="Show panels (H)">Show panels</button>}
     </div>
   );
 }

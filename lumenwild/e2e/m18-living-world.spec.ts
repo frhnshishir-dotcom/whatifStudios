@@ -8,7 +8,7 @@ test('a traveller in Lumenfall: villagers, keyboard walking, wildlife, a find, a
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto('/?scene=continent');
+  await page.goto('/?scene=continent&layout=sandbox');
   await page.waitForFunction(() => (window as any).__lumenwild?.getEngine()?.streamer?.life?.sim.villages.people.size > 0, null, { timeout: 90_000 });
   await page.evaluate(() => { const e = (window as any).__lumenwild.getEngine(); e.env.set({ time: 10 }); e.env.settle(); });
   const lw = <T,>(f: string) => page.evaluate((f) => new Function('lw', `return (${f})`)((window as any).__lumenwild.getEngine().streamer.life), f) as Promise<T>;

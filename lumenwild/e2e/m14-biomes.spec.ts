@@ -14,7 +14,7 @@ test('continent biomes: each of the six regions renders with its own look', asyn
   page.on('pageerror', (e) => errors.push(String(e)));
   const means: Record<string, [number, number, number]> = {};
   for (const [id, name, x, y] of PLACES) {
-    await page.goto(`/?scene=continent&at=${x},${y}`);
+    await page.goto(`/?scene=continent&layout=sandbox&at=${x},${y}`);
     await page.waitForFunction(() => !!(window as any).__lumenwild?.useUI.getState().stats, null, { timeout: 90_000 });
     await expect(page.getByTestId('continent-where')).toContainText(name);
     await page.waitForTimeout(1500); // shading of the window settles

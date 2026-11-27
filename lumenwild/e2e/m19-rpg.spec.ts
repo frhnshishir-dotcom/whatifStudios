@@ -11,7 +11,7 @@ test('fight, loot, equip, quest, shop, level up; the character survives save and
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto('/?scene=continent');
+  await page.goto('/?scene=continent&layout=sandbox');
   await page.waitForFunction(() => (window as any).__lumenwild?.getEngine()?.streamer?.life?.sim.villages.people.size > 0, null, { timeout: 90_000 });
   await page.evaluate(() => { const e = (window as any).__lumenwild.getEngine(); e.env.set({ time: 11 }); e.env.settle(); });
   await expect(page.getByTestId('hud')).toBeVisible();
@@ -75,7 +75,7 @@ test('fight, loot, equip, quest, shop, level up; the character survives save and
   await page.getByTestId('save-current').click();
   await expect(page.getByText(/^Saved “/)).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.goto('/?scene=continent');
+  await page.goto('/?scene=continent&layout=sandbox');
   await page.waitForFunction(() => (window as any).__lumenwild?.getEngine()?.streamer?.life?.sim.villages.people.size > 0, null, { timeout: 90_000 });
   expect(await lw<number>(page, `lw.player.hero.level`)).toBe(1);
   await page.getByTestId('open-worlds').click();

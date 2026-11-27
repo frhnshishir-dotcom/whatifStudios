@@ -7,7 +7,7 @@ test('continent mode: starts at Lumenfall, streams while travelling, and the val
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto('/?scene=continent');
+  await page.goto('/?scene=continent&layout=sandbox');
   await page.waitForFunction(() => !!(window as any).__lumenwild?.useUI.getState().stats, null, { timeout: 90_000 });
   await expect(page.getByTestId('continent-panel')).toBeVisible();
   await expect(page.getByTestId('continent-where')).toContainText('Lumenfall Village');

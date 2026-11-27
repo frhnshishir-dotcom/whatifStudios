@@ -1,0 +1,76 @@
+/*
+ * Lumenwild RPG interface (continent "Play" layout). Dark charcoal and deep forest surfaces, muted gold accents,
+ * serif headings from the system (no font dependency), readable sans body text. Lies over the world canvas; the
+ * character-cell renderer is untouched.
+ */
+:root {
+  --rpg-ink: #0d100e;
+  --rpg-surface: rgba(16, 20, 17, 0.94);
+  --rpg-surface-2: rgba(20, 33, 26, 0.94);
+  --rpg-forest: #13211a;
+  --rpg-forest-2: #1a2e23;
+  --rpg-gold: #c4a265;
+  --rpg-gold-dim: rgba(196, 162, 101, 0.38);
+  --rpg-gold-faint: rgba(196, 162, 101, 0.16);
+  --rpg-text: #ebe4d1;
+  --rpg-text-2: #b3ab96;
+  --rpg-text-3: #8a8473;
+  --rpg-hp: #b9473c;
+  --rpg-hp-2: #e06a5b;
+  --rpg-st: #4b8ea6;
+  --rpg-xp: #c9a24f;
+  --rpg-good: #8fc27a;
+  --rpg-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+  --rpg-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --rpg-radius: 10px;
+  --rpg-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 240, 210, 0.04);
+  --rpg-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Layout: the bar on top, the world everywhere else. */
+.app.play { grid-template-columns: 1fr; grid-template-rows: auto 1fr; grid-template-areas: "top" "stage"; }
+
+.playbar {
+  grid-area: top; display: flex; align-items: center; gap: 12px; min-height: 48px;
+  padding: 0 14px; padding-top: env(safe-area-inset-top, 0px);
+  background: linear-gradient(180deg, #151b17 0%, #0f1310 100%);
+  border-bottom: 1px solid var(--rpg-gold-dim);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 6px 18px rgba(0, 0, 0, 0.35);
+  color: var(--rpg-text); font-family: var(--rpg-sans); position: relative; z-index: 20;
+}
+.playbar-brand { display: flex; align-items: center; gap: 8px; color: var(--rpg-gold); }
+.playbar-brand .logo { display: inline-flex; filter: drop-shadow(0 0 6px rgba(196, 162, 101, 0.35)); }
+.playbar-world {
+  font-family: var(--rpg-serif); font-size: 17px; letter-spacing: 0.02em; color: var(--rpg-text);
+  background: none; border: 0; padding: 4px 2px; cursor: pointer; white-space: nowrap;
+}
+.playbar-world:hover, .playbar-world:focus-visible { color: var(--rpg-gold); }
+.playbar-where { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; padding-left: 12px; border-left: 1px solid var(--rpg-gold-faint); }
+.playbar-where b { font-family: var(--rpg-serif); font-weight: 600; font-size: 14px; color: var(--rpg-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.playbar-where span { font-size: 11.5px; color: var(--rpg-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.playbar-clock { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; color: var(--rpg-text-2); font-size: 12.5px; }
+.playbar-online { font-size: 11.5px; color: var(--rpg-good); border: 1px solid rgba(143, 194, 122, 0.35); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.playbar-online.off { color: var(--rpg-text-3); border-color: var(--rpg-gold-faint); }
+.playbar .grow { flex: 1; }
+.rpg-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; min-width: 32px; padding: 0 8px;
+  border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--rpg-text-2); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.rpg-icon-btn:hover, .rpg-icon-btn:focus-visible { color: var(--rpg-text); background: var(--rpg-gold-faint); border-color: var(--rpg-gold-dim); outline: none; }
+.rpg-key { font: 600 10px/1 var(--rpg-sans); color: var(--rpg-text-3); border: 1px solid var(--rpg-gold-faint); border-radius: 4px; padding: 2px 4px; }
+.rpg-sandbox-btn { color: var(--rpg-gold); border-color: var(--rpg-gold-dim); }
+
+@media (max-width: 820px) {
+  .playbar { gap: 8px; padding: 0 10px; }
+  .playbar-clock .label, .playbar .wide { display: none; }
+}
+@media (max-width: 600px) {
+  .playbar-where, .playbar-brand .logo { display: none; }
+  .playbar-world { font-size: 15px; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+  .rpg-icon-btn { padding: 0 6px; }
+  .playbar-full { display: none; } /* phones: the browser's own full screen (and few support the API) */
+}
+@media (prefers-reduced-motion: reduce) {
+  .rpg-icon-btn { transition: none; }
+}

@@ -55,6 +55,15 @@ interface UIState {
   setWorldMeta: (name: string, seed: number) => void;
   /** 'valley' (the sandbox world) or 'continent' (streamed regions). */
   mode: 'valley' | 'continent';
+  /**
+   * The continent's layout: 'play' (the RPG: world, HUD and windows; editing off) or 'sandbox' (the editor's tools,
+   * inspector and statistics). Switching changes only the interface: the engine, world and character carry on.
+   * The Valley is always 'sandbox'. `?layout=sandbox` opens the continent in the sandbox.
+   */
+  layout: 'play' | 'sandbox';
+  /** The editing tool to restore when returning to the sandbox (Play keeps the harmless select tool). */
+  sandboxTool: ToolId;
+  setLayout: (l: UIState['layout']) => void;
   setSaveState: (s: UIState['saveState']) => void;
   markUnsaved: () => void;
 }
@@ -107,6 +116,12 @@ export const useUI = create<UIState>()((set) => ({
   setHover: (hover) => set({ hover }),
   setWorldMeta: (worldName, seed) => set({ worldName, seed }),
   mode: typeof location !== 'undefined' && new URLSearchParams(location.search).get('scene') === 'continent' ? 'continent' : 'valley',
+  layout: typeof location !== 'undefined' && new URLSearchParams(location.search).get('scene') === 'continent' && new URLSearchParams(location.search).get('layout') !== 'sandbox' ? 'play' : 'sandbox',
+  sandboxTool: 'select',
+  setLayout: (layout) => set((s) => {
+    if (s.mode !== 'continent' || layout === s.layout) return {};
+    return layout === 'play' ? { layout, sandboxTool: s.tool, tool: 'select', inspectorOpen: false } : { layout, tool: s.sandboxTool };
+  }),
   setSaveState: (saveState) => set({ saveState }),
   markUnsaved: () => set((st) => (st.saveState === 'unsaved' ? st : { saveState: 'unsaved' })),
 }));
