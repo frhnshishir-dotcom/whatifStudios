@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the five continent dragons keep their identities > each has its own palette, size and refined wing; poses match their golden hashes 1`] = `
+{
+  "dragon-ashmaw": [
+    "a231e9b5",
+    "774db2f8",
+    "7c0b8c7d",
+  ],
+  "dragon-aurath": [
+    "f4b08d9b",
+    "55d794cd",
+    "9e93ec62",
+  ],
+  "dragon-emberfang": [
+    "708a7aa8",
+    "674540b0",
+    "9d4263f6",
+  ],
+  "dragon-mossheart": [
+    "17861163",
+    "99036128",
+    "265ef9e1",
+  ],
+  "dragon-rimeclaw": [
+    "7d2a5d10",
+    "e23a51c4",
+    "0ce4165f",
+  ],
+}
+`;
+
+exports[`the five continent dragons keep their identities > each has its own palette, size and refined wing; poses match their golden hashes 2`] = `"5ddcb009"`;

@@ -3,7 +3,8 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join as pathJoin } from 'node:path';
 import { WorldServer } from '../server/WorldServer';
-import { heroToJSON } from '../src/world/rpg/hero';
+import { heroToJSON, addItem, nextUid, count } from '../src/world/rpg/hero';
+import { makeItem } from '../src/world/rpg/items';
 import { PROTOCOL, type ServerMsg } from '../src/world/net/protocol';
 
 /**
@@ -16,7 +17,8 @@ class Client {
   ws: WebSocket;
   msgs: ServerMsg[] = [];
   id = ''; token = '';
-  constructor(url: string) { this.ws = new WebSocket(url); this.ws.onmessage = (e) => { const m = JSON.parse(String(e.data)) as ServerMsg; this.msgs.push(m); if (m.type === 'welcome') { this.id = m.id; this.token = m.token; } }; }
+  welcome: Extract<ServerMsg, { type: 'welcome' }> | null = null;
+  constructor(url: string) { this.ws = new WebSocket(url); this.ws.onmessage = (e) => { const m = JSON.parse(String(e.data)) as ServerMsg; this.msgs.push(m); if (m.type === 'welcome') { this.id = m.id; this.token = m.token; this.welcome = m; } }; }
   opened(): Promise<void> { return new Promise((res, rej) => { this.ws.onopen = () => res(); this.ws.onerror = () => rej(new Error('ws error')); }); }
   send(m: object): void { this.ws.send(JSON.stringify(m)); }
   async waitFor<T extends ServerMsg['type']>(type: T, pred: (m: Extract<ServerMsg, { type: T }>) => boolean = () => true, ms = 8000): Promise<Extract<ServerMsg, { type: T }>> {
@@ -187,6 +189,36 @@ describe('multiplayer foundation (local authoritative server)', { timeout: 180_0
     expect(Math.hypot(corr.x - A.hero.home[0], corr.y - A.hero.home[1])).toBeLessThan(3);
     console.log(`combat sync: ${server.stats.events} events, ${server.stats.commands} commands; Ada level ${A.hero.level}, kills ${JSON.stringify(A.hero.stats.kills)}`);
     a.close(); b.close();
+    await server.stop();
+  });
+
+  it('a character survives a dropped connection and a long absence (out of the world, then back)', async () => {
+    const server = new WorldServer({ port: 0, dataFile: null });
+    const port = await server.listen(), url = `ws://127.0.0.1:${port}`;
+    const a = await join(url, 'Ada');
+    const A = server.sim.players.get(a.id)!;
+    A.hero.coins = 321; A.hero.skills.mining = 90; A.hero.stats.kills.wolf = 7;
+    addItem(A.hero, makeItem('ore', 5, nextUid(A.hero)));
+    A.x += 4; A.y += 2;
+    const want = heroToJSON(A.hero), at = [A.x, A.y];
+    await a.waitFor('hero', (m) => m.hero.coins === 321);
+    // A short drop: back with the token, same character and place.
+    a.close();
+    const a2 = await join(url, 'Ada', a.token);
+    expect(a2.id).toBe(a.id);
+    expect(a2.welcome!.hero).toEqual(JSON.parse(JSON.stringify(want)));
+    expect([a2.welcome!.x, a2.welcome!.y]).toEqual(at);
+    // A long absence: after a minute away the player leaves the world; the character waits in the session.
+    a2.close();
+    await new Promise((r) => setTimeout(r, 200));
+    server.sessions.get(a.id)!.lastSeen = Date.now() - 120_000;
+    server.tick(0.1);
+    expect(server.sim.players.has(a.id)).toBe(false);
+    const a3 = await join(url, 'Ada', a.token);
+    expect(server.sim.players.has(a.id)).toBe(true);
+    expect(a3.welcome!.hero).toEqual(JSON.parse(JSON.stringify(want)));
+    expect(count(server.sim.players.get(a.id)!.hero, 'ore')).toBe(5);
+    a3.close();
     await server.stop();
   });
 });
