@@ -85,6 +85,14 @@ working through every milestone.
 ## G. Rules that are not tests
 
 - The Valley must stay exactly as it is unless a change is approved. The golden images are its contract.
+  - **Two golden sets, the same scenes.** `e2e/m8-golden.spec.ts-snapshots/` holds the approved images, made in
+    the development container. `e2e/m8-golden.spec.ts-snapshots-ci/` holds the same nine scenes as the GitHub
+    runner draws them (`LUMENWILD_GOLDENS=ci`). The runner's fonts anti-alias glyph edges differently, so 5–15 % of
+    pixels differ by a few levels. Both sets are compared exactly (0 pixels of tolerance).
+  - The CI set was taken from the first CI run (2026-11-27, run 3). Each image was checked against the approved one:
+    same scene, every object, light and rain streak in the same place, with differences only at glyph edges.
+  - If a CI image ever needs replacing, review it the same way. The workflow prints the failing renders in its log.
+    Never update either set only to make a test pass.
 - Keep the five dragons' identities, colours, sizes and wing structure.
 - The character-cell renderer stays the game's renderer: no conventional 3D renderer replaces it.
 - Blender is never a required dependency, and no commercial graphics dependency is added.
