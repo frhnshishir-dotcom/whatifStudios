@@ -1,0 +1,56 @@
+# Lumenwild (the browser game in lumenwild/): typecheck, production build, unit tests (including multiplayer, old-save
+# fixtures and the 16-bot load test) and browser tests (including the Valley golden images, compared pixel for
+# pixel). Separate from the video pipeline's workflow (pipeline-tests.yml); runs only when the game changes.
+name: lumenwild
+
+on:
+  push:
+    paths: ["lumenwild/**", ".github/workflows/lumenwild.yml"]
+  pull_request:
+    paths: ["lumenwild/**", ".github/workflows/lumenwild.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lumenwild-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: lumenwild
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false # the repository's LFS holds large video and Blender files; fetch only what the tests need
+      - name: Fetch the golden images (Git LFS, these files only)
+        working-directory: .
+        run: git lfs pull --include="lumenwild/e2e/m8-golden.spec.ts-snapshots/*"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: lumenwild/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Unit tests
+        run: npx vitest run
+      - name: Install Chromium for the browser tests
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests (including the Valley golden images)
+        run: npx playwright test --trace off
+      - name: Keep the browser test results when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumenwild-test-results
+          path: lumenwild/test-results
+          retention-days: 7
