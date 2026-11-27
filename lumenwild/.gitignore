@@ -5,3 +5,5 @@ playwright-report/
 *.tsbuildinfo
 dist-server/
 server-data/
+dist-bench/
+bench-results/

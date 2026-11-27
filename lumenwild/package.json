@@ -14,7 +14,9 @@
     "e2e": "playwright test --trace off",
     "server:build": "vite build --ssr server/main.ts --outDir dist-server --emptyOutDir",
     "server": "npm run server:build && node dist-server/main.js",
-    "loadtest": "vitest run tests/load.test.ts --silent=false"
+    "loadtest": "vitest run tests/load.test.ts --silent=false",
+    "bench:server": "node bench/server.mjs",
+    "bench:continent": "node bench/continent.mjs"
   },
   "engines": {
     "node": ">=20.19"
