@@ -48,9 +48,8 @@ describe('region streaming', { timeout: 120_000 }, () => {
     expect(engine.objects.objects.size).toBeLessThan(30_000);
     expect(engine.objects.objects.size).toBeGreaterThan(objectsBefore * 0.2);
     console.log(`window moves: ${moves}, slowest ${session.stats.maxShiftMs.toFixed(0)} ms, last ${session.stats.lastShiftMs.toFixed(0)} ms; region generation max ${session.cache.stats.maxMs.toFixed(0)} ms`);
-    // No worker here, so a move also generates its new regions on this thread (now with villages and places): ~90 ms
-    // alone, ~110 ms under a full parallel test run. In the browser the worker does that and moves take 23–25 ms.
-    expect(session.stats.maxShiftMs).toBeLessThan(150);
+    // How long a move takes is checked in tests/acceptance/streaming-moves.test.ts, which runs alone: here three other
+    // test files share the CPU, and a slow CI runner measured 157 ms (run 11) for what takes ~90 ms alone.
     // Newly loaded strips are re-shaded within a few frames (4 ms of shading per frame; headless, so drive it directly).
     for (let k = 0; k < 400 && engine.world.terrainDirty.some((d) => d === 1); k++) engine.shader.update(engine.composer.shadeBudgetMs);
     expect(Array.from(engine.world.terrainDirty).every((d) => d === 0)).toBe(true);
